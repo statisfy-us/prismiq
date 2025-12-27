@@ -31,12 +31,42 @@ __version__ = "0.1.0"
 # Main engine
 # API router factory
 from prismiq.api import create_router
+
+# Date utilities
+from prismiq.dates import (
+    DatePreset,
+    date_add,
+    date_trunc,
+    get_date_range_sql,
+    resolve_date_preset,
+)
 from prismiq.engine import PrismiqEngine
-from prismiq.executor import QueryExecutor
-from prismiq.query import QueryBuilder
 
 # Low-level components (for advanced use)
+from prismiq.executor import QueryExecutor
+
+# Number formatting utilities
+from prismiq.formatting import (
+    NumberFormat,
+    format_compact,
+    format_currency,
+    format_number,
+    format_percent,
+    parse_number,
+)
+from prismiq.query import QueryBuilder, ValidationError, ValidationResult
 from prismiq.schema import SchemaIntrospector
+
+# Schema configuration
+from prismiq.schema_config import (
+    ColumnConfig,
+    EnhancedColumnSchema,
+    EnhancedDatabaseSchema,
+    EnhancedTableSchema,
+    SchemaConfig,
+    SchemaConfigManager,
+    TableConfig,
+)
 
 # Schema types
 # Query types
@@ -69,19 +99,29 @@ from prismiq.types import (
 __all__ = [
     # Query types
     "AggregationType",
+    # Schema configuration
+    "ColumnConfig",
     # Schema types
     "ColumnSchema",
     "ColumnSelection",
     "DatabaseSchema",
+    # Date utilities
+    "DatePreset",
+    "EnhancedColumnSchema",
+    "EnhancedDatabaseSchema",
+    "EnhancedTableSchema",
     "FilterDefinition",
     "FilterOperator",
     "GroupByDefinition",
     "JoinDefinition",
     "JoinType",
+    # Number formatting
+    "NumberFormat",
     # Main engine
     "PrismiqEngine",
     # Exception types
     "PrismiqError",
+    # Low-level components
     "QueryBuilder",
     "QueryDefinition",
     "QueryExecutionError",
@@ -92,13 +132,28 @@ __all__ = [
     "QueryTimeoutError",
     "QueryValidationError",
     "Relationship",
-    # Low-level components
+    "SchemaConfig",
+    "SchemaConfigManager",
     "SchemaIntrospector",
     "SortDefinition",
     "SortDirection",
+    "TableConfig",
     "TableNotFoundError",
     "TableSchema",
+    # Validation
+    "ValidationError",
+    "ValidationResult",
     # Version
     "__version__",
+    # API router factory
     "create_router",
+    "date_add",
+    "date_trunc",
+    "format_compact",
+    "format_currency",
+    "format_number",
+    "format_percent",
+    "get_date_range_sql",
+    "parse_number",
+    "resolve_date_preset",
 ]

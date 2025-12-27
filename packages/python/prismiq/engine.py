@@ -12,8 +12,15 @@ from typing import TYPE_CHECKING
 import asyncpg
 
 from prismiq.executor import QueryExecutor
-from prismiq.query import QueryBuilder
+from prismiq.query import QueryBuilder, ValidationResult
 from prismiq.schema import SchemaIntrospector
+from prismiq.schema_config import (
+    ColumnConfig,
+    EnhancedDatabaseSchema,
+    SchemaConfig,
+    SchemaConfigManager,
+    TableConfig,
+)
 from prismiq.types import (
     DatabaseSchema,
     QueryDefinition,
@@ -68,6 +75,7 @@ class PrismiqEngine:
         query_timeout: float = 30.0,
         max_rows: int = 10000,
         schema_name: str = "public",
+        schema_config: SchemaConfig | None = None,
     ) -> None:
         """
         Initialize the Prismiq engine.
@@ -78,12 +86,16 @@ class PrismiqEngine:
             query_timeout: Maximum query execution time in seconds.
             max_rows: Maximum number of rows to return per query.
             schema_name: PostgreSQL schema to use (default: "public").
+            schema_config: Initial schema configuration for display names, hidden items, etc.
         """
         self._database_url = database_url
         self._exposed_tables = exposed_tables
         self._query_timeout = query_timeout
         self._max_rows = max_rows
         self._schema_name = schema_name
+
+        # Schema config manager
+        self._schema_config_manager = SchemaConfigManager(schema_config)
 
         # These will be initialized in startup()
         self._pool: Pool | None = None
@@ -140,9 +152,13 @@ class PrismiqEngine:
         self._builder = None
         self._schema = None
 
+    # ========================================================================
+    # Schema Methods
+    # ========================================================================
+
     async def get_schema(self) -> DatabaseSchema:
         """
-        Get the complete database schema.
+        Get the complete database schema (raw, without config applied).
 
         Returns:
             DatabaseSchema containing all exposed tables and relationships.
@@ -153,6 +169,23 @@ class PrismiqEngine:
         self._ensure_started()
         assert self._introspector is not None
         return await self._introspector.get_schema()
+
+    async def get_enhanced_schema(self) -> EnhancedDatabaseSchema:
+        """
+        Get the database schema with configuration applied.
+
+        Returns schema with display names, descriptions, and hidden
+        tables/columns filtered out.
+
+        Returns:
+            EnhancedDatabaseSchema with configuration applied.
+
+        Raises:
+            RuntimeError: If the engine has not been started.
+        """
+        self._ensure_started()
+        schema = await self.get_schema()
+        return self._schema_config_manager.apply_to_schema(schema)
 
     async def get_table(self, table_name: str) -> TableSchema:
         """
@@ -171,6 +204,10 @@ class PrismiqEngine:
         self._ensure_started()
         assert self._introspector is not None
         return await self._introspector.get_table(table_name)
+
+    # ========================================================================
+    # Query Methods
+    # ========================================================================
 
     async def execute_query(self, query: QueryDefinition) -> QueryResult:
         """
@@ -227,6 +264,70 @@ class PrismiqEngine:
         self._ensure_started()
         assert self._builder is not None
         return self._builder.validate(query)
+
+    def validate_query_detailed(self, query: QueryDefinition) -> ValidationResult:
+        """
+        Validate a query with detailed error information.
+
+        Args:
+            query: Query definition to validate.
+
+        Returns:
+            ValidationResult with detailed errors including suggestions.
+
+        Raises:
+            RuntimeError: If the engine has not been started.
+        """
+        self._ensure_started()
+        assert self._builder is not None
+        return self._builder.validate_detailed(query)
+
+    # ========================================================================
+    # Schema Configuration Methods
+    # ========================================================================
+
+    def get_schema_config(self) -> SchemaConfig:
+        """
+        Get the current schema configuration.
+
+        Returns:
+            Current SchemaConfig with all table and column settings.
+        """
+        return self._schema_config_manager.get_config()
+
+    def set_schema_config(self, config: SchemaConfig) -> None:
+        """
+        Replace the entire schema configuration.
+
+        Args:
+            config: New schema configuration.
+        """
+        self._schema_config_manager = SchemaConfigManager(config)
+
+    def update_table_config(self, table_name: str, config: TableConfig) -> None:
+        """
+        Update configuration for a specific table.
+
+        Args:
+            table_name: Name of the table.
+            config: New configuration for the table.
+        """
+        self._schema_config_manager.update_table_config(table_name, config)
+
+    def update_column_config(self, table_name: str, column_name: str, config: ColumnConfig) -> None:
+        """
+        Update configuration for a specific column.
+
+        Args:
+            table_name: Name of the table.
+            column_name: Name of the column.
+            config: New configuration for the column.
+        """
+        self._schema_config_manager.update_column_config(table_name, column_name, config)
+
+    # ========================================================================
+    # Private Methods
+    # ========================================================================
 
     def _ensure_started(self) -> None:
         """Ensure the engine has been started."""

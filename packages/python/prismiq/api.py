@@ -12,6 +12,14 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from prismiq.query import ValidationResult
+from prismiq.schema_config import (
+    ColumnConfig,
+    EnhancedDatabaseSchema,
+    EnhancedTableSchema,
+    SchemaConfig,
+    TableConfig,
+)
 from prismiq.types import (
     DatabaseSchema,
     QueryDefinition,
@@ -40,6 +48,13 @@ class ValidationResponse(BaseModel):
     """List of validation error messages (empty if valid)."""
 
 
+class DetailedValidationResponse(BaseModel):
+    """Response model for detailed query validation endpoint."""
+
+    result: ValidationResult
+    """Complete validation result with detailed errors."""
+
+
 class TableListResponse(BaseModel):
     """Response model for table list endpoint."""
 
@@ -55,6 +70,48 @@ class PreviewRequest(BaseModel):
 
     limit: int = 100
     """Maximum number of rows to return."""
+
+
+class TableConfigUpdate(BaseModel):
+    """Request model for updating table configuration."""
+
+    display_name: str | None = None
+    """Friendly display name for the table."""
+
+    description: str | None = None
+    """Description for the table."""
+
+    hidden: bool | None = None
+    """Whether to hide the table from the schema explorer."""
+
+
+class ColumnConfigUpdate(BaseModel):
+    """Request model for updating column configuration."""
+
+    display_name: str | None = None
+    """Friendly display name for the column."""
+
+    description: str | None = None
+    """Description for the column."""
+
+    hidden: bool | None = None
+    """Whether to hide the column from the schema explorer."""
+
+    format: str | None = None
+    """Number format: plain, currency, percent, compact."""
+
+    date_format: str | None = None
+    """Date format string for date/timestamp columns."""
+
+
+class SuccessResponse(BaseModel):
+    """Generic success response."""
+
+    success: bool = True
+    """Whether the operation succeeded."""
+
+    message: str = "OK"
+    """Success message."""
 
 
 # ============================================================================
@@ -80,14 +137,29 @@ def create_router(engine: PrismiqEngine) -> APIRouter:
     """
     router = APIRouter(tags=["analytics"])
 
+    # ========================================================================
+    # Schema Endpoints
+    # ========================================================================
+
     @router.get("/schema", response_model=DatabaseSchema)
     async def get_schema() -> DatabaseSchema:
         """
-        Get the complete database schema.
+        Get the complete database schema (raw).
 
-        Returns all exposed tables, their columns, and relationships.
+        Returns all exposed tables, their columns, and relationships
+        without any configuration applied.
         """
         return await engine.get_schema()
+
+    @router.get("/schema/enhanced", response_model=EnhancedDatabaseSchema)
+    async def get_enhanced_schema() -> EnhancedDatabaseSchema:
+        """
+        Get the enhanced database schema with configuration applied.
+
+        Returns schema with display names, descriptions, and hidden
+        tables/columns filtered out.
+        """
+        return await engine.get_enhanced_schema()
 
     @router.get("/tables", response_model=TableListResponse)
     async def get_tables() -> TableListResponse:
@@ -102,7 +174,7 @@ def create_router(engine: PrismiqEngine) -> APIRouter:
     @router.get("/tables/{table_name}", response_model=TableSchema)
     async def get_table(table_name: str) -> TableSchema:
         """
-        Get schema information for a single table.
+        Get schema information for a single table (raw).
 
         Args:
             table_name: Name of the table to retrieve.
@@ -117,6 +189,30 @@ def create_router(engine: PrismiqEngine) -> APIRouter:
             return await engine.get_table(table_name)
         except TableNotFoundError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
+
+    @router.get("/tables/{table_name}/enhanced", response_model=EnhancedTableSchema)
+    async def get_enhanced_table(table_name: str) -> EnhancedTableSchema:
+        """
+        Get enhanced schema information for a single table.
+
+        Args:
+            table_name: Name of the table to retrieve.
+
+        Returns:
+            EnhancedTableSchema with display names and format hints.
+
+        Raises:
+            404: If the table is not found or is hidden.
+        """
+        enhanced_schema = await engine.get_enhanced_schema()
+        table = enhanced_schema.get_table(table_name)
+        if table is None:
+            raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
+        return table
+
+    # ========================================================================
+    # Query Endpoints
+    # ========================================================================
 
     @router.post("/query/validate", response_model=ValidationResponse)
     async def validate_query(query: QueryDefinition) -> ValidationResponse:
@@ -134,6 +230,22 @@ def create_router(engine: PrismiqEngine) -> APIRouter:
         """
         errors = engine.validate_query(query)
         return ValidationResponse(valid=len(errors) == 0, errors=errors)
+
+    @router.post("/query/validate/detailed", response_model=DetailedValidationResponse)
+    async def validate_query_detailed(query: QueryDefinition) -> DetailedValidationResponse:
+        """
+        Validate a query with detailed error information.
+
+        Returns detailed errors with error codes, field paths, and suggestions.
+
+        Args:
+            query: Query definition to validate.
+
+        Returns:
+            DetailedValidationResponse with complete validation result.
+        """
+        result = engine.validate_query_detailed(query)
+        return DetailedValidationResponse(result=result)
 
     @router.post("/query/execute", response_model=QueryResult)
     async def execute_query(query: QueryDefinition) -> QueryResult:
@@ -184,5 +296,159 @@ def create_router(engine: PrismiqEngine) -> APIRouter:
             ) from e
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
+
+    # ========================================================================
+    # Schema Config Endpoints
+    # ========================================================================
+
+    @router.get("/config", response_model=SchemaConfig)
+    async def get_schema_config() -> SchemaConfig:
+        """
+        Get the current schema configuration.
+
+        Returns:
+            Current SchemaConfig with all table and column settings.
+        """
+        return engine.get_schema_config()
+
+    @router.put("/config", response_model=SuccessResponse)
+    async def set_schema_config(config: SchemaConfig) -> SuccessResponse:
+        """
+        Replace the entire schema configuration.
+
+        Args:
+            config: New schema configuration.
+
+        Returns:
+            Success response.
+        """
+        engine.set_schema_config(config)
+        return SuccessResponse(message="Schema configuration updated")
+
+    @router.get("/config/tables/{table_name}", response_model=TableConfig)
+    async def get_table_config(table_name: str) -> TableConfig:
+        """
+        Get configuration for a specific table.
+
+        Args:
+            table_name: Name of the table.
+
+        Returns:
+            TableConfig for the table (may be default if not configured).
+        """
+        config = engine.get_schema_config()
+        return config.get_table_config(table_name)
+
+    @router.put("/config/tables/{table_name}", response_model=SuccessResponse)
+    async def update_table_config(table_name: str, update: TableConfigUpdate) -> SuccessResponse:
+        """
+        Update configuration for a specific table.
+
+        Only the provided fields are updated; others are preserved.
+
+        Args:
+            table_name: Name of the table.
+            update: Fields to update.
+
+        Returns:
+            Success response.
+        """
+        current = engine.get_schema_config().get_table_config(table_name)
+
+        new_config = TableConfig(
+            display_name=update.display_name
+            if update.display_name is not None
+            else current.display_name,
+            description=update.description
+            if update.description is not None
+            else current.description,
+            hidden=update.hidden if update.hidden is not None else current.hidden,
+            columns=current.columns,
+        )
+
+        engine.update_table_config(table_name, new_config)
+        return SuccessResponse(message=f"Table '{table_name}' configuration updated")
+
+    @router.get("/config/tables/{table_name}/columns/{column_name}", response_model=ColumnConfig)
+    async def get_column_config(table_name: str, column_name: str) -> ColumnConfig:
+        """
+        Get configuration for a specific column.
+
+        Args:
+            table_name: Name of the table.
+            column_name: Name of the column.
+
+        Returns:
+            ColumnConfig for the column (may be default if not configured).
+        """
+        config = engine.get_schema_config()
+        return config.get_column_config(table_name, column_name)
+
+    @router.put("/config/tables/{table_name}/columns/{column_name}", response_model=SuccessResponse)
+    async def update_column_config(
+        table_name: str, column_name: str, update: ColumnConfigUpdate
+    ) -> SuccessResponse:
+        """
+        Update configuration for a specific column.
+
+        Only the provided fields are updated; others are preserved.
+
+        Args:
+            table_name: Name of the table.
+            column_name: Name of the column.
+            update: Fields to update.
+
+        Returns:
+            Success response.
+        """
+        current = engine.get_schema_config().get_column_config(table_name, column_name)
+
+        new_config = ColumnConfig(
+            display_name=update.display_name
+            if update.display_name is not None
+            else current.display_name,
+            description=update.description
+            if update.description is not None
+            else current.description,
+            hidden=update.hidden if update.hidden is not None else current.hidden,
+            format=update.format if update.format is not None else current.format,
+            date_format=update.date_format
+            if update.date_format is not None
+            else current.date_format,
+        )
+
+        engine.update_column_config(table_name, column_name, new_config)
+        return SuccessResponse(message=f"Column '{table_name}.{column_name}' configuration updated")
+
+    @router.delete("/config/tables/{table_name}", response_model=SuccessResponse)
+    async def reset_table_config(table_name: str) -> SuccessResponse:
+        """
+        Reset configuration for a specific table to defaults.
+
+        Args:
+            table_name: Name of the table.
+
+        Returns:
+            Success response.
+        """
+        engine.update_table_config(table_name, TableConfig())
+        return SuccessResponse(message=f"Table '{table_name}' configuration reset")
+
+    @router.delete(
+        "/config/tables/{table_name}/columns/{column_name}", response_model=SuccessResponse
+    )
+    async def reset_column_config(table_name: str, column_name: str) -> SuccessResponse:
+        """
+        Reset configuration for a specific column to defaults.
+
+        Args:
+            table_name: Name of the table.
+            column_name: Name of the column.
+
+        Returns:
+            Success response.
+        """
+        engine.update_column_config(table_name, column_name, ColumnConfig())
+        return SuccessResponse(message=f"Column '{table_name}.{column_name}' configuration reset")
 
     return router
