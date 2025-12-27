@@ -40,6 +40,7 @@ dev = [
     "pyright>=1.1.350",
     "ruff>=0.4.0",
     "pre-commit>=3.7.0",
+    "httpx>=0.27.0",
 ]
 redis = [
     "redis>=5.0.0",
@@ -53,6 +54,7 @@ dev-dependencies = [
     "pyright>=1.1.350",
     "ruff>=0.4.0",
     "pre-commit>=3.7.0",
+    "httpx>=0.27.0",
 ]
 
 [project.urls]
@@ -77,6 +79,8 @@ reportMissingTypeStubs = false
 reportUnknownMemberType = false
 reportUnknownVariableType = false
 reportUnknownArgumentType = false
+# FastAPI route functions are accessed via decorators, not direct calls
+reportUnusedFunction = false
 
 # ============================================================================
 # Testing (Pytest)
