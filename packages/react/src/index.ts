@@ -15,16 +15,56 @@
  * ```
  */
 
-// Types will be exported here after implementation
-// export type { ... } from './types';
+// ============================================================================
+// Types
+// ============================================================================
 
-// Client will be exported here after implementation
-// export { PrismiqClient } from './api/client';
+export type {
+  // Schema types
+  ColumnSchema,
+  TableSchema,
+  Relationship,
+  DatabaseSchema,
+  // Query types
+  QueryTable,
+  JoinType,
+  JoinDefinition,
+  AggregationType,
+  ColumnSelection,
+  FilterOperator,
+  FilterDefinition,
+  SortDirection,
+  SortDefinition,
+  GroupByDefinition,
+  QueryDefinition,
+  // Result types
+  QueryResult,
+  ValidationResult,
+} from './types';
 
-// Context will be exported here after implementation
-// export { AnalyticsProvider, useAnalytics } from './context';
+// ============================================================================
+// API Client
+// ============================================================================
 
-// Hooks will be exported here after implementation
-// export { useSchema, useQuery } from './hooks';
+export { PrismiqClient, PrismiqError } from './api';
+export type { ClientConfig } from './api';
+
+// ============================================================================
+// Context
+// ============================================================================
+
+export { AnalyticsProvider, useAnalytics } from './context';
+export type { AnalyticsContextValue, AnalyticsProviderProps } from './context';
+
+// ============================================================================
+// Hooks
+// ============================================================================
+
+export { useSchema, useQuery } from './hooks';
+export type { UseSchemaResult, UseQueryResult, UseQueryOptions } from './hooks';
+
+// ============================================================================
+// Version
+// ============================================================================
 
 export const VERSION = '0.1.0';
