@@ -7,7 +7,10 @@ parameterized SQL queries from QueryDefinition objects.
 
 from __future__ import annotations
 
+from difflib import get_close_matches
 from typing import Any
+
+from pydantic import BaseModel, ConfigDict
 
 from prismiq.types import (
     AggregationType,
@@ -19,6 +22,51 @@ from prismiq.types import (
     QueryDefinition,
     SortDefinition,
 )
+
+# ============================================================================
+# Validation Models
+# ============================================================================
+
+
+class ValidationError(BaseModel):
+    """Detailed validation error."""
+
+    model_config = ConfigDict(strict=True)
+
+    code: str
+    """Machine-readable error code."""
+
+    message: str
+    """User-friendly error message."""
+
+    field: str | None = None
+    """Path to the problematic field (e.g., 'tables[0].name')."""
+
+    suggestion: str | None = None
+    """Suggested fix."""
+
+
+class ValidationResult(BaseModel):
+    """Complete validation result."""
+
+    model_config = ConfigDict(strict=True)
+
+    valid: bool
+    """Whether the query is valid."""
+
+    errors: list[ValidationError]
+    """List of validation errors (empty if valid)."""
+
+
+# Error codes
+ERROR_TABLE_NOT_FOUND = "TABLE_NOT_FOUND"
+ERROR_COLUMN_NOT_FOUND = "COLUMN_NOT_FOUND"
+ERROR_INVALID_JOIN = "INVALID_JOIN"
+ERROR_TYPE_MISMATCH = "TYPE_MISMATCH"
+ERROR_INVALID_AGGREGATION = "INVALID_AGGREGATION"
+ERROR_EMPTY_QUERY = "EMPTY_QUERY"
+ERROR_CIRCULAR_JOIN = "CIRCULAR_JOIN"
+ERROR_AMBIGUOUS_COLUMN = "AMBIGUOUS_COLUMN"
 
 
 class QueryBuilder:
@@ -53,36 +101,100 @@ class QueryBuilder:
 
         Returns:
             List of validation error messages (empty if valid).
+
+        Note:
+            This method returns simple string errors for backward compatibility.
+            Use validate_detailed() for richer error information.
         """
-        errors: list[str] = []
+        result = self.validate_detailed(query)
+        return [err.message for err in result.errors]
+
+    def validate_detailed(self, query: QueryDefinition) -> ValidationResult:
+        """
+        Validate a query definition with detailed error information.
+
+        Args:
+            query: Query definition to validate.
+
+        Returns:
+            ValidationResult with detailed errors including suggestions.
+        """
+        errors: list[ValidationError] = []
 
         # Build table_id -> table_name mapping
         table_map: dict[str, str] = {}
         for qt in query.tables:
             table_map[qt.id] = qt.name
 
+        # Get all available table names for suggestions
+        available_tables = self._schema.table_names()
+
         # Validate tables exist in schema
-        for qt in query.tables:
+        for i, qt in enumerate(query.tables):
             if not self._schema.has_table(qt.name):
-                errors.append(f"Table '{qt.name}' not found in schema")
+                suggestion = self._suggest_similar(qt.name, available_tables)
+                errors.append(
+                    ValidationError(
+                        code=ERROR_TABLE_NOT_FOUND,
+                        message=f"Table '{qt.name}' not found in schema",
+                        field=f"tables[{i}].name",
+                        suggestion=suggestion,
+                    )
+                )
 
         # Validate columns exist in tables
-        for col in query.columns:
+        for i, col in enumerate(query.columns):
             table_name = table_map.get(col.table_id)
             if table_name:
                 table = self._schema.get_table(table_name)
-                if table and not table.has_column(col.column):
-                    errors.append(f"Column '{col.column}' not found in table '{table_name}'")
+                if table:
+                    if not table.has_column(col.column):
+                        available_columns = [c.name for c in table.columns]
+                        suggestion = self._suggest_similar(col.column, available_columns)
+                        errors.append(
+                            ValidationError(
+                                code=ERROR_COLUMN_NOT_FOUND,
+                                message=f"Column '{col.column}' not found in table '{table_name}'",
+                                field=f"columns[{i}].column",
+                                suggestion=suggestion,
+                            )
+                        )
+                    else:
+                        # Validate aggregation is valid for column type
+                        if col.aggregation != AggregationType.NONE:
+                            column_schema = table.get_column(col.column)
+                            if column_schema:
+                                agg_error = self._validate_aggregation(
+                                    col.aggregation, column_schema.data_type, col.column
+                                )
+                                if agg_error:
+                                    errors.append(
+                                        ValidationError(
+                                            code=ERROR_INVALID_AGGREGATION,
+                                            message=agg_error,
+                                            field=f"columns[{i}].aggregation",
+                                            suggestion=self._suggest_aggregation(
+                                                column_schema.data_type
+                                            ),
+                                        )
+                                    )
 
         # Validate join columns
-        for join in query.joins:
+        for i, join in enumerate(query.joins):
             # From column
             from_table_name = table_map.get(join.from_table_id)
             if from_table_name:
                 from_table = self._schema.get_table(from_table_name)
                 if from_table and not from_table.has_column(join.from_column):
+                    available_columns = [c.name for c in from_table.columns]
+                    suggestion = self._suggest_similar(join.from_column, available_columns)
                     errors.append(
-                        f"Join column '{join.from_column}' not found in table '{from_table_name}'"
+                        ValidationError(
+                            code=ERROR_INVALID_JOIN,
+                            message=f"Join column '{join.from_column}' not found in table '{from_table_name}'",
+                            field=f"joins[{i}].from_column",
+                            suggestion=suggestion,
+                        )
                     )
 
             # To column
@@ -90,27 +202,203 @@ class QueryBuilder:
             if to_table_name:
                 to_table = self._schema.get_table(to_table_name)
                 if to_table and not to_table.has_column(join.to_column):
+                    available_columns = [c.name for c in to_table.columns]
+                    suggestion = self._suggest_similar(join.to_column, available_columns)
                     errors.append(
-                        f"Join column '{join.to_column}' not found in table '{to_table_name}'"
+                        ValidationError(
+                            code=ERROR_INVALID_JOIN,
+                            message=f"Join column '{join.to_column}' not found in table '{to_table_name}'",
+                            field=f"joins[{i}].to_column",
+                            suggestion=suggestion,
+                        )
                     )
 
         # Validate filter columns
-        for f in query.filters:
+        for i, f in enumerate(query.filters):
             table_name = table_map.get(f.table_id)
             if table_name:
                 table = self._schema.get_table(table_name)
-                if table and not table.has_column(f.column):
-                    errors.append(f"Filter column '{f.column}' not found in table '{table_name}'")
+                if table:
+                    if not table.has_column(f.column):
+                        available_columns = [c.name for c in table.columns]
+                        suggestion = self._suggest_similar(f.column, available_columns)
+                        errors.append(
+                            ValidationError(
+                                code=ERROR_COLUMN_NOT_FOUND,
+                                message=f"Filter column '{f.column}' not found in table '{table_name}'",
+                                field=f"filters[{i}].column",
+                                suggestion=suggestion,
+                            )
+                        )
+                    else:
+                        # Validate filter value type matches column type
+                        column_schema = table.get_column(f.column)
+                        if column_schema and f.value is not None:
+                            type_error = self._validate_filter_type(
+                                f.operator, f.value, column_schema.data_type, f.column
+                            )
+                            if type_error:
+                                errors.append(
+                                    ValidationError(
+                                        code=ERROR_TYPE_MISMATCH,
+                                        message=type_error,
+                                        field=f"filters[{i}].value",
+                                        suggestion=None,
+                                    )
+                                )
 
         # Validate order by columns
-        for o in query.order_by:
+        for i, o in enumerate(query.order_by):
             table_name = table_map.get(o.table_id)
             if table_name:
                 table = self._schema.get_table(table_name)
                 if table and not table.has_column(o.column):
-                    errors.append(f"Order by column '{o.column}' not found in table '{table_name}'")
+                    available_columns = [c.name for c in table.columns]
+                    suggestion = self._suggest_similar(o.column, available_columns)
+                    errors.append(
+                        ValidationError(
+                            code=ERROR_COLUMN_NOT_FOUND,
+                            message=f"Order by column '{o.column}' not found in table '{table_name}'",
+                            field=f"order_by[{i}].column",
+                            suggestion=suggestion,
+                        )
+                    )
 
-        return errors
+        # Check for circular joins
+        circular_error = self._check_circular_joins(query)
+        if circular_error:
+            errors.append(circular_error)
+
+        return ValidationResult(valid=len(errors) == 0, errors=errors)
+
+    def _suggest_similar(
+        self, name: str, candidates: list[str], max_suggestions: int = 3
+    ) -> str | None:
+        """Find similar names for suggestions."""
+        matches = get_close_matches(
+            name.lower(), [c.lower() for c in candidates], n=max_suggestions, cutoff=0.6
+        )
+        if matches:
+            # Map back to original case
+            original_matches = []
+            for match in matches:
+                for candidate in candidates:
+                    if candidate.lower() == match:
+                        original_matches.append(candidate)
+                        break
+            if len(original_matches) == 1:
+                return f"Did you mean '{original_matches[0]}'?"
+            elif len(original_matches) > 1:
+                return f"Did you mean one of: {', '.join(repr(m) for m in original_matches)}?"
+        return None
+
+    def _validate_aggregation(
+        self, agg: AggregationType, data_type: str, column_name: str
+    ) -> str | None:
+        """Validate that an aggregation is valid for a data type."""
+        # Numeric aggregations
+        numeric_aggs = {AggregationType.SUM, AggregationType.AVG}
+        numeric_types = {
+            "integer",
+            "bigint",
+            "smallint",
+            "numeric",
+            "decimal",
+            "real",
+            "double precision",
+        }
+
+        if agg in numeric_aggs:
+            # Check if type is numeric-ish
+            data_type_lower = data_type.lower()
+            is_numeric = any(nt in data_type_lower for nt in numeric_types)
+            if not is_numeric:
+                return f"Aggregation '{agg.value}' is not valid for column '{column_name}' of type '{data_type}'"
+
+        return None
+
+    def _suggest_aggregation(self, data_type: str) -> str | None:
+        """Suggest valid aggregations for a data type."""
+        data_type_lower = data_type.lower()
+        numeric_types = {
+            "integer",
+            "bigint",
+            "smallint",
+            "numeric",
+            "decimal",
+            "real",
+            "double precision",
+        }
+
+        is_numeric = any(nt in data_type_lower for nt in numeric_types)
+        if is_numeric:
+            return "Valid aggregations for this column: sum, avg, min, max, count"
+        else:
+            return "Valid aggregations for this column: min, max, count"
+
+    def _validate_filter_type(
+        self, operator: FilterOperator, value: Any, data_type: str, column_name: str
+    ) -> str | None:
+        """Validate that a filter value is compatible with the column type."""
+        data_type_lower = data_type.lower()
+
+        # Check for list operators - combined condition
+        if operator in (FilterOperator.IN, FilterOperator.NOT_IN) and not isinstance(value, list):
+            return f"Operator '{operator.value}' requires a list value for column '{column_name}'"
+
+        # Check for between operator - combined condition
+        if operator == FilterOperator.BETWEEN and (
+            not isinstance(value, list | tuple) or len(value) != 2
+        ):
+            return f"Operator 'between' requires a list/tuple of exactly 2 values for column '{column_name}'"
+
+        # Basic numeric type checking
+        numeric_types = {
+            "integer",
+            "bigint",
+            "smallint",
+            "numeric",
+            "decimal",
+            "real",
+            "double precision",
+        }
+        is_numeric_column = any(nt in data_type_lower for nt in numeric_types)
+
+        if is_numeric_column and operator not in (
+            FilterOperator.IS_NULL,
+            FilterOperator.IS_NOT_NULL,
+        ):
+            # For IN/NOT_IN, check list items
+            if operator in (FilterOperator.IN, FilterOperator.NOT_IN) and isinstance(value, list):
+                for v in value:
+                    if v is not None and not isinstance(v, int | float):
+                        return f"Column '{column_name}' is numeric but received non-numeric value in list"
+            elif operator == FilterOperator.BETWEEN and isinstance(value, list | tuple):
+                for v in value:
+                    if not isinstance(v, int | float):
+                        return f"Column '{column_name}' is numeric but received non-numeric value in range"
+            elif not isinstance(value, int | float | list | tuple):
+                return f"Column '{column_name}' is numeric but received non-numeric value"
+
+        return None
+
+    def _check_circular_joins(self, query: QueryDefinition) -> ValidationError | None:
+        """Check for circular join references."""
+        if not query.joins:
+            return None
+
+        # Build a simple adjacency list
+        # For simplicity, we just check if any table joins to itself
+        for i, join in enumerate(query.joins):
+            if join.from_table_id == join.to_table_id:
+                return ValidationError(
+                    code=ERROR_CIRCULAR_JOIN,
+                    message="Join references the same table on both sides",
+                    field=f"joins[{i}]",
+                    suggestion="A join should connect two different tables",
+                )
+
+        return None
 
     def build(self, query: QueryDefinition) -> tuple[str, list[Any]]:
         """
