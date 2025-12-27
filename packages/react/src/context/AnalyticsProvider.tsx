@@ -1,0 +1,165 @@
+/**
+ * Analytics Provider and Context.
+ *
+ * Provides the Prismiq client and schema to React components.
+ */
+
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
+
+import { PrismiqClient, type ClientConfig } from '../api/client';
+import type { DatabaseSchema } from '../types';
+
+// ============================================================================
+// Context Types
+// ============================================================================
+
+/**
+ * Value provided by the AnalyticsContext.
+ */
+export interface AnalyticsContextValue {
+  /** The Prismiq API client instance. */
+  client: PrismiqClient;
+  /** The database schema, or null if not yet loaded. */
+  schema: DatabaseSchema | null;
+  /** Whether the schema is currently loading. */
+  isLoading: boolean;
+  /** Error that occurred during schema loading, if any. */
+  error: Error | null;
+  /** Function to manually refresh the schema. */
+  refetchSchema: () => Promise<void>;
+}
+
+/**
+ * Props for the AnalyticsProvider component.
+ */
+export interface AnalyticsProviderProps {
+  /** Configuration for the Prismiq client. */
+  config: ClientConfig;
+  /** Child components that will have access to the analytics context. */
+  children: ReactNode;
+}
+
+// ============================================================================
+// Context
+// ============================================================================
+
+const AnalyticsContext = createContext<AnalyticsContextValue | null>(null);
+
+// ============================================================================
+// Provider Component
+// ============================================================================
+
+/**
+ * Provider component that supplies the Prismiq client and schema to child components.
+ *
+ * @example
+ * ```tsx
+ * function App() {
+ *   return (
+ *     <AnalyticsProvider config={{ endpoint: 'https://api.example.com' }}>
+ *       <Dashboard />
+ *     </AnalyticsProvider>
+ *   );
+ * }
+ * ```
+ */
+export function AnalyticsProvider({
+  config,
+  children,
+}: AnalyticsProviderProps): JSX.Element {
+  // Create client instance - memoize to prevent recreation on re-renders
+  const client = useMemo(() => new PrismiqClient(config), [config]);
+
+  // Schema state
+  const [schema, setSchema] = useState<DatabaseSchema | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  // Fetch schema function
+  const fetchSchema = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const fetchedSchema = await client.getSchema();
+      setSchema(fetchedSchema);
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
+      setError(error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [client]);
+
+  // Refetch schema function (exposed to consumers)
+  const refetchSchema = useCallback(async () => {
+    await fetchSchema();
+  }, [fetchSchema]);
+
+  // Fetch schema on mount
+  useEffect(() => {
+    void fetchSchema();
+  }, [fetchSchema]);
+
+  // Memoize context value to prevent unnecessary re-renders
+  const contextValue = useMemo<AnalyticsContextValue>(
+    () => ({
+      client,
+      schema,
+      isLoading,
+      error,
+      refetchSchema,
+    }),
+    [client, schema, isLoading, error, refetchSchema]
+  );
+
+  return (
+    <AnalyticsContext.Provider value={contextValue}>
+      {children}
+    </AnalyticsContext.Provider>
+  );
+}
+
+// ============================================================================
+// Hook
+// ============================================================================
+
+/**
+ * Hook to access the analytics context.
+ *
+ * Must be used within an AnalyticsProvider.
+ *
+ * @throws Error if used outside of AnalyticsProvider.
+ *
+ * @example
+ * ```tsx
+ * function Dashboard() {
+ *   const { client, schema, isLoading, error } = useAnalytics();
+ *
+ *   if (isLoading) return <Loading />;
+ *   if (error) return <Error message={error.message} />;
+ *
+ *   return <TableList tables={schema?.tables ?? []} />;
+ * }
+ * ```
+ */
+export function useAnalytics(): AnalyticsContextValue {
+  const context = useContext(AnalyticsContext);
+
+  if (context === null) {
+    throw new Error(
+      'useAnalytics must be used within an AnalyticsProvider. ' +
+        'Wrap your component tree with <AnalyticsProvider config={...}>.'
+    );
+  }
+
+  return context;
+}
