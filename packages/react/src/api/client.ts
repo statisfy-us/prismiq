@@ -158,6 +158,20 @@ export class PrismiqClient {
   }
 
   /**
+   * Generate SQL from a query definition without executing.
+   *
+   * @param query - The query definition.
+   * @returns The generated SQL string.
+   */
+  async generateSql(query: QueryDefinition): Promise<string> {
+    const result = await this.request<{ sql: string }>('/query/sql', {
+      method: 'POST',
+      body: JSON.stringify(query),
+    });
+    return result.sql;
+  }
+
+  /**
    * Execute a query and return the full result.
    *
    * @param query - The query definition to execute.
