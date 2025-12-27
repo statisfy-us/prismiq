@@ -7,6 +7,7 @@ that exposes schema, validation, and query execution endpoints.
 
 from __future__ import annotations
 
+from datetime import date
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, HTTPException
@@ -20,6 +21,9 @@ from prismiq.schema_config import (
     SchemaConfig,
     TableConfig,
 )
+from prismiq.timeseries import TimeInterval
+from prismiq.transforms import pivot_data
+from prismiq.trends import ComparisonPeriod, TrendResult, add_trend_column
 from prismiq.types import (
     DatabaseSchema,
     QueryDefinition,
@@ -112,6 +116,84 @@ class SuccessResponse(BaseModel):
 
     message: str = "OK"
     """Success message."""
+
+
+# ============================================================================
+# Time Series Request Models
+# ============================================================================
+
+
+class TimeSeriesQueryRequest(BaseModel):
+    """Request model for time series query execution."""
+
+    query: QueryDefinition
+    """Query definition to execute."""
+
+    interval: TimeInterval
+    """Time interval for bucketing (minute, hour, day, week, month, quarter, year)."""
+
+    date_column: str
+    """Name of the date/timestamp column to bucket."""
+
+    fill_missing: bool = True
+    """Whether to fill missing time buckets with default values."""
+
+
+class PivotRequest(BaseModel):
+    """Request model for pivot transformation."""
+
+    result: QueryResult
+    """Query result to pivot."""
+
+    row_column: str
+    """Column to use as row headers."""
+
+    pivot_column: str
+    """Column to pivot into separate columns."""
+
+    value_column: str
+    """Column containing values to aggregate."""
+
+    aggregation: str = "sum"
+    """Aggregation function: sum, avg, count, min, max."""
+
+
+class TrendColumnRequest(BaseModel):
+    """Request model for adding trend columns."""
+
+    result: QueryResult
+    """Query result to add trend columns to."""
+
+    value_column: str
+    """Column containing values to calculate trends for."""
+
+    order_column: str
+    """Column to order by for trend calculation."""
+
+    group_column: str | None = None
+    """Optional column to group by for separate trend calculations."""
+
+
+class MetricTrendRequest(BaseModel):
+    """Request model for calculating metric trend."""
+
+    query: QueryDefinition
+    """Query definition for the metric."""
+
+    comparison: ComparisonPeriod
+    """Period to compare against."""
+
+    current_start: date
+    """Start date of current period."""
+
+    current_end: date
+    """End date of current period."""
+
+    value_column: str
+    """Column containing the metric value."""
+
+    date_column: str
+    """Column containing the date for filtering."""
 
 
 # ============================================================================
@@ -294,6 +376,153 @@ def create_router(engine: PrismiqEngine) -> APIRouter:
             raise HTTPException(
                 status_code=400, detail={"message": e.message, "errors": e.errors}
             ) from e
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    # ========================================================================
+    # Time Series Endpoints
+    # ========================================================================
+
+    @router.post("/query/execute/timeseries", response_model=QueryResult)
+    async def execute_timeseries_query(request: TimeSeriesQueryRequest) -> QueryResult:
+        """
+        Execute a time series query with automatic bucketing.
+
+        Automatically adds date_trunc to the query for time bucketing
+        and optionally fills missing time buckets.
+
+        Args:
+            request: Time series query request with interval configuration.
+
+        Returns:
+            QueryResult with time-bucketed data.
+
+        Raises:
+            400: If the query fails validation or date column is invalid.
+            500: If the query execution fails.
+        """
+        try:
+            return await engine.execute_timeseries_query(
+                query=request.query,
+                interval=request.interval,
+                date_column=request.date_column,
+                fill_missing=request.fill_missing,
+            )
+        except QueryValidationError as e:
+            raise HTTPException(
+                status_code=400, detail={"message": e.message, "errors": e.errors}
+            ) from e
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    # ========================================================================
+    # Transform Endpoints
+    # ========================================================================
+
+    @router.post("/transform/pivot", response_model=QueryResult)
+    async def pivot_result(request: PivotRequest) -> QueryResult:
+        """
+        Pivot query result data from long to wide format.
+
+        Transforms data like:
+          region | month | sales
+          East   | Jan   | 100
+          East   | Feb   | 150
+
+        Into:
+          region | Jan | Feb
+          East   | 100 | 150
+
+        Args:
+            request: Pivot request with column configuration.
+
+        Returns:
+            Pivoted QueryResult.
+
+        Raises:
+            400: If column names are invalid.
+        """
+        try:
+            return pivot_data(
+                result=request.result,
+                row_column=request.row_column,
+                pivot_column=request.pivot_column,
+                value_column=request.value_column,
+                aggregation=request.aggregation,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @router.post("/transform/trend", response_model=QueryResult)
+    async def add_trend(request: TrendColumnRequest) -> QueryResult:
+        """
+        Add trend columns to query result.
+
+        Adds columns for previous value, absolute change, and percent change
+        based on the order of rows.
+
+        Args:
+            request: Trend column request with column configuration.
+
+        Returns:
+            QueryResult with added trend columns.
+
+        Raises:
+            400: If column names are invalid.
+        """
+        try:
+            return add_trend_column(
+                result=request.result,
+                value_column=request.value_column,
+                order_column=request.order_column,
+                group_column=request.group_column,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    # ========================================================================
+    # Metrics Endpoints
+    # ========================================================================
+
+    @router.post("/metrics/trend", response_model=TrendResult)
+    async def calculate_metric_trend(request: MetricTrendRequest) -> TrendResult:
+        """
+        Calculate trend for a metric query.
+
+        Executes the query for both current and comparison periods,
+        then calculates the trend between them.
+
+        Args:
+            request: Metric trend request with period configuration.
+
+        Returns:
+            TrendResult with current value, previous value, and change metrics.
+
+        Raises:
+            400: If the query fails validation.
+            500: If the query execution fails.
+        """
+        try:
+            return await engine.calculate_metric_trend(
+                query=request.query,
+                comparison=request.comparison,
+                current_start=request.current_start,
+                current_end=request.current_end,
+                value_column=request.value_column,
+                date_column=request.date_column,
+            )
+        except QueryValidationError as e:
+            raise HTTPException(
+                status_code=400, detail={"message": e.message, "errors": e.errors}
+            ) from e
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
 

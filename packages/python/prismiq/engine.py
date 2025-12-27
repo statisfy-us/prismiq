@@ -7,6 +7,7 @@ embedded analytics platform.
 
 from __future__ import annotations
 
+from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
 import asyncpg
@@ -21,11 +22,17 @@ from prismiq.schema_config import (
     SchemaConfigManager,
     TableConfig,
 )
+from prismiq.timeseries import TimeInterval
+from prismiq.transforms import pivot_data
+from prismiq.trends import ComparisonPeriod, TrendResult, calculate_trend
 from prismiq.types import (
     DatabaseSchema,
+    FilterDefinition,
+    FilterOperator,
     QueryDefinition,
     QueryResult,
     TableSchema,
+    TimeSeriesConfig,
 )
 
 if TYPE_CHECKING:
@@ -281,6 +288,289 @@ class PrismiqEngine:
         self._ensure_started()
         assert self._builder is not None
         return self._builder.validate_detailed(query)
+
+    # ========================================================================
+    # Time Series Methods
+    # ========================================================================
+
+    async def execute_timeseries_query(
+        self,
+        query: QueryDefinition,
+        interval: TimeInterval,
+        date_column: str,
+        fill_missing: bool = True,
+    ) -> QueryResult:
+        """
+        Execute a time series query with automatic bucketing.
+
+        Adds date_trunc to the query for time bucketing and optionally
+        fills missing time buckets.
+
+        Args:
+            query: Query definition to execute.
+            interval: Time interval for bucketing.
+            date_column: Name of the date/timestamp column to bucket.
+            fill_missing: Whether to fill missing time buckets with default values.
+
+        Returns:
+            QueryResult with time-bucketed data.
+
+        Raises:
+            RuntimeError: If the engine has not been started.
+            QueryValidationError: If the query fails validation.
+            ValueError: If the date column is not found.
+        """
+        self._ensure_started()
+        assert self._executor is not None
+
+        # Find the table ID for the date column
+        table_id = self._find_table_for_column(query, date_column)
+        if table_id is None:
+            raise ValueError(f"Date column '{date_column}' not found in query tables")
+
+        # Create a modified query with time series config
+        modified_query = QueryDefinition(
+            tables=query.tables,
+            joins=query.joins,
+            columns=query.columns,
+            filters=query.filters,
+            group_by=query.group_by,
+            order_by=query.order_by,
+            limit=query.limit,
+            offset=query.offset,
+            time_series=TimeSeriesConfig(
+                table_id=table_id,
+                date_column=date_column,
+                interval=interval.value,
+                fill_missing=fill_missing,
+            ),
+        )
+
+        return await self._executor.execute(modified_query)
+
+    def _find_table_for_column(self, query: QueryDefinition, column_name: str) -> str | None:
+        """Find the table ID that contains the specified column."""
+        self._ensure_started()
+        assert self._schema is not None
+
+        for query_table in query.tables:
+            table_schema = self._schema.get_table(query_table.name)
+            if table_schema and table_schema.has_column(column_name):
+                return query_table.id
+
+        return None
+
+    # ========================================================================
+    # Transform Methods
+    # ========================================================================
+
+    def transform_pivot(
+        self,
+        result: QueryResult,
+        row_column: str,
+        pivot_column: str,
+        value_column: str,
+        aggregation: str = "sum",
+    ) -> QueryResult:
+        """
+        Pivot a query result from long to wide format.
+
+        Args:
+            result: Query result to pivot.
+            row_column: Column to use as row headers.
+            pivot_column: Column to pivot into separate columns.
+            value_column: Column containing values to aggregate.
+            aggregation: Aggregation function: sum, avg, count, min, max.
+
+        Returns:
+            Pivoted QueryResult.
+        """
+        return pivot_data(
+            result=result,
+            row_column=row_column,
+            pivot_column=pivot_column,
+            value_column=value_column,
+            aggregation=aggregation,
+        )
+
+    # ========================================================================
+    # Trend Methods
+    # ========================================================================
+
+    def calculate_trend(
+        self,
+        current: float | None,
+        previous: float | None,
+        threshold: float = 0.001,
+    ) -> TrendResult:
+        """
+        Calculate a trend between two values.
+
+        Args:
+            current: Current value.
+            previous: Previous value for comparison.
+            threshold: Changes smaller than this are considered "flat".
+
+        Returns:
+            TrendResult with direction and change metrics.
+        """
+        return calculate_trend(current, previous, threshold)
+
+    async def calculate_metric_trend(
+        self,
+        query: QueryDefinition,
+        comparison: ComparisonPeriod,
+        current_start: date,
+        current_end: date,
+        value_column: str,
+        date_column: str,
+    ) -> TrendResult:
+        """
+        Calculate trend for a metric query.
+
+        Executes the query for both current and comparison periods,
+        then calculates the trend between them.
+
+        Args:
+            query: Query definition for the metric.
+            comparison: Period to compare against.
+            current_start: Start date of current period.
+            current_end: End date of current period.
+            value_column: Column containing the metric value.
+            date_column: Column containing the date for filtering.
+
+        Returns:
+            TrendResult with current value, previous value, and change metrics.
+
+        Raises:
+            RuntimeError: If the engine has not been started.
+            ValueError: If the date or value column is not found.
+        """
+        self._ensure_started()
+        assert self._executor is not None
+
+        # Find the table ID for the date column
+        table_id = self._find_table_for_column(query, date_column)
+        if table_id is None:
+            raise ValueError(f"Date column '{date_column}' not found in query tables")
+
+        # Calculate comparison period dates
+        previous_start, previous_end = self._get_comparison_dates(
+            comparison, current_start, current_end
+        )
+
+        # Execute query for current period
+        current_query = self._add_date_filter(
+            query, table_id, date_column, current_start, current_end
+        )
+        current_result = await self._executor.execute(current_query)
+
+        # Execute query for previous period
+        previous_query = self._add_date_filter(
+            query, table_id, date_column, previous_start, previous_end
+        )
+        previous_result = await self._executor.execute(previous_query)
+
+        # Extract values
+        current_value = self._extract_value(current_result, value_column)
+        previous_value = self._extract_value(previous_result, value_column)
+
+        return calculate_trend(current_value, previous_value)
+
+    def _get_comparison_dates(
+        self,
+        comparison: ComparisonPeriod,
+        current_start: date,
+        current_end: date,
+    ) -> tuple[date, date]:
+        """Calculate the comparison period dates."""
+        period_days = (current_end - current_start).days + 1
+
+        if comparison == ComparisonPeriod.PREVIOUS_PERIOD:
+            previous_end = current_start - timedelta(days=1)
+            previous_start = previous_end - timedelta(days=period_days - 1)
+        elif comparison == ComparisonPeriod.PREVIOUS_YEAR:
+            previous_start = current_start.replace(year=current_start.year - 1)
+            previous_end = current_end.replace(year=current_end.year - 1)
+        elif comparison == ComparisonPeriod.PREVIOUS_MONTH:
+            # Move back one month
+            if current_start.month == 1:
+                previous_start = current_start.replace(year=current_start.year - 1, month=12)
+            else:
+                previous_start = current_start.replace(month=current_start.month - 1)
+
+            if current_end.month == 1:
+                previous_end = current_end.replace(year=current_end.year - 1, month=12)
+            else:
+                previous_end = current_end.replace(month=current_end.month - 1)
+        elif comparison == ComparisonPeriod.PREVIOUS_WEEK:
+            previous_start = current_start - timedelta(days=7)
+            previous_end = current_end - timedelta(days=7)
+        else:
+            raise ValueError(f"Unknown comparison period: {comparison}")
+
+        return previous_start, previous_end
+
+    def _add_date_filter(
+        self,
+        query: QueryDefinition,
+        table_id: str,
+        date_column: str,
+        start_date: date,
+        end_date: date,
+    ) -> QueryDefinition:
+        """Add date range filters to a query."""
+        new_filters = list(query.filters)
+        new_filters.extend(
+            [
+                FilterDefinition(
+                    table_id=table_id,
+                    column=date_column,
+                    operator=FilterOperator.GTE,
+                    value=start_date.isoformat(),
+                ),
+                FilterDefinition(
+                    table_id=table_id,
+                    column=date_column,
+                    operator=FilterOperator.LTE,
+                    value=end_date.isoformat(),
+                ),
+            ]
+        )
+
+        return QueryDefinition(
+            tables=query.tables,
+            joins=query.joins,
+            columns=query.columns,
+            filters=new_filters,
+            group_by=query.group_by,
+            order_by=query.order_by,
+            limit=query.limit,
+            offset=query.offset,
+            time_series=query.time_series,
+        )
+
+    def _extract_value(self, result: QueryResult, column: str) -> float | None:
+        """Extract a single value from a query result."""
+        if not result.rows:
+            return None
+
+        try:
+            col_idx = result.columns.index(column)
+        except ValueError:
+            # Try finding by alias pattern (e.g., "sum_amount" for aggregated column)
+            for i, col_name in enumerate(result.columns):
+                if col_name == column or col_name.endswith(f"_{column}"):
+                    col_idx = i
+                    break
+            else:
+                raise ValueError(f"Column '{column}' not found in result")
+
+        value = result.rows[0][col_idx]
+        if value is None:
+            return None
+
+        return float(value)
 
     # ========================================================================
     # Schema Configuration Methods

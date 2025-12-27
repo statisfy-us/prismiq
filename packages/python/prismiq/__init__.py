@@ -68,6 +68,39 @@ from prismiq.schema_config import (
     TableConfig,
 )
 
+# Time series utilities
+from prismiq.timeseries import (
+    TimeBucket,
+    TimeInterval,
+    fill_missing_buckets,
+    generate_time_buckets,
+    get_date_trunc_sql,
+    get_interval_format,
+)
+
+# Data transformation utilities
+from prismiq.transforms import (
+    calculate_percent_of_total,
+    calculate_running_total,
+    fill_nulls,
+    limit_result,
+    pivot_data,
+    sort_result,
+    transpose_data,
+)
+
+# Trend calculation utilities
+from prismiq.trends import (
+    ComparisonPeriod,
+    TrendDirection,
+    TrendResult,
+    add_trend_column,
+    calculate_moving_average,
+    calculate_period_comparison,
+    calculate_trend,
+    calculate_year_over_year,
+)
+
 # Schema types
 # Query types
 # Result types
@@ -94,6 +127,7 @@ from prismiq.types import (
     SortDirection,
     TableNotFoundError,
     TableSchema,
+    TimeSeriesConfig,
 )
 
 __all__ = [
@@ -104,6 +138,8 @@ __all__ = [
     # Schema types
     "ColumnSchema",
     "ColumnSelection",
+    # Trend utilities
+    "ComparisonPeriod",
     "DatabaseSchema",
     # Date utilities
     "DatePreset",
@@ -140,20 +176,47 @@ __all__ = [
     "TableConfig",
     "TableNotFoundError",
     "TableSchema",
+    # Time series types
+    "TimeBucket",
+    "TimeInterval",
+    "TimeSeriesConfig",
+    "TrendDirection",
+    "TrendResult",
     # Validation
     "ValidationError",
     "ValidationResult",
     # Version
     "__version__",
+    # Trend functions
+    "add_trend_column",
+    "calculate_moving_average",
+    # Transform functions
+    "calculate_percent_of_total",
+    "calculate_period_comparison",
+    "calculate_running_total",
+    # Trend functions
+    "calculate_trend",
+    "calculate_year_over_year",
     # API router factory
     "create_router",
     "date_add",
     "date_trunc",
+    # Transform functions
+    "fill_missing_buckets",
+    "fill_nulls",
     "format_compact",
     "format_currency",
     "format_number",
     "format_percent",
+    # Time series functions
+    "generate_time_buckets",
     "get_date_range_sql",
+    "get_date_trunc_sql",
+    "get_interval_format",
+    "limit_result",
     "parse_number",
+    "pivot_data",
     "resolve_date_preset",
+    "sort_result",
+    "transpose_data",
 ]
