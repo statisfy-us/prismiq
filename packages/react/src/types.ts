@@ -1,0 +1,248 @@
+/**
+ * Prismiq TypeScript type definitions.
+ *
+ * These types match the Python backend exactly (snake_case field names).
+ * Keep in sync with packages/python/prismiq/types.py
+ */
+
+// ============================================================================
+// Schema Types - Database metadata models
+// ============================================================================
+
+/**
+ * Schema information for a single database column.
+ */
+export interface ColumnSchema {
+  /** Column name. */
+  name: string;
+  /** PostgreSQL data type (e.g., 'integer', 'character varying'). */
+  data_type: string;
+  /** Whether the column allows NULL values. */
+  is_nullable: boolean;
+  /** Whether this column is part of the primary key. */
+  is_primary_key: boolean;
+  /** Default value expression, if any. */
+  default_value: string | null;
+}
+
+/**
+ * Schema information for a database table.
+ */
+export interface TableSchema {
+  /** Table name. */
+  name: string;
+  /** Database schema (namespace) containing the table. */
+  schema_name: string;
+  /** List of columns in the table. */
+  columns: ColumnSchema[];
+}
+
+/**
+ * Foreign key relationship between two tables.
+ */
+export interface Relationship {
+  /** Name of the table containing the foreign key. */
+  from_table: string;
+  /** Column name in the from_table. */
+  from_column: string;
+  /** Name of the referenced table. */
+  to_table: string;
+  /** Column name in the to_table (usually primary key). */
+  to_column: string;
+}
+
+/**
+ * Complete schema for an exposed database.
+ */
+export interface DatabaseSchema {
+  /** List of exposed tables. */
+  tables: TableSchema[];
+  /** Foreign key relationships between tables. */
+  relationships: Relationship[];
+}
+
+// ============================================================================
+// Query Types - Query definition models
+// ============================================================================
+
+/**
+ * A table reference in a query.
+ */
+export interface QueryTable {
+  /** Unique identifier for this table in the query (e.g., 't1', 't2'). */
+  id: string;
+  /** Actual table name in the database. */
+  name: string;
+  /** Optional alias for the table in the query. */
+  alias?: string;
+}
+
+/**
+ * SQL join types.
+ */
+export type JoinType = 'INNER' | 'LEFT' | 'RIGHT' | 'FULL';
+
+/**
+ * Definition of a join between two tables.
+ */
+export interface JoinDefinition {
+  /** ID of the left table in the join. */
+  from_table_id: string;
+  /** Column name in the left table. */
+  from_column: string;
+  /** ID of the right table in the join. */
+  to_table_id: string;
+  /** Column name in the right table. */
+  to_column: string;
+  /** Type of join to perform. */
+  join_type: JoinType;
+}
+
+/**
+ * SQL aggregation functions.
+ */
+export type AggregationType =
+  | 'none'
+  | 'sum'
+  | 'avg'
+  | 'count'
+  | 'count_distinct'
+  | 'min'
+  | 'max';
+
+/**
+ * A column to select in a query.
+ */
+export interface ColumnSelection {
+  /** ID of the table containing the column. */
+  table_id: string;
+  /** Column name. */
+  column: string;
+  /** Aggregation function to apply. */
+  aggregation: AggregationType;
+  /** Optional alias for the result column. */
+  alias?: string;
+}
+
+/**
+ * SQL filter operators.
+ */
+export type FilterOperator =
+  | 'eq'
+  | 'neq'
+  | 'gt'
+  | 'gte'
+  | 'lt'
+  | 'lte'
+  | 'in_'
+  | 'not_in'
+  | 'like'
+  | 'ilike'
+  | 'between'
+  | 'is_null'
+  | 'is_not_null';
+
+/**
+ * A filter condition in a query.
+ *
+ * Value types:
+ * - Single value for eq, neq, gt, gte, lt, lte, like, ilike
+ * - Array for in_, not_in
+ * - [min, max] tuple for between
+ * - null/undefined for is_null, is_not_null
+ */
+export interface FilterDefinition {
+  /** ID of the table containing the column to filter. */
+  table_id: string;
+  /** Column name to filter on. */
+  column: string;
+  /** Filter operator. */
+  operator: FilterOperator;
+  /** Value(s) for the filter. */
+  value?: unknown;
+}
+
+/**
+ * SQL sort directions.
+ */
+export type SortDirection = 'ASC' | 'DESC';
+
+/**
+ * A sort order definition.
+ */
+export interface SortDefinition {
+  /** ID of the table containing the column to sort by. */
+  table_id: string;
+  /** Column name to sort by. */
+  column: string;
+  /** Sort direction. */
+  direction: SortDirection;
+}
+
+/**
+ * A group by column definition.
+ */
+export interface GroupByDefinition {
+  /** ID of the table containing the column. */
+  table_id: string;
+  /** Column name to group by. */
+  column: string;
+}
+
+/**
+ * Complete query definition.
+ */
+export interface QueryDefinition {
+  /** Tables used in the query. */
+  tables: QueryTable[];
+  /** Join definitions between tables. */
+  joins?: JoinDefinition[];
+  /** Columns to select. */
+  columns: ColumnSelection[];
+  /** Filter conditions. */
+  filters?: FilterDefinition[];
+  /** Explicit group by columns. If empty and aggregations are present, will be auto-derived. */
+  group_by?: GroupByDefinition[];
+  /** Sort order. */
+  order_by?: SortDefinition[];
+  /** Maximum number of rows to return. */
+  limit?: number;
+  /** Number of rows to skip. */
+  offset?: number;
+}
+
+// ============================================================================
+// Result Types
+// ============================================================================
+
+/**
+ * Result of executing a query.
+ */
+export interface QueryResult {
+  /** Column names in the result. */
+  columns: string[];
+  /** PostgreSQL data types for each column. */
+  column_types: string[];
+  /** Result rows as a list of lists. */
+  rows: unknown[][];
+  /** Number of rows returned. */
+  row_count: number;
+  /** Whether the result was truncated due to row limit. */
+  truncated: boolean;
+  /** Query execution time in milliseconds. */
+  execution_time_ms: number;
+}
+
+// ============================================================================
+// Validation Types
+// ============================================================================
+
+/**
+ * Result of query validation.
+ */
+export interface ValidationResult {
+  /** Whether the query is valid. */
+  valid: boolean;
+  /** List of validation errors, if any. */
+  errors: string[];
+}
