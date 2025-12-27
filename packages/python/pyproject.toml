@@ -128,6 +128,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101", "S105", "S106"]  # Allow asserts, hardcoded passwords in tests
+"prismiq/query.py" = ["S608"]  # SQL construction is intentional in query builder
 
 [tool.ruff.lint.isort]
 known-first-party = ["prismiq"]
