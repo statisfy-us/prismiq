@@ -3,13 +3,20 @@
  *
  * @example
  * ```tsx
- * import { AnalyticsProvider, useQuery } from '@prismiq/react';
+ * import {
+ *   AnalyticsProvider,
+ *   ThemeProvider,
+ *   QueryBuilder,
+ *   useQuery
+ * } from '@prismiq/react';
  *
  * function App() {
  *   return (
- *     <AnalyticsProvider config={{ endpoint: 'https://api.example.com' }}>
- *       <Dashboard />
- *     </AnalyticsProvider>
+ *     <ThemeProvider>
+ *       <AnalyticsProvider config={{ endpoint: 'https://api.example.com' }}>
+ *         <QueryBuilder onExecute={(result) => console.log(result)} />
+ *       </AnalyticsProvider>
+ *     </ThemeProvider>
  *   );
  * }
  * ```
@@ -50,11 +57,28 @@ export { PrismiqClient, PrismiqError } from './api';
 export type { ClientConfig } from './api';
 
 // ============================================================================
+// Theme
+// ============================================================================
+
+export { ThemeProvider, useTheme, lightTheme, darkTheme } from './theme';
+export type {
+  PrismiqTheme,
+  ThemeMode,
+  ThemeContextValue,
+  ThemeProviderProps,
+  DeepPartial,
+} from './theme';
+
+// ============================================================================
 // Context
 // ============================================================================
 
-export { AnalyticsProvider, useAnalytics } from './context';
-export type { AnalyticsContextValue, AnalyticsProviderProps } from './context';
+export { AnalyticsProvider, useAnalytics, useAnalyticsCallbacks } from './context';
+export type {
+  AnalyticsContextValue,
+  AnalyticsProviderProps,
+  AnalyticsCallbacks,
+} from './context';
 
 // ============================================================================
 // Hooks
@@ -62,6 +86,93 @@ export type { AnalyticsContextValue, AnalyticsProviderProps } from './context';
 
 export { useSchema, useQuery } from './hooks';
 export type { UseSchemaResult, UseQueryResult, UseQueryOptions } from './hooks';
+
+// ============================================================================
+// UI Components
+// ============================================================================
+
+export {
+  // Base UI
+  Button,
+  Input,
+  Select,
+  Checkbox,
+  Badge,
+  Tooltip,
+  Dropdown,
+  DropdownItem,
+  DropdownSeparator,
+  Icon,
+  // Schema Explorer
+  SchemaExplorer,
+  TableNode,
+  ColumnNode,
+  // Column Selector
+  ColumnSelector,
+  SelectedColumn,
+  // Filter Builder
+  FilterBuilder,
+  FilterRow,
+  FilterValueInput,
+  // Sort Builder
+  SortBuilder,
+  SortRow,
+  // Aggregation Picker
+  AggregationPicker,
+  // Results Table
+  ResultsTable,
+  TableHeader,
+  TableRow,
+  TableCell,
+  Pagination,
+  // Query Builder
+  QueryBuilder,
+  QueryBuilderToolbar,
+  QueryPreview,
+} from './components';
+
+export type {
+  // Base UI
+  ButtonProps,
+  InputProps,
+  SelectProps,
+  SelectOption,
+  CheckboxProps,
+  BadgeProps,
+  TooltipProps,
+  DropdownProps,
+  DropdownItemProps,
+  DropdownSeparatorProps,
+  IconProps,
+  IconName,
+  // Schema Explorer
+  SchemaExplorerProps,
+  TableNodeProps,
+  ColumnNodeProps,
+  // Column Selector
+  ColumnSelectorProps,
+  SelectedColumnProps,
+  // Filter Builder
+  FilterBuilderProps,
+  FilterRowProps,
+  FilterValueInputProps,
+  // Sort Builder
+  SortBuilderProps,
+  SortRowProps,
+  // Aggregation Picker
+  AggregationPickerProps,
+  // Results Table
+  ResultsTableProps,
+  TableHeaderProps,
+  TableRowProps,
+  TableCellProps,
+  PaginationProps,
+  // Query Builder
+  QueryBuilderProps,
+  QueryBuilderState,
+  QueryBuilderToolbarProps,
+  QueryPreviewProps,
+} from './components';
 
 // ============================================================================
 // Version
