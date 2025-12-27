@@ -1,0 +1,45 @@
+# Pre-commit hooks for Prismiq
+# Install: pre-commit install
+# Run all: pre-commit run --all-files
+
+repos:
+  # Ruff - linting and formatting (replaces black, isort, flake8)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # Pyright - type checking (local, uses uv-installed pyright)
+  - repo: local
+    hooks:
+      - id: pyright
+        name: Pyright type check
+        entry: bash -c 'cd packages/python && uv run pyright'
+        language: system
+        files: ^packages/python/.*\.py$
+        pass_filenames: false
+
+  # General file hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: detect-private-key
+
+  # TypeScript/React
+  - repo: local
+    hooks:
+      - id: tsc
+        name: TypeScript check
+        entry: bash -c 'cd packages/react && npm run typecheck'
+        language: system
+        files: ^packages/react/.*\.(ts|tsx)$
+        pass_filenames: false
