@@ -21,6 +21,7 @@ from prismiq.types import (
     SortDefinition,
     SortDirection,
     TableSchema,
+    TimeSeriesConfig,
 )
 
 # ============================================================================
@@ -772,3 +773,187 @@ class TestSqlInjectionPrevention:
         # This tests the internal _quote_identifier method
         escaped = builder._quote_identifier('column"name')
         assert escaped == '"column""name"'
+
+
+# ============================================================================
+# Time Series Tests
+# ============================================================================
+
+
+class TestTimeSeries:
+    """Tests for time series query building."""
+
+    def test_time_series_adds_date_trunc_column(self, builder: QueryBuilder) -> None:
+        """Test that time series adds date_trunc to SELECT."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="orders")],
+            columns=[
+                ColumnSelection(
+                    table_id="t1", column="total", aggregation=AggregationType.SUM, alias="sum"
+                ),
+            ],
+            time_series=TimeSeriesConfig(
+                table_id="t1",
+                date_column="created_at",
+                interval="day",
+            ),
+        )
+        sql, _params = builder.build(query)
+
+        assert "date_trunc('day'" in sql
+        assert '"orders"."created_at"' in sql
+        assert '"created_at_bucket"' in sql  # Default alias
+
+    def test_time_series_with_custom_alias(self, builder: QueryBuilder) -> None:
+        """Test time series with custom alias."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="orders")],
+            columns=[
+                ColumnSelection(table_id="t1", column="total", aggregation=AggregationType.SUM),
+            ],
+            time_series=TimeSeriesConfig(
+                table_id="t1",
+                date_column="created_at",
+                interval="month",
+                alias="period",
+            ),
+        )
+        sql, _params = builder.build(query)
+
+        assert "date_trunc('month'" in sql
+        assert '"period"' in sql
+
+    def test_time_series_adds_group_by(self, builder: QueryBuilder) -> None:
+        """Test that time series adds date_trunc to GROUP BY."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="orders")],
+            columns=[
+                ColumnSelection(table_id="t1", column="total", aggregation=AggregationType.SUM),
+            ],
+            time_series=TimeSeriesConfig(
+                table_id="t1",
+                date_column="created_at",
+                interval="week",
+            ),
+        )
+        sql, _params = builder.build(query)
+
+        assert "GROUP BY date_trunc('week'" in sql
+
+    def test_time_series_adds_order_by(self, builder: QueryBuilder) -> None:
+        """Test that time series adds date bucket to ORDER BY."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="orders")],
+            columns=[
+                ColumnSelection(table_id="t1", column="total", aggregation=AggregationType.SUM),
+            ],
+            time_series=TimeSeriesConfig(
+                table_id="t1",
+                date_column="created_at",
+                interval="day",
+            ),
+        )
+        sql, _params = builder.build(query)
+
+        assert "ORDER BY date_trunc('day'" in sql
+        assert "ASC" in sql
+
+    def test_time_series_with_explicit_order_by(self, builder: QueryBuilder) -> None:
+        """Test that explicit order_by overrides time series default."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="orders")],
+            columns=[
+                ColumnSelection(table_id="t1", column="total", aggregation=AggregationType.SUM),
+            ],
+            time_series=TimeSeriesConfig(
+                table_id="t1",
+                date_column="created_at",
+                interval="day",
+            ),
+            order_by=[SortDefinition(table_id="t1", column="total", direction=SortDirection.DESC)],
+        )
+        sql, _params = builder.build(query)
+
+        # Should use explicit order by, not the date bucket
+        assert '"orders"."total" DESC' in sql
+
+    def test_time_series_all_intervals(self, builder: QueryBuilder) -> None:
+        """Test all valid time intervals."""
+        for interval in ["minute", "hour", "day", "week", "month", "quarter", "year"]:
+            query = QueryDefinition(
+                tables=[QueryTable(id="t1", name="orders")],
+                columns=[
+                    ColumnSelection(table_id="t1", column="total", aggregation=AggregationType.SUM),
+                ],
+                time_series=TimeSeriesConfig(
+                    table_id="t1",
+                    date_column="created_at",
+                    interval=interval,
+                ),
+            )
+            sql, _params = builder.build(query)
+
+            assert f"date_trunc('{interval}'" in sql
+
+
+class TestTimeSeriesValidation:
+    """Tests for time series validation."""
+
+    def test_validate_time_series_valid(self, builder: QueryBuilder) -> None:
+        """Test validation passes for valid time series config."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="orders")],
+            columns=[
+                ColumnSelection(table_id="t1", column="total", aggregation=AggregationType.SUM),
+            ],
+            time_series=TimeSeriesConfig(
+                table_id="t1",
+                date_column="created_at",
+                interval="day",
+            ),
+        )
+        errors = builder.validate(query)
+        assert errors == []
+
+    def test_validate_time_series_invalid_column(self, builder: QueryBuilder) -> None:
+        """Test validation fails for invalid date column."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="orders")],
+            columns=[
+                ColumnSelection(table_id="t1", column="total"),
+            ],
+            time_series=TimeSeriesConfig(
+                table_id="t1",
+                date_column="nonexistent",
+                interval="day",
+            ),
+        )
+        errors = builder.validate(query)
+        assert len(errors) == 1
+        assert "nonexistent" in errors[0]
+
+    def test_validate_time_series_non_date_column(self, builder: QueryBuilder) -> None:
+        """Test validation fails for non-date column."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="orders")],
+            columns=[
+                ColumnSelection(table_id="t1", column="total"),
+            ],
+            time_series=TimeSeriesConfig(
+                table_id="t1",
+                date_column="status",  # text column, not date
+                interval="day",
+            ),
+        )
+        errors = builder.validate(query)
+        assert len(errors) == 1
+        assert "not a date/timestamp type" in errors[0]
+
+    def test_validate_time_series_invalid_interval(self) -> None:
+        """Test validation fails for invalid interval."""
+        with pytest.raises(ValueError, match="Invalid interval"):
+            TimeSeriesConfig(
+                table_id="t1",
+                date_column="created_at",
+                interval="invalid",
+            )

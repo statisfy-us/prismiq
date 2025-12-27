@@ -8,9 +8,12 @@ for the Prismiq embedded analytics platform.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+
+if TYPE_CHECKING:
+    pass
 
 # ============================================================================
 # Schema Types - Database metadata models
@@ -265,6 +268,45 @@ class GroupByDefinition(BaseModel):
     """Column name to group by."""
 
 
+class TimeSeriesConfig(BaseModel):
+    """Configuration for time series queries.
+
+    When provided in a QueryDefinition, the query will automatically
+    bucket dates using PostgreSQL's date_trunc function.
+    """
+
+    model_config = ConfigDict(strict=True)
+
+    table_id: str
+    """ID of the table containing the date column."""
+
+    date_column: str
+    """Name of the date/timestamp column to bucket."""
+
+    interval: str
+    """Time interval for bucketing (minute, hour, day, week, month, quarter, year)."""
+
+    fill_missing: bool = True
+    """Whether to fill missing time buckets with default values."""
+
+    fill_value: Any = 0
+    """Value to use for missing time buckets."""
+
+    alias: str | None = None
+    """Optional alias for the date bucket column."""
+
+    @field_validator("interval")
+    @classmethod
+    def validate_interval(cls, v: str) -> str:
+        """Validate that interval is a valid TimeInterval value."""
+        valid_intervals = {"minute", "hour", "day", "week", "month", "quarter", "year"}
+        if v.lower() not in valid_intervals:
+            raise ValueError(
+                f"Invalid interval '{v}'. Must be one of: {', '.join(valid_intervals)}"
+            )
+        return v.lower()
+
+
 class QueryDefinition(BaseModel):
     """Complete query definition."""
 
@@ -296,6 +338,12 @@ class QueryDefinition(BaseModel):
 
     offset: int | None = None
     """Number of rows to skip."""
+
+    time_series: TimeSeriesConfig | None = None
+    """
+    Optional time series configuration.
+    When present, the query will bucket dates automatically.
+    """
 
     @field_validator("tables")
     @classmethod
@@ -344,6 +392,12 @@ class QueryDefinition(BaseModel):
         for o in self.order_by:
             if o.table_id not in table_ids:
                 raise ValueError(f"Order by references unknown table_id: {o.table_id}")
+
+        # Check time_series
+        if self.time_series and self.time_series.table_id not in table_ids:
+            raise ValueError(
+                f"Time series references unknown table_id: {self.time_series.table_id}"
+            )
 
         return self
 

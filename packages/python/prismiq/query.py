@@ -14,13 +14,11 @@ from pydantic import BaseModel, ConfigDict
 
 from prismiq.types import (
     AggregationType,
-    ColumnSelection,
     DatabaseSchema,
     FilterDefinition,
     FilterOperator,
     JoinType,
     QueryDefinition,
-    SortDefinition,
 )
 
 # ============================================================================
@@ -67,6 +65,7 @@ ERROR_INVALID_AGGREGATION = "INVALID_AGGREGATION"
 ERROR_EMPTY_QUERY = "EMPTY_QUERY"
 ERROR_CIRCULAR_JOIN = "CIRCULAR_JOIN"
 ERROR_AMBIGUOUS_COLUMN = "AMBIGUOUS_COLUMN"
+ERROR_INVALID_TIME_SERIES = "INVALID_TIME_SERIES"
 
 
 class QueryBuilder:
@@ -264,12 +263,80 @@ class QueryBuilder:
                         )
                     )
 
+        # Validate time series configuration
+        if query.time_series:
+            ts_errors = self._validate_time_series(query, table_map)
+            errors.extend(ts_errors)
+
         # Check for circular joins
         circular_error = self._check_circular_joins(query)
         if circular_error:
             errors.append(circular_error)
 
         return ValidationResult(valid=len(errors) == 0, errors=errors)
+
+    def _validate_time_series(
+        self, query: QueryDefinition, table_map: dict[str, str]
+    ) -> list[ValidationError]:
+        """Validate time series configuration."""
+        errors: list[ValidationError] = []
+
+        if not query.time_series:
+            return errors
+
+        ts = query.time_series
+        table_name = table_map.get(ts.table_id)
+
+        if not table_name:
+            errors.append(
+                ValidationError(
+                    code=ERROR_INVALID_TIME_SERIES,
+                    message=f"Time series table_id '{ts.table_id}' not found",
+                    field="time_series.table_id",
+                    suggestion=None,
+                )
+            )
+            return errors
+
+        table = self._schema.get_table(table_name)
+        if not table:
+            return errors
+
+        # Validate date column exists
+        if not table.has_column(ts.date_column):
+            available_columns = [c.name for c in table.columns]
+            suggestion = self._suggest_similar(ts.date_column, available_columns)
+            errors.append(
+                ValidationError(
+                    code=ERROR_INVALID_TIME_SERIES,
+                    message=f"Date column '{ts.date_column}' not found in table '{table_name}'",
+                    field="time_series.date_column",
+                    suggestion=suggestion,
+                )
+            )
+        else:
+            # Validate column is a date/timestamp type
+            column_schema = table.get_column(ts.date_column)
+            if column_schema:
+                date_types = {
+                    "date",
+                    "timestamp",
+                    "timestamp without time zone",
+                    "timestamp with time zone",
+                    "timestamptz",
+                }
+                is_date_type = any(dt in column_schema.data_type.lower() for dt in date_types)
+                if not is_date_type:
+                    errors.append(
+                        ValidationError(
+                            code=ERROR_INVALID_TIME_SERIES,
+                            message=f"Column '{ts.date_column}' is not a date/timestamp type (found: {column_schema.data_type})",
+                            field="time_series.date_column",
+                            suggestion="Use a column with date, timestamp, or timestamptz type",
+                        )
+                    )
+
+        return errors
 
     def _suggest_similar(
         self, name: str, candidates: list[str], max_suggestions: int = 3
@@ -415,8 +482,8 @@ class QueryBuilder:
         # Build table_id -> table reference mapping
         table_refs = self._build_table_refs(query)
 
-        # SELECT clause
-        select_clause = self._build_select(query.columns, table_refs)
+        # SELECT clause - with time series support
+        select_clause = self._build_select(query, table_refs)
 
         # FROM clause
         from_clause = self._build_from(query, table_refs)
@@ -424,11 +491,11 @@ class QueryBuilder:
         # WHERE clause
         where_clause, params = self._build_where(query.filters, table_refs, params)
 
-        # GROUP BY clause
+        # GROUP BY clause - with time series support
         group_by_clause = self._build_group_by(query, table_refs)
 
-        # ORDER BY clause
-        order_by_clause = self._build_order_by(query.order_by, table_refs)
+        # ORDER BY clause - with time series support
+        order_by_clause = self._build_order_by(query, table_refs)
 
         # LIMIT and OFFSET
         limit_clause = ""
@@ -463,10 +530,25 @@ class QueryBuilder:
                 refs[qt.id] = self._quote_identifier(qt.name)
         return refs
 
-    def _build_select(self, columns: list[ColumnSelection], table_refs: dict[str, str]) -> str:
-        """Build the SELECT clause."""
+    def _build_select(self, query: QueryDefinition, table_refs: dict[str, str]) -> str:
+        """Build the SELECT clause, including time series bucket if configured."""
         parts: list[str] = []
-        for col in columns:
+
+        # Add time series bucket column first if configured
+        if query.time_series:
+            ts = query.time_series
+            table_ref = table_refs[ts.table_id]
+            date_col = f"{table_ref}.{self._quote_identifier(ts.date_column)}"
+            date_trunc = f"date_trunc('{ts.interval}', {date_col})"
+
+            # Add alias if specified
+            alias = ts.alias or f"{ts.date_column}_bucket"
+            date_trunc = f"{date_trunc} AS {self._quote_identifier(alias)}"
+
+            parts.append(date_trunc)
+
+        # Add regular columns
+        for col in query.columns:
             table_ref = table_refs[col.table_id]
             col_ref = f"{table_ref}.{self._quote_identifier(col.column)}"
 
@@ -643,27 +725,46 @@ class QueryBuilder:
         return "1=1", params
 
     def _build_group_by(self, query: QueryDefinition, table_refs: dict[str, str]) -> str:
-        """Build the GROUP BY clause."""
-        group_by_cols = query.derive_group_by()
-        if not group_by_cols:
-            return ""
+        """Build the GROUP BY clause, including time series bucket if configured."""
+        group_by_parts: list[str] = []
 
-        parts: list[str] = []
+        # Add time series bucket to GROUP BY if present
+        if query.time_series:
+            ts = query.time_series
+            table_ref = table_refs[ts.table_id]
+            date_col = f"{table_ref}.{self._quote_identifier(ts.date_column)}"
+            group_by_parts.append(f"date_trunc('{ts.interval}', {date_col})")
+
+        # Add regular GROUP BY columns
+        group_by_cols = query.derive_group_by()
         for g in group_by_cols:
             table_ref = table_refs[g.table_id]
-            parts.append(f"{table_ref}.{self._quote_identifier(g.column)}")
+            group_by_parts.append(f"{table_ref}.{self._quote_identifier(g.column)}")
 
-        return ", ".join(parts)
-
-    def _build_order_by(self, order_by: list[SortDefinition], table_refs: dict[str, str]) -> str:
-        """Build the ORDER BY clause."""
-        if not order_by:
+        # If time series is present and there are aggregations, we need GROUP BY
+        if query.time_series and query.has_aggregations() and not group_by_cols:
+            # Only have the time series bucket
+            pass
+        elif not group_by_parts:
             return ""
 
+        return ", ".join(group_by_parts)
+
+    def _build_order_by(self, query: QueryDefinition, table_refs: dict[str, str]) -> str:
+        """Build the ORDER BY clause, adding time series bucket if configured."""
         parts: list[str] = []
-        for o in order_by:
-            table_ref = table_refs[o.table_id]
-            parts.append(f"{table_ref}.{self._quote_identifier(o.column)} {o.direction.value}")
+
+        # If time series is present and no explicit order by, order by date bucket
+        if query.time_series and not query.order_by:
+            ts = query.time_series
+            table_ref = table_refs[ts.table_id]
+            date_col = f"{table_ref}.{self._quote_identifier(ts.date_column)}"
+            parts.append(f"date_trunc('{ts.interval}', {date_col}) ASC")
+        else:
+            # Use explicit order by
+            for o in query.order_by:
+                table_ref = table_refs[o.table_id]
+                parts.append(f"{table_ref}.{self._quote_identifier(o.column)} {o.direction.value}")
 
         return ", ".join(parts)
 
