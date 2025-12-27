@@ -72,6 +72,12 @@ typeCheckingMode = "strict"
 include = ["prismiq"]
 exclude = ["tests", ".venv", "build", "dist"]
 
+# Disable strict checks for libraries without complete type stubs
+reportMissingTypeStubs = false
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
+
 # ============================================================================
 # Testing (Pytest)
 # ============================================================================
