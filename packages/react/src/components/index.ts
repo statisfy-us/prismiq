@@ -57,6 +57,22 @@ export type {
 } from './Skeleton';
 
 // ============================================================================
+// Error Boundary Components
+// ============================================================================
+
+export {
+  ErrorBoundary,
+  ErrorFallback,
+  WidgetErrorBoundary,
+} from './ErrorBoundary';
+
+export type {
+  ErrorBoundaryProps,
+  ErrorFallbackProps,
+  WidgetErrorBoundaryProps,
+} from './ErrorBoundary';
+
+// ============================================================================
 // Schema Explorer
 // ============================================================================
 
