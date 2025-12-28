@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 from pydantic import ValidationError
@@ -214,14 +214,14 @@ class TestWidget:
 
     def test_timestamps_auto_set(self) -> None:
         """Test that timestamps are automatically set."""
-        before = datetime.utcnow()
+        before = datetime.now(timezone.utc)
         widget = Widget(
             id="w1",
             type=WidgetType.TABLE,
             title="Data",
             position=WidgetPosition(x=0, y=0, w=12, h=6),
         )
-        after = datetime.utcnow()
+        after = datetime.now(timezone.utc)
         assert before <= widget.created_at <= after
         assert before <= widget.updated_at <= after
 
