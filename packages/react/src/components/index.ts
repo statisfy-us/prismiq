@@ -37,6 +37,26 @@ export type {
 } from './ui';
 
 // ============================================================================
+// Skeleton Loading Components
+// ============================================================================
+
+export {
+  Skeleton,
+  SkeletonText,
+  SkeletonChart,
+  SkeletonTable,
+  SkeletonMetricCard,
+} from './Skeleton';
+
+export type {
+  SkeletonProps,
+  SkeletonTextProps,
+  SkeletonChartProps,
+  SkeletonTableProps,
+  SkeletonMetricCardProps,
+} from './Skeleton';
+
+// ============================================================================
 // Schema Explorer
 // ============================================================================
 
