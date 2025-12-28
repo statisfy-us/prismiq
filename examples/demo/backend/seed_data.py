@@ -11,6 +11,7 @@ Run with:
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import random
 import sys
@@ -460,7 +461,7 @@ async def seed_events(
                 "method": random.choice(["password", "google", "facebook"]),
             }
 
-        events.append((event_type, user_id, timestamp, properties))
+        events.append((event_type, user_id, timestamp, json.dumps(properties)))
 
         # Insert batch
         if len(events) >= batch_size:

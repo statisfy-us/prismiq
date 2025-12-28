@@ -78,16 +78,16 @@ async def create_sales_overview_dashboard(store: DashboardStore) -> None:
             filters=[
                 DashboardFilter(
                     id="date-range",
-                    name="Date Range",
+                    label="Date Range",
                     type=DashboardFilterType.DATE_RANGE,
-                    column="order_date",
+                    field="order_date",
                     table="orders",
                 ),
                 DashboardFilter(
                     id="region-filter",
-                    name="Region",
+                    label="Region",
                     type=DashboardFilterType.SELECT,
-                    column="region",
+                    field="region",
                     table="customers",
                     options=[
                         {"value": "North", "label": "North"},
@@ -229,10 +229,10 @@ async def create_sales_overview_dashboard(store: DashboardStore) -> None:
                 ],
                 joins=[
                     JoinDefinition(
-                        left_table_id="o",
-                        left_column="customer_id",
-                        right_table_id="c",
-                        right_column="id",
+                        from_table_id="o",
+                        from_column="customer_id",
+                        to_table_id="c",
+                        to_column="id",
                         join_type=JoinType.INNER,
                     )
                 ],
@@ -254,6 +254,7 @@ async def create_sales_overview_dashboard(store: DashboardStore) -> None:
                 ],
                 order_by=[
                     SortDefinition(
+                        table_id="o",
                         column="revenue",
                         direction=SortDirection.DESC,
                     )
@@ -281,10 +282,10 @@ async def create_sales_overview_dashboard(store: DashboardStore) -> None:
                 ],
                 joins=[
                     JoinDefinition(
-                        left_table_id="oi",
-                        left_column="product_id",
-                        right_table_id="p",
-                        right_column="id",
+                        from_table_id="oi",
+                        from_column="product_id",
+                        to_table_id="p",
+                        to_column="id",
                         join_type=JoinType.INNER,
                     )
                 ],
@@ -349,6 +350,7 @@ async def create_sales_overview_dashboard(store: DashboardStore) -> None:
                 ],
                 order_by=[
                     SortDefinition(
+                        table_id="o",
                         column="date",
                         direction=SortDirection.ASC,
                     )
@@ -377,10 +379,10 @@ async def create_sales_overview_dashboard(store: DashboardStore) -> None:
                 ],
                 joins=[
                     JoinDefinition(
-                        left_table_id="o",
-                        left_column="customer_id",
-                        right_table_id="c",
-                        right_column="id",
+                        from_table_id="o",
+                        from_column="customer_id",
+                        to_table_id="c",
+                        to_column="id",
                         join_type=JoinType.INNER,
                     )
                 ],
@@ -403,6 +405,7 @@ async def create_sales_overview_dashboard(store: DashboardStore) -> None:
                 ],
                 order_by=[
                     SortDefinition(
+                        table_id="o",
                         column="total_spend",
                         direction=SortDirection.DESC,
                     )
@@ -444,9 +447,9 @@ async def create_product_analytics_dashboard(store: DashboardStore) -> None:
             filters=[
                 DashboardFilter(
                     id="category-filter",
-                    name="Category",
+                    label="Category",
                     type=DashboardFilterType.MULTI_SELECT,
-                    column="category",
+                    field="category",
                     table="products",
                     options=[
                         {"value": "Electronics", "label": "Electronics"},
@@ -574,10 +577,10 @@ async def create_product_analytics_dashboard(store: DashboardStore) -> None:
                 ],
                 joins=[
                     JoinDefinition(
-                        left_table_id="oi",
-                        left_column="product_id",
-                        right_table_id="p",
-                        right_column="id",
+                        from_table_id="oi",
+                        from_column="product_id",
+                        to_table_id="p",
+                        to_column="id",
                         join_type=JoinType.INNER,
                     )
                 ],
@@ -599,6 +602,7 @@ async def create_product_analytics_dashboard(store: DashboardStore) -> None:
                 ],
                 order_by=[
                     SortDefinition(
+                        table_id="oi",
                         column="units_sold",
                         direction=SortDirection.DESC,
                     )
@@ -628,17 +632,17 @@ async def create_product_analytics_dashboard(store: DashboardStore) -> None:
                 ],
                 joins=[
                     JoinDefinition(
-                        left_table_id="oi",
-                        left_column="order_id",
-                        right_table_id="o",
-                        right_column="id",
+                        from_table_id="oi",
+                        from_column="order_id",
+                        to_table_id="o",
+                        to_column="id",
                         join_type=JoinType.INNER,
                     ),
                     JoinDefinition(
-                        left_table_id="oi",
-                        left_column="product_id",
-                        right_table_id="p",
-                        right_column="id",
+                        from_table_id="oi",
+                        from_column="product_id",
+                        to_table_id="p",
+                        to_column="id",
                         join_type=JoinType.INNER,
                     ),
                 ],
@@ -665,7 +669,9 @@ async def create_product_analytics_dashboard(store: DashboardStore) -> None:
                     GroupByDefinition(table_id="p", column="category"),
                 ],
                 order_by=[
-                    SortDefinition(column="date", direction=SortDirection.ASC),
+                    SortDefinition(
+                        table_id="o", column="date", direction=SortDirection.ASC
+                    ),
                 ],
             ),
             config={
@@ -756,7 +762,9 @@ async def create_product_analytics_dashboard(store: DashboardStore) -> None:
                     GroupByDefinition(table_id="p", column="category"),
                 ],
                 order_by=[
-                    SortDefinition(column="total_stock", direction=SortDirection.DESC),
+                    SortDefinition(
+                        table_id="p", column="total_stock", direction=SortDirection.DESC
+                    ),
                 ],
             ),
             config={
