@@ -8,11 +8,22 @@ that exposes schema, validation, and query execution endpoints.
 from __future__ import annotations
 
 from datetime import date
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from prismiq.dashboard_store import DashboardStore, InMemoryDashboardStore
+from prismiq.dashboards import (
+    Dashboard,
+    DashboardCreate,
+    DashboardExport,
+    DashboardUpdate,
+    Widget,
+    WidgetCreate,
+    WidgetUpdate,
+)
+from prismiq.filter_merge import FilterValue, merge_filters
 from prismiq.query import ValidationResult
 from prismiq.schema_config import (
     ColumnConfig,
@@ -197,16 +208,53 @@ class MetricTrendRequest(BaseModel):
 
 
 # ============================================================================
+# Dashboard Request/Response Models
+# ============================================================================
+
+
+class DashboardListResponse(BaseModel):
+    """Response model for dashboard list endpoint."""
+
+    dashboards: list[Dashboard]
+    """List of dashboards."""
+
+
+class WidgetQueryRequest(BaseModel):
+    """Request model for executing a widget's query with dashboard filters."""
+
+    widget_id: str
+    """ID of the widget to execute."""
+
+    filter_values: list[FilterValue] = []
+    """Current dashboard filter values."""
+
+
+class DashboardImportRequest(BaseModel):
+    """Request model for importing a dashboard."""
+
+    export_data: DashboardExport
+    """Dashboard export data to import."""
+
+    name_override: str | None = None
+    """Optional name to use instead of the export's name."""
+
+
+# ============================================================================
 # Router Factory
 # ============================================================================
 
 
-def create_router(engine: PrismiqEngine) -> APIRouter:
+def create_router(
+    engine: PrismiqEngine,
+    dashboard_store: DashboardStore | None = None,
+) -> APIRouter:
     """
     Create a FastAPI router for the Prismiq analytics engine.
 
     Args:
         engine: Initialized PrismiqEngine instance.
+        dashboard_store: Optional dashboard storage backend.
+            If not provided, uses InMemoryDashboardStore.
 
     Returns:
         APIRouter with analytics endpoints.
@@ -218,6 +266,9 @@ def create_router(engine: PrismiqEngine) -> APIRouter:
         >>> app.include_router(router, prefix="/api/analytics")
     """
     router = APIRouter(tags=["analytics"])
+
+    # Use provided store or create in-memory store
+    store = dashboard_store or InMemoryDashboardStore()
 
     # ========================================================================
     # Schema Endpoints
@@ -679,5 +730,340 @@ def create_router(engine: PrismiqEngine) -> APIRouter:
         """
         engine.update_column_config(table_name, column_name, ColumnConfig())
         return SuccessResponse(message=f"Column '{table_name}.{column_name}' configuration reset")
+
+    # ========================================================================
+    # Dashboard Endpoints
+    # ========================================================================
+
+    @router.get("/dashboards", response_model=DashboardListResponse)
+    async def list_dashboards(owner_id: str | None = None) -> DashboardListResponse:
+        """
+        List all dashboards.
+
+        Args:
+            owner_id: Optional filter by owner ID.
+
+        Returns:
+            List of dashboards.
+        """
+        dashboards = await store.list_dashboards(owner_id)
+        return DashboardListResponse(dashboards=dashboards)
+
+    @router.get("/dashboards/{dashboard_id}", response_model=Dashboard)
+    async def get_dashboard(dashboard_id: str) -> Dashboard:
+        """
+        Get a dashboard by ID.
+
+        Args:
+            dashboard_id: Dashboard ID.
+
+        Returns:
+            Dashboard with all widgets and filters.
+
+        Raises:
+            404: If dashboard not found.
+        """
+        dashboard = await store.get_dashboard(dashboard_id)
+        if dashboard is None:
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+        return dashboard
+
+    @router.post("/dashboards", response_model=Dashboard, status_code=201)
+    async def create_dashboard(
+        dashboard: DashboardCreate,
+        owner_id: str | None = None,
+    ) -> Dashboard:
+        """
+        Create a new dashboard.
+
+        Args:
+            dashboard: Dashboard creation data.
+            owner_id: Optional owner ID.
+
+        Returns:
+            Created dashboard.
+        """
+        return await store.create_dashboard(dashboard, owner_id)
+
+    @router.patch("/dashboards/{dashboard_id}", response_model=Dashboard)
+    async def update_dashboard(
+        dashboard_id: str,
+        update: DashboardUpdate,
+    ) -> Dashboard:
+        """
+        Update a dashboard.
+
+        Args:
+            dashboard_id: Dashboard ID.
+            update: Fields to update.
+
+        Returns:
+            Updated dashboard.
+
+        Raises:
+            404: If dashboard not found.
+        """
+        updated = await store.update_dashboard(dashboard_id, update)
+        if updated is None:
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+        return updated
+
+    @router.delete("/dashboards/{dashboard_id}", response_model=SuccessResponse)
+    async def delete_dashboard(dashboard_id: str) -> SuccessResponse:
+        """
+        Delete a dashboard.
+
+        Args:
+            dashboard_id: Dashboard ID.
+
+        Returns:
+            Success response.
+
+        Raises:
+            404: If dashboard not found.
+        """
+        deleted = await store.delete_dashboard(dashboard_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+        return SuccessResponse(message=f"Dashboard '{dashboard_id}' deleted")
+
+    # ========================================================================
+    # Widget Endpoints
+    # ========================================================================
+
+    @router.post(
+        "/dashboards/{dashboard_id}/widgets",
+        response_model=Widget,
+        status_code=201,
+    )
+    async def add_widget(dashboard_id: str, widget: WidgetCreate) -> Widget:
+        """
+        Add a widget to a dashboard.
+
+        Args:
+            dashboard_id: Dashboard ID.
+            widget: Widget creation data.
+
+        Returns:
+            Created widget.
+
+        Raises:
+            404: If dashboard not found.
+        """
+        created = await store.add_widget(dashboard_id, widget)
+        if created is None:
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+        return created
+
+    @router.patch("/widgets/{widget_id}", response_model=Widget)
+    async def update_widget(widget_id: str, update: WidgetUpdate) -> Widget:
+        """
+        Update a widget.
+
+        Args:
+            widget_id: Widget ID.
+            update: Fields to update.
+
+        Returns:
+            Updated widget.
+
+        Raises:
+            404: If widget not found.
+        """
+        updated = await store.update_widget(widget_id, update)
+        if updated is None:
+            raise HTTPException(status_code=404, detail=f"Widget '{widget_id}' not found")
+        return updated
+
+    @router.delete("/widgets/{widget_id}", response_model=SuccessResponse)
+    async def delete_widget(widget_id: str) -> SuccessResponse:
+        """
+        Delete a widget.
+
+        Args:
+            widget_id: Widget ID.
+
+        Returns:
+            Success response.
+
+        Raises:
+            404: If widget not found.
+        """
+        deleted = await store.delete_widget(widget_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail=f"Widget '{widget_id}' not found")
+        return SuccessResponse(message=f"Widget '{widget_id}' deleted")
+
+    @router.post("/widgets/{widget_id}/duplicate", response_model=Widget, status_code=201)
+    async def duplicate_widget(widget_id: str) -> Widget:
+        """
+        Duplicate a widget.
+
+        Args:
+            widget_id: Widget ID to duplicate.
+
+        Returns:
+            New duplicated widget.
+
+        Raises:
+            404: If widget not found.
+        """
+        duplicated = await store.duplicate_widget(widget_id)
+        if duplicated is None:
+            raise HTTPException(status_code=404, detail=f"Widget '{widget_id}' not found")
+        return duplicated
+
+    @router.post(
+        "/dashboards/{dashboard_id}/widgets/{widget_id}/execute",
+        response_model=QueryResult,
+    )
+    async def execute_widget_query(
+        dashboard_id: str,
+        widget_id: str,
+        filter_values: list[FilterValue] | None = None,
+    ) -> QueryResult:
+        """
+        Execute a widget's query with dashboard filters applied.
+
+        Args:
+            dashboard_id: Dashboard ID.
+            widget_id: Widget ID.
+            filter_values: Current dashboard filter values.
+
+        Returns:
+            Query result.
+
+        Raises:
+            404: If dashboard or widget not found.
+            400: If widget has no query or query fails validation.
+        """
+        dashboard = await store.get_dashboard(dashboard_id)
+        if dashboard is None:
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+
+        # Find the widget
+        widget = None
+        for w in dashboard.widgets:
+            if w.id == widget_id:
+                widget = w
+                break
+
+        if widget is None:
+            raise HTTPException(status_code=404, detail=f"Widget '{widget_id}' not found")
+
+        if widget.query is None:
+            raise HTTPException(status_code=400, detail="Widget has no query")
+
+        # Merge dashboard filters with widget query
+        schema = await engine.get_schema()
+        query = merge_filters(
+            widget.query,
+            dashboard.filters,
+            filter_values or [],
+            schema,
+        )
+
+        try:
+            return await engine.execute_query(query)
+        except QueryValidationError as e:
+            raise HTTPException(
+                status_code=400, detail={"message": e.message, "errors": e.errors}
+            ) from e
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    # ========================================================================
+    # Dashboard Import/Export Endpoints
+    # ========================================================================
+
+    @router.get("/dashboards/{dashboard_id}/export", response_model=DashboardExport)
+    async def export_dashboard(dashboard_id: str) -> DashboardExport:
+        """
+        Export a dashboard to a portable format.
+
+        Args:
+            dashboard_id: Dashboard ID.
+
+        Returns:
+            DashboardExport data.
+
+        Raises:
+            404: If dashboard not found.
+        """
+        dashboard = await store.get_dashboard(dashboard_id)
+        if dashboard is None:
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+
+        # Convert widgets to dict format without IDs
+        widget_dicts: list[dict[str, Any]] = []
+        for widget in dashboard.widgets:
+            widget_dict = widget.model_dump()
+            # Remove ID and timestamps
+            del widget_dict["id"]
+            del widget_dict["created_at"]
+            del widget_dict["updated_at"]
+            widget_dicts.append(widget_dict)
+
+        return DashboardExport(
+            version="1.0",
+            name=dashboard.name,
+            description=dashboard.description,
+            layout=dashboard.layout,
+            widgets=widget_dicts,
+            filters=dashboard.filters,
+        )
+
+    @router.post("/dashboards/import", response_model=Dashboard, status_code=201)
+    async def import_dashboard(
+        request: DashboardImportRequest,
+        owner_id: str | None = None,
+    ) -> Dashboard:
+        """
+        Import a dashboard from exported data.
+
+        Args:
+            request: Import request with export data.
+            owner_id: Optional owner ID for the imported dashboard.
+
+        Returns:
+            Imported dashboard.
+        """
+        export_data = request.export_data
+
+        # Create the dashboard
+        dashboard = await store.create_dashboard(
+            DashboardCreate(
+                name=request.name_override or export_data.name,
+                description=export_data.description,
+                layout=export_data.layout,
+            ),
+            owner_id=owner_id,
+        )
+
+        # Update with filters
+        if export_data.filters:
+            await store.update_dashboard(
+                dashboard.id,
+                DashboardUpdate(filters=export_data.filters),
+            )
+
+        # Add widgets
+        for widget_dict in export_data.widgets:
+            await store.add_widget(
+                dashboard.id,
+                WidgetCreate(
+                    type=widget_dict["type"],
+                    title=widget_dict["title"],
+                    query=widget_dict.get("query"),
+                    position=widget_dict["position"],
+                    config=widget_dict.get("config"),
+                ),
+            )
+
+        # Return the complete dashboard
+        result = await store.get_dashboard(dashboard.id)
+        if result is None:
+            raise HTTPException(status_code=500, detail="Failed to retrieve imported dashboard")
+        return result
 
     return router

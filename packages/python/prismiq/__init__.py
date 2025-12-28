@@ -32,6 +32,24 @@ __version__ = "0.1.0"
 # API router factory
 from prismiq.api import create_router
 
+# Dashboard models and storage
+from prismiq.dashboard_store import DashboardStore, InMemoryDashboardStore
+from prismiq.dashboards import (
+    Dashboard,
+    DashboardCreate,
+    DashboardExport,
+    DashboardFilter,
+    DashboardFilterType,
+    DashboardLayout,
+    DashboardUpdate,
+    Widget,
+    WidgetConfig,
+    WidgetCreate,
+    WidgetPosition,
+    WidgetType,
+    WidgetUpdate,
+)
+
 # Date utilities
 from prismiq.dates import (
     DatePreset,
@@ -44,6 +62,16 @@ from prismiq.engine import PrismiqEngine
 
 # Low-level components (for advanced use)
 from prismiq.executor import QueryExecutor
+
+# Filter merging utilities
+from prismiq.filter_merge import (
+    FilterValue,
+    filter_to_query_filter,
+    filter_to_query_filters,
+    get_applicable_filters,
+    merge_filters,
+    resolve_date_filter,
+)
 
 # Number formatting utilities
 from prismiq.formatting import (
@@ -140,6 +168,16 @@ __all__ = [
     "ColumnSelection",
     # Trend utilities
     "ComparisonPeriod",
+    # Dashboard models
+    "Dashboard",
+    "DashboardCreate",
+    "DashboardExport",
+    "DashboardFilter",
+    "DashboardFilterType",
+    "DashboardLayout",
+    # Dashboard storage
+    "DashboardStore",
+    "DashboardUpdate",
     "DatabaseSchema",
     # Date utilities
     "DatePreset",
@@ -148,7 +186,11 @@ __all__ = [
     "EnhancedTableSchema",
     "FilterDefinition",
     "FilterOperator",
+    # Filter merge utilities
+    "FilterValue",
     "GroupByDefinition",
+    # Dashboard storage implementations
+    "InMemoryDashboardStore",
     "JoinDefinition",
     "JoinType",
     # Number formatting
@@ -185,6 +227,13 @@ __all__ = [
     # Validation
     "ValidationError",
     "ValidationResult",
+    # Widget models
+    "Widget",
+    "WidgetConfig",
+    "WidgetCreate",
+    "WidgetPosition",
+    "WidgetType",
+    "WidgetUpdate",
     # Version
     "__version__",
     # Trend functions
@@ -204,18 +253,24 @@ __all__ = [
     # Transform functions
     "fill_missing_buckets",
     "fill_nulls",
+    # Filter merge functions
+    "filter_to_query_filter",
+    "filter_to_query_filters",
     "format_compact",
     "format_currency",
     "format_number",
     "format_percent",
     # Time series functions
     "generate_time_buckets",
+    "get_applicable_filters",
     "get_date_range_sql",
     "get_date_trunc_sql",
     "get_interval_format",
     "limit_result",
+    "merge_filters",
     "parse_number",
     "pivot_data",
+    "resolve_date_filter",
     "resolve_date_preset",
     "sort_result",
     "transpose_data",
