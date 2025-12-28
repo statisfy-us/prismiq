@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from prismiq.cache import InMemoryCache
 from prismiq.schema import SchemaIntrospector
 from prismiq.types import TableNotFoundError
 
@@ -58,6 +59,8 @@ class TestSchemaIntrospectorInit:
         assert introspector._pool is mock_pool
         assert introspector._exposed_tables is None
         assert introspector._schema_name == "public"
+        assert introspector._cache is None
+        assert introspector._cache_ttl == 3600
 
     def test_init_with_exposed_tables(self, mock_pool: MagicMock) -> None:
         """Test initialization with exposed_tables."""
@@ -68,6 +71,13 @@ class TestSchemaIntrospectorInit:
         """Test initialization with custom schema name."""
         introspector = SchemaIntrospector(mock_pool, schema_name="analytics")
         assert introspector._schema_name == "analytics"
+
+    def test_init_with_cache(self, mock_pool: MagicMock) -> None:
+        """Test initialization with cache."""
+        cache = InMemoryCache()
+        introspector = SchemaIntrospector(mock_pool, cache=cache, cache_ttl=1800)
+        assert introspector._cache is cache
+        assert introspector._cache_ttl == 1800
 
 
 class TestGetSchema:
@@ -370,3 +380,196 @@ class TestPrimaryKeyDetection:
         assert order_id_col.is_primary_key is True
         assert product_id_col.is_primary_key is True
         assert quantity_col.is_primary_key is False
+
+
+# ============================================================================
+# Schema Caching Tests
+# ============================================================================
+
+
+class TestSchemaCaching:
+    """Tests for schema caching functionality."""
+
+    async def test_get_schema_uses_cache(
+        self, mock_pool: MagicMock, mock_connection: AsyncMock
+    ) -> None:
+        """Test that get_schema uses cache when available."""
+        cache = InMemoryCache()
+        introspector = SchemaIntrospector(mock_pool, cache=cache)
+
+        # First call: mock database response
+        mock_connection.fetch.side_effect = [
+            [make_record({"table_name": "users"})],
+            [
+                make_record(
+                    {
+                        "column_name": "id",
+                        "data_type": "integer",
+                        "is_nullable": "NO",
+                        "column_default": None,
+                    }
+                ),
+            ],
+            [make_record({"column_name": "id"})],
+            [],
+        ]
+
+        schema1 = await introspector.get_schema()
+        assert len(schema1.tables) == 1
+
+        # Reset mock to track second call
+        mock_connection.fetch.reset_mock()
+        mock_connection.fetch.side_effect = None
+
+        # Second call should use cache (no DB calls)
+        schema2 = await introspector.get_schema()
+
+        assert schema2.tables[0].name == schema1.tables[0].name
+        mock_connection.fetch.assert_not_called()
+
+    async def test_get_schema_force_refresh_bypasses_cache(
+        self, mock_pool: MagicMock, mock_connection: AsyncMock
+    ) -> None:
+        """Test that force_refresh bypasses cache."""
+        cache = InMemoryCache()
+        introspector = SchemaIntrospector(mock_pool, cache=cache)
+
+        # Setup database responses for both calls
+        def setup_mock() -> None:
+            mock_connection.fetch.side_effect = [
+                [make_record({"table_name": "users"})],
+                [
+                    make_record(
+                        {
+                            "column_name": "id",
+                            "data_type": "integer",
+                            "is_nullable": "NO",
+                            "column_default": None,
+                        }
+                    ),
+                ],
+                [make_record({"column_name": "id"})],
+                [],
+            ]
+
+        # First call populates cache
+        setup_mock()
+        await introspector.get_schema()
+
+        # Second call with force_refresh
+        setup_mock()
+        schema = await introspector.get_schema(force_refresh=True)
+
+        # Should have made database calls
+        assert schema.tables[0].name == "users"
+        assert mock_connection.fetch.call_count > 0
+
+    async def test_get_table_uses_cache(
+        self, mock_pool: MagicMock, mock_connection: AsyncMock
+    ) -> None:
+        """Test that get_table uses cache when available."""
+        cache = InMemoryCache()
+        introspector = SchemaIntrospector(mock_pool, cache=cache)
+
+        # First call: mock database response
+        mock_connection.fetch.side_effect = [
+            [make_record({"table_name": "users"})],
+            [
+                make_record(
+                    {
+                        "column_name": "id",
+                        "data_type": "integer",
+                        "is_nullable": "NO",
+                        "column_default": None,
+                    }
+                ),
+            ],
+            [make_record({"column_name": "id"})],
+        ]
+
+        table1 = await introspector.get_table("users")
+        assert table1.name == "users"
+
+        # Reset mock to track second call
+        mock_connection.fetch.reset_mock()
+        mock_connection.fetch.side_effect = None
+
+        # Second call should use cache
+        table2 = await introspector.get_table("users")
+
+        assert table2.name == table1.name
+        mock_connection.fetch.assert_not_called()
+
+    async def test_get_table_force_refresh_bypasses_cache(
+        self, mock_pool: MagicMock, mock_connection: AsyncMock
+    ) -> None:
+        """Test that get_table force_refresh bypasses cache."""
+        cache = InMemoryCache()
+        introspector = SchemaIntrospector(mock_pool, cache=cache)
+
+        def setup_mock() -> None:
+            mock_connection.fetch.side_effect = [
+                [make_record({"table_name": "users"})],
+                [
+                    make_record(
+                        {
+                            "column_name": "id",
+                            "data_type": "integer",
+                            "is_nullable": "NO",
+                            "column_default": None,
+                        }
+                    ),
+                ],
+                [make_record({"column_name": "id"})],
+            ]
+
+        # First call populates cache
+        setup_mock()
+        await introspector.get_table("users")
+
+        # Second call with force_refresh
+        setup_mock()
+        table = await introspector.get_table("users", force_refresh=True)
+
+        assert table.name == "users"
+        assert mock_connection.fetch.call_count > 0
+
+    async def test_invalidate_cache_clears_schema(
+        self, mock_pool: MagicMock, mock_connection: AsyncMock
+    ) -> None:
+        """Test that invalidate_cache clears all schema entries."""
+        cache = InMemoryCache()
+        introspector = SchemaIntrospector(mock_pool, cache=cache)
+
+        # Populate cache
+        mock_connection.fetch.side_effect = [
+            [make_record({"table_name": "users"})],
+            [
+                make_record(
+                    {
+                        "column_name": "id",
+                        "data_type": "integer",
+                        "is_nullable": "NO",
+                        "column_default": None,
+                    }
+                ),
+            ],
+            [make_record({"column_name": "id"})],
+            [],
+        ]
+        await introspector.get_schema()
+
+        # Invalidate cache
+        count = await introspector.invalidate_cache()
+
+        assert count >= 1
+
+        # Verify cache is empty for schema
+        cached = await cache.get("schema:full")
+        assert cached is None
+
+    async def test_invalidate_cache_without_cache_returns_zero(self, mock_pool: MagicMock) -> None:
+        """Test that invalidate_cache returns 0 when no cache is configured."""
+        introspector = SchemaIntrospector(mock_pool)
+        count = await introspector.invalidate_cache()
+        assert count == 0

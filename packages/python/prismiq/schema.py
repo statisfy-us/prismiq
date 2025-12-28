@@ -20,6 +20,8 @@ from prismiq.types import (
 if TYPE_CHECKING:
     from asyncpg import Pool, Record
 
+    from prismiq.cache import CacheBackend
+
 
 class SchemaIntrospector:
     """
@@ -29,12 +31,21 @@ class SchemaIntrospector:
     detects foreign key relationships, and provides a filtered
     view based on exposed_tables configuration.
 
+    Supports optional caching to reduce database queries.
+
     Example:
         >>> pool = await asyncpg.create_pool(database_url)
         >>> introspector = SchemaIntrospector(pool, exposed_tables=["users", "orders"])
         >>> schema = await introspector.get_schema()
         >>> print(schema.table_names())
         ['users', 'orders']
+
+    With caching:
+        >>> from prismiq.cache import InMemoryCache
+        >>> cache = InMemoryCache()
+        >>> introspector = SchemaIntrospector(pool, cache=cache, cache_ttl=3600)
+        >>> schema = await introspector.get_schema()  # Hits database
+        >>> schema = await introspector.get_schema()  # Returns cached result
     """
 
     def __init__(
@@ -42,6 +53,8 @@ class SchemaIntrospector:
         pool: Pool,
         exposed_tables: list[str] | None = None,
         schema_name: str = "public",
+        cache: CacheBackend | None = None,
+        cache_ttl: int = 3600,
     ) -> None:
         """
         Initialize the schema introspector.
@@ -51,18 +64,42 @@ class SchemaIntrospector:
             exposed_tables: List of table names to expose. If None, all tables
                 in the schema are exposed.
             schema_name: PostgreSQL schema to introspect (default: "public").
+            cache: Optional cache backend for caching schema data.
+            cache_ttl: TTL for cached schema in seconds (default: 1 hour).
         """
         self._pool = pool
         self._exposed_tables = exposed_tables
         self._schema_name = schema_name
+        self._cache = cache
+        self._cache_ttl = cache_ttl
 
-    async def get_schema(self) -> DatabaseSchema:
+    async def get_schema(self, force_refresh: bool = False) -> DatabaseSchema:
         """
         Get the complete database schema.
+
+        Args:
+            force_refresh: If True, bypass cache and fetch fresh data.
 
         Returns:
             DatabaseSchema containing all exposed tables and their relationships.
         """
+        # Try cache first
+        if self._cache and not force_refresh:
+            cached = await self._cache.get("schema:full")
+            if cached is not None:
+                return DatabaseSchema.model_validate(cached)
+
+        # Introspect from database
+        schema = await self._introspect_schema()
+
+        # Store in cache
+        if self._cache:
+            await self._cache.set("schema:full", schema.model_dump(), self._cache_ttl)
+
+        return schema
+
+    async def _introspect_schema(self) -> DatabaseSchema:
+        """Introspect schema from database."""
         table_names = await self._get_table_names()
         tables: list[TableSchema] = []
 
@@ -74,12 +111,13 @@ class SchemaIntrospector:
 
         return DatabaseSchema(tables=tables, relationships=relationships)
 
-    async def get_table(self, table_name: str) -> TableSchema:
+    async def get_table(self, table_name: str, force_refresh: bool = False) -> TableSchema:
         """
         Get schema information for a single table.
 
         Args:
             table_name: Name of the table to retrieve.
+            force_refresh: If True, bypass cache and fetch fresh data.
 
         Returns:
             TableSchema for the requested table.
@@ -91,12 +129,41 @@ class SchemaIntrospector:
         if self._exposed_tables is not None and table_name not in self._exposed_tables:
             raise TableNotFoundError(table_name)
 
+        # Try cache first
+        if self._cache and not force_refresh:
+            cached = await self._cache.get(f"schema:table:{table_name}")
+            if cached is not None:
+                return TableSchema.model_validate(cached)
+
         # Check if table exists in database
         table_names = await self._get_table_names()
         if table_name not in table_names:
             raise TableNotFoundError(table_name)
 
-        return await self._get_table_schema(table_name)
+        # Introspect from database
+        table = await self._get_table_schema(table_name)
+
+        # Store in cache
+        if self._cache:
+            await self._cache.set(
+                f"schema:table:{table_name}",
+                table.model_dump(),
+                self._cache_ttl,
+            )
+
+        return table
+
+    async def invalidate_cache(self) -> int:
+        """
+        Invalidate all cached schema data.
+
+        Returns:
+            Number of cache entries cleared.
+        """
+        if self._cache is None:
+            return 0
+
+        return await self._cache.clear("schema:*")
 
     async def detect_relationships(self) -> list[Relationship]:
         """
