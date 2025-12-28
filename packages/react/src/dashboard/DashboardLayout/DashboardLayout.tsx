@@ -4,7 +4,10 @@
  */
 
 import { useCallback, useMemo } from 'react';
-import GridLayout from 'react-grid-layout';
+import type { ComponentClass } from 'react';
+import ReactGridLayout from 'react-grid-layout';
+import 'react-grid-layout/css/styles.css';
+import 'react-resizable/css/styles.css';
 import { useTheme } from '../../theme';
 import type { DashboardLayoutProps, Widget, WidgetPosition } from '../types';
 
@@ -27,11 +30,12 @@ interface Layouts {
   [breakpoint: string]: LayoutItem[];
 }
 
-// Access Responsive and WidthProvider from the module
-// The module exports these as additional properties on the default export
+// react-grid-layout exports Responsive and WidthProvider as module properties
+// but the TypeScript types don't correctly represent this CommonJS pattern
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const RGL = GridLayout as any;
-const ResponsiveGridLayout = RGL.WidthProvider(RGL.Responsive || RGL);
+const RGLAny = ReactGridLayout as any;
+const ResponsiveGridLayout: ComponentClass<ReactGridLayout.ResponsiveProps & ReactGridLayout.WidthProviderProps> =
+  RGLAny.WidthProvider(RGLAny.Responsive);
 
 // Responsive breakpoints
 const BREAKPOINTS = {
