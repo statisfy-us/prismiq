@@ -7,12 +7,15 @@ embedded analytics platform.
 
 from __future__ import annotations
 
+import time
 from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
 import asyncpg
 
+from prismiq.cache import CacheBackend, CacheConfig, QueryCache
 from prismiq.executor import QueryExecutor
+from prismiq.metrics import record_cache_hit, record_query_execution, set_active_connections
 from prismiq.query import QueryBuilder, ValidationResult
 from prismiq.schema import SchemaIntrospector
 from prismiq.schema_config import (
@@ -73,6 +76,16 @@ class PrismiqEngine:
         >>> @app.on_event("shutdown")
         >>> async def shutdown():
         ...     await engine.shutdown()
+
+    With caching:
+        >>> from prismiq import PrismiqEngine, InMemoryCache
+        >>>
+        >>> cache = InMemoryCache()
+        >>> engine = PrismiqEngine(
+        ...     database_url="postgresql://...",
+        ...     cache=cache,
+        ...     cache_ttl=300,  # 5 minutes
+        ... )
     """
 
     def __init__(
@@ -83,6 +96,9 @@ class PrismiqEngine:
         max_rows: int = 10000,
         schema_name: str = "public",
         schema_config: SchemaConfig | None = None,
+        cache: CacheBackend | None = None,
+        cache_ttl: int = 300,
+        enable_metrics: bool = True,
     ) -> None:
         """
         Initialize the Prismiq engine.
@@ -94,15 +110,31 @@ class PrismiqEngine:
             max_rows: Maximum number of rows to return per query.
             schema_name: PostgreSQL schema to use (default: "public").
             schema_config: Initial schema configuration for display names, hidden items, etc.
+            cache: Optional cache backend for query result caching.
+            cache_ttl: Default cache TTL in seconds (default: 300).
+            enable_metrics: Whether to record Prometheus metrics (default: True).
         """
         self._database_url = database_url
         self._exposed_tables = exposed_tables
         self._query_timeout = query_timeout
         self._max_rows = max_rows
         self._schema_name = schema_name
+        self._cache_ttl = cache_ttl
+        self._enable_metrics = enable_metrics
 
         # Schema config manager
         self._schema_config_manager = SchemaConfigManager(schema_config)
+
+        # Cache backend
+        self._cache: CacheBackend | None = cache
+        self._query_cache: QueryCache | None = None
+        if cache:
+            cache_config = CacheConfig(
+                default_ttl=cache_ttl,
+                query_ttl=cache_ttl,
+                schema_ttl=cache_ttl * 12,  # Schema cache lasts 12x longer
+            )
+            self._query_cache = QueryCache(cache, config=cache_config)
 
         # These will be initialized in startup()
         self._pool: Pool | None = None
@@ -110,6 +142,11 @@ class PrismiqEngine:
         self._executor: QueryExecutor | None = None
         self._builder: QueryBuilder | None = None
         self._schema: DatabaseSchema | None = None
+
+    @property
+    def cache(self) -> CacheBackend | None:
+        """Get the cache backend."""
+        return self._cache
 
     async def startup(self) -> None:
         """
@@ -125,11 +162,13 @@ class PrismiqEngine:
             max_size=10,
         )
 
-        # Create schema introspector
+        # Create schema introspector with optional caching
         self._introspector = SchemaIntrospector(
             self._pool,
             exposed_tables=self._exposed_tables,
             schema_name=self._schema_name,
+            cache=self._cache,
+            cache_ttl=self._cache_ttl,
         )
 
         # Introspect schema
@@ -143,6 +182,10 @@ class PrismiqEngine:
             query_timeout=self._query_timeout,
             max_rows=self._max_rows,
         )
+
+        # Update metrics
+        if self._enable_metrics:
+            set_active_connections(self._pool.get_size())
 
     async def shutdown(self) -> None:
         """
@@ -158,6 +201,10 @@ class PrismiqEngine:
         self._executor = None
         self._builder = None
         self._schema = None
+
+        # Update metrics
+        if self._enable_metrics:
+            set_active_connections(0)
 
     # ========================================================================
     # Health Check Methods
@@ -188,9 +235,12 @@ class PrismiqEngine:
     # Schema Methods
     # ========================================================================
 
-    async def get_schema(self) -> DatabaseSchema:
+    async def get_schema(self, force_refresh: bool = False) -> DatabaseSchema:
         """
         Get the complete database schema (raw, without config applied).
+
+        Args:
+            force_refresh: If True, bypass cache and introspect fresh.
 
         Returns:
             DatabaseSchema containing all exposed tables and relationships.
@@ -200,7 +250,7 @@ class PrismiqEngine:
         """
         self._ensure_started()
         assert self._introspector is not None
-        return await self._introspector.get_schema()
+        return await self._introspector.get_schema(force_refresh=force_refresh)
 
     async def get_enhanced_schema(self) -> EnhancedDatabaseSchema:
         """
@@ -241,12 +291,17 @@ class PrismiqEngine:
     # Query Methods
     # ========================================================================
 
-    async def execute_query(self, query: QueryDefinition) -> QueryResult:
+    async def execute_query(
+        self,
+        query: QueryDefinition,
+        use_cache: bool = True,
+    ) -> QueryResult:
         """
         Execute a query and return results.
 
         Args:
             query: Query definition to execute.
+            use_cache: Whether to use cached results if available.
 
         Returns:
             QueryResult with columns, rows, and execution metadata.
@@ -259,7 +314,39 @@ class PrismiqEngine:
         """
         self._ensure_started()
         assert self._executor is not None
-        return await self._executor.execute(query)
+
+        start = time.perf_counter()
+
+        # Check cache first
+        if use_cache and self._query_cache:
+            cached = await self._query_cache.get_result(query)
+            if cached:
+                if self._enable_metrics:
+                    record_cache_hit(True)
+                return cached
+            if self._enable_metrics:
+                record_cache_hit(False)
+
+        # Execute query
+        try:
+            result = await self._executor.execute(query)
+
+            # Cache the result
+            if use_cache and self._query_cache:
+                await self._query_cache.cache_result(query, result)
+
+            # Record metrics
+            if self._enable_metrics:
+                duration = (time.perf_counter() - start) * 1000
+                record_query_execution(duration, "success")
+
+            return result
+
+        except Exception:
+            if self._enable_metrics:
+                duration = (time.perf_counter() - start) * 1000
+                record_query_execution(duration, "error")
+            raise
 
     async def preview_query(self, query: QueryDefinition, limit: int = 100) -> QueryResult:
         """
@@ -313,6 +400,38 @@ class PrismiqEngine:
         self._ensure_started()
         assert self._builder is not None
         return self._builder.validate_detailed(query)
+
+    # ========================================================================
+    # Cache Methods
+    # ========================================================================
+
+    async def invalidate_cache(self, table_name: str | None = None) -> int:
+        """
+        Invalidate cached data.
+
+        Args:
+            table_name: If provided, invalidate only queries involving this table.
+                        If None, invalidate all query cache.
+
+        Returns:
+            Number of cache entries invalidated.
+        """
+        if not self._query_cache or not self._cache:
+            return 0
+
+        if table_name:
+            return await self._query_cache.invalidate_table(table_name)
+        else:
+            return await self._cache.clear("query:*")
+
+    async def invalidate_schema_cache(self) -> None:
+        """
+        Invalidate the schema cache.
+
+        Forces the next get_schema() call to introspect the database.
+        """
+        if self._introspector:
+            await self._introspector.invalidate_cache()
 
     # ========================================================================
     # Time Series Methods
