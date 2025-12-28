@@ -22,6 +22,15 @@
  *   );
  * }
  * ```
+ *
+ * For modular imports (smaller bundle size):
+ * ```tsx
+ * import { BarChart } from '@prismiq/react/charts';
+ * import { Dashboard } from '@prismiq/react/dashboard';
+ * import { useIsClient } from '@prismiq/react/ssr';
+ * import { useFocusTrap } from '@prismiq/react/utils';
+ * import { exportToCSV } from '@prismiq/react/export';
+ * ```
  */
 
 // ============================================================================
@@ -167,6 +176,21 @@ export {
   DropdownItem,
   DropdownSeparator,
   Icon,
+  // Skeleton Loading
+  Skeleton,
+  SkeletonText,
+  SkeletonChart,
+  SkeletonTable,
+  SkeletonMetricCard,
+  // Error Boundaries
+  ErrorBoundary,
+  ErrorFallback,
+  WidgetErrorBoundary,
+  // Empty States
+  EmptyState,
+  NoData,
+  NoResults,
+  EmptyDashboard,
   // Schema Explorer
   SchemaExplorer,
   TableNode,
@@ -209,6 +233,21 @@ export type {
   DropdownSeparatorProps,
   IconProps,
   IconName,
+  // Skeleton Loading
+  SkeletonProps,
+  SkeletonTextProps,
+  SkeletonChartProps,
+  SkeletonTableProps,
+  SkeletonMetricCardProps,
+  // Error Boundaries
+  ErrorBoundaryProps,
+  ErrorFallbackProps,
+  WidgetErrorBoundaryProps,
+  // Empty States
+  EmptyStateProps,
+  NoDataProps,
+  NoResultsProps,
+  EmptyDashboardProps,
   // Schema Explorer
   SchemaExplorerProps,
   TableNodeProps,
@@ -239,6 +278,31 @@ export type {
 } from './components';
 
 // ============================================================================
+// Export Utilities
+// ============================================================================
+
+export {
+  // CSV export
+  exportToCSV,
+  generateCSV,
+  downloadFile,
+  // Excel export
+  exportToExcel,
+  exportMultipleSheets,
+  // Hook
+  useExport,
+} from './export';
+
+export type {
+  ExportOptions,
+  ExcelExportOptions,
+  ExcelCellStyle,
+  ExportData,
+  UseExportOptions,
+  UseExportResult,
+} from './export';
+
+// ============================================================================
 // Dashboard
 // ============================================================================
 
@@ -257,6 +321,11 @@ export {
   SelectFilter,
   MultiSelectFilter,
   TextFilter,
+  // Editor components
+  DashboardEditor,
+  EditorToolbar,
+  WidgetPalette,
+  WidgetEditor,
   // Hooks
   useDashboard,
   useDashboardFilters,
@@ -301,6 +370,7 @@ export type {
   WidgetPaletteProps,
   WidgetEditorProps,
   WidgetContentProps,
+  EditorToolbarProps,
   // Hook result types
   UseDashboardFiltersResult,
   UseWidgetResult,
@@ -308,6 +378,56 @@ export type {
   UseAutoRefreshResult,
   UseFullscreenResult,
 } from './dashboard';
+
+// ============================================================================
+// Accessibility Utilities
+// ============================================================================
+
+export {
+  useFocusTrap,
+  useArrowNavigation,
+  useRovingTabIndex,
+  useFocusVisible,
+  announceToScreenReader,
+  focusVisibleStyles,
+  skipLinkStyles,
+  skipLinkFocusStyles,
+} from './utils';
+
+export type {
+  FocusTrapOptions,
+  ArrowNavigationOptions,
+  UseFocusTrapResult,
+  UseArrowNavigationResult,
+  SkipLinkProps,
+} from './utils';
+
+// ============================================================================
+// SSR Utilities
+// ============================================================================
+
+export {
+  useIsClient,
+  ClientOnly,
+  getWindowWidth,
+  getWindowHeight,
+  isBrowser,
+  isServer,
+  getLocalStorage,
+  setLocalStorage,
+  removeLocalStorage,
+  useWindowSize,
+  useMediaQuery,
+  useBreakpoint,
+  useIsBreakpoint,
+  BREAKPOINTS,
+} from './ssr';
+
+export type {
+  ClientOnlyProps,
+  WindowSize,
+  Breakpoint,
+} from './ssr';
 
 // ============================================================================
 // Version
