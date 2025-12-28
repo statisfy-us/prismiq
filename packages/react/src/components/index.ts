@@ -73,6 +73,24 @@ export type {
 } from './ErrorBoundary';
 
 // ============================================================================
+// Empty State Components
+// ============================================================================
+
+export {
+  EmptyState,
+  NoData,
+  NoResults,
+  EmptyDashboard,
+} from './EmptyState';
+
+export type {
+  EmptyStateProps,
+  NoDataProps,
+  NoResultsProps,
+  EmptyDashboardProps,
+} from './EmptyState';
+
+// ============================================================================
 // Schema Explorer
 // ============================================================================
 
