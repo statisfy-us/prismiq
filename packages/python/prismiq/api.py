@@ -7,12 +7,14 @@ that exposes schema, validation, and query execution endpoints.
 
 from __future__ import annotations
 
+import time
 from datetime import date
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
+from prismiq import __version__
 from prismiq.dashboard_store import DashboardStore, InMemoryDashboardStore
 from prismiq.dashboards import (
     Dashboard,
@@ -46,6 +48,16 @@ from prismiq.types import (
 
 if TYPE_CHECKING:
     from prismiq.engine import PrismiqEngine
+
+# Track startup time for uptime calculation
+_startup_time: float | None = None
+
+
+def _get_uptime() -> float:
+    """Get uptime in seconds since router was created."""
+    if _startup_time is None:
+        return 0.0
+    return time.time() - _startup_time
 
 
 # ============================================================================
@@ -127,6 +139,58 @@ class SuccessResponse(BaseModel):
 
     message: str = "OK"
     """Success message."""
+
+
+# ============================================================================
+# Health Check Models
+# ============================================================================
+
+
+class HealthCheck(BaseModel):
+    """Individual health check result."""
+
+    model_config = ConfigDict(strict=True)
+
+    status: str
+    """Status of the check: 'healthy', 'degraded', or 'unhealthy'."""
+
+    message: str | None = None
+    """Optional message with details (e.g., error message)."""
+
+    latency_ms: float | None = None
+    """Optional latency of the health check in milliseconds."""
+
+
+class HealthStatus(BaseModel):
+    """Overall health status response."""
+
+    model_config = ConfigDict(strict=True)
+
+    status: str
+    """Overall status: 'healthy', 'degraded', or 'unhealthy'."""
+
+    version: str
+    """Application version."""
+
+    uptime_seconds: float
+    """Time since the application started in seconds."""
+
+    checks: dict[str, HealthCheck]
+    """Individual health check results."""
+
+
+class LivenessResponse(BaseModel):
+    """Response for liveness probe."""
+
+    status: str = "ok"
+    """Liveness status."""
+
+
+class ReadinessResponse(BaseModel):
+    """Response for readiness probe."""
+
+    status: str = "ok"
+    """Readiness status."""
 
 
 # ============================================================================
@@ -265,10 +329,126 @@ def create_router(
         >>> router = create_router(engine)
         >>> app.include_router(router, prefix="/api/analytics")
     """
+    global _startup_time
+    _startup_time = time.time()
+
     router = APIRouter(tags=["analytics"])
 
     # Use provided store or create in-memory store
     store = dashboard_store or InMemoryDashboardStore()
+
+    # ========================================================================
+    # Health Check Endpoints
+    # ========================================================================
+
+    @router.get("/health", response_model=HealthStatus)
+    async def health_check() -> HealthStatus:
+        """
+        Comprehensive health check endpoint.
+
+        Checks the health of all dependencies (database, cache, etc.)
+        and returns an overall status.
+
+        Returns:
+            HealthStatus with overall status and individual check results.
+        """
+        checks: dict[str, HealthCheck] = {}
+
+        # Check database connection
+        try:
+            start = time.perf_counter()
+            await engine.check_connection()
+            latency = (time.perf_counter() - start) * 1000
+            checks["database"] = HealthCheck(
+                status="healthy",
+                latency_ms=round(latency, 2),
+            )
+        except Exception as e:
+            checks["database"] = HealthCheck(
+                status="unhealthy",
+                message=str(e),
+            )
+
+        # Check cache if configured (using getattr for forward compatibility)
+        # The cache property will be added in Task 7 (Engine Integration)
+        cache = getattr(engine, "cache", None)
+        if cache is not None:
+            try:
+                start = time.perf_counter()
+                await cache.set("health_check", "ok", ttl=1)
+                result = await cache.get("health_check")
+                latency = (time.perf_counter() - start) * 1000
+
+                if result == "ok":
+                    checks["cache"] = HealthCheck(
+                        status="healthy",
+                        latency_ms=round(latency, 2),
+                    )
+                else:
+                    checks["cache"] = HealthCheck(
+                        status="degraded",
+                        message="Cache read/write verification failed",
+                    )
+            except Exception as e:
+                checks["cache"] = HealthCheck(
+                    status="unhealthy",
+                    message=str(e),
+                )
+
+        # Determine overall status
+        all_healthy = all(c.status == "healthy" for c in checks.values())
+        any_unhealthy = any(c.status == "unhealthy" for c in checks.values())
+
+        if all_healthy:
+            overall_status = "healthy"
+        elif any_unhealthy:
+            overall_status = "unhealthy"
+        else:
+            overall_status = "degraded"
+
+        return HealthStatus(
+            status=overall_status,
+            version=__version__,
+            uptime_seconds=round(_get_uptime(), 2),
+            checks=checks,
+        )
+
+    @router.get("/health/live", response_model=LivenessResponse)
+    async def liveness() -> LivenessResponse:
+        """
+        Kubernetes liveness probe endpoint.
+
+        Indicates whether the application process is running.
+        This should only fail if the process is in a broken state
+        and needs to be restarted.
+
+        Returns:
+            LivenessResponse with status 'ok'.
+        """
+        return LivenessResponse(status="ok")
+
+    @router.get("/health/ready", response_model=ReadinessResponse)
+    async def readiness() -> ReadinessResponse:
+        """
+        Kubernetes readiness probe endpoint.
+
+        Indicates whether the application is ready to receive traffic.
+        Checks if the database connection is available.
+
+        Returns:
+            ReadinessResponse with status 'ok'.
+
+        Raises:
+            HTTPException: 503 if the application is not ready.
+        """
+        try:
+            await engine.check_connection()
+            return ReadinessResponse(status="ok")
+        except Exception as e:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Service not ready: {e!s}",
+            ) from e
 
     # ========================================================================
     # Schema Endpoints

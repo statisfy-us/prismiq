@@ -9,7 +9,14 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from prismiq.api import create_router
+from prismiq import __version__
+from prismiq.api import (
+    HealthCheck,
+    HealthStatus,
+    LivenessResponse,
+    ReadinessResponse,
+    create_router,
+)
 from prismiq.types import (
     ColumnSchema,
     DatabaseSchema,
@@ -61,6 +68,10 @@ def mock_engine(sample_schema: DatabaseSchema) -> MagicMock:
     """Create a mock PrismiqEngine."""
     engine = MagicMock()
 
+    # Explicitly set cache to None to avoid MagicMock auto-attribute creation
+    # This prevents the health check from trying to check a mock cache
+    engine.cache = None
+
     # Mock async methods
     async def get_schema() -> DatabaseSchema:
         return sample_schema
@@ -89,10 +100,14 @@ def mock_engine(sample_schema: DatabaseSchema) -> MagicMock:
             execution_time_ms=2.0,
         )
 
+    async def check_connection() -> bool:
+        return True
+
     engine.get_schema = get_schema
     engine.get_table = get_table
     engine.execute_query = execute_query
     engine.preview_query = preview_query
+    engine.check_connection = check_connection
     engine.validate_query = MagicMock(return_value=[])
 
     return engine
@@ -105,6 +120,180 @@ def client(mock_engine: MagicMock) -> TestClient:
     router = create_router(mock_engine)
     app.include_router(router, prefix="/api/analytics")
     return TestClient(app)
+
+
+# ============================================================================
+# Health Check Model Tests
+# ============================================================================
+
+
+class TestHealthCheckModels:
+    """Tests for health check model classes."""
+
+    def test_health_check_model(self) -> None:
+        """HealthCheck model has expected fields."""
+        check = HealthCheck(status="healthy", message=None, latency_ms=5.0)
+
+        assert check.status == "healthy"
+        assert check.message is None
+        assert check.latency_ms == 5.0
+
+    def test_health_check_with_error(self) -> None:
+        """HealthCheck can include error message."""
+        check = HealthCheck(status="unhealthy", message="Connection failed")
+
+        assert check.status == "unhealthy"
+        assert check.message == "Connection failed"
+        assert check.latency_ms is None
+
+    def test_health_status_model(self) -> None:
+        """HealthStatus model has expected fields."""
+        status = HealthStatus(
+            status="healthy",
+            version="1.0.0",
+            uptime_seconds=100.5,
+            checks={
+                "database": HealthCheck(status="healthy", latency_ms=5.0),
+            },
+        )
+
+        assert status.status == "healthy"
+        assert status.version == "1.0.0"
+        assert status.uptime_seconds == 100.5
+        assert "database" in status.checks
+
+    def test_liveness_response(self) -> None:
+        """LivenessResponse has status ok by default."""
+        response = LivenessResponse()
+        assert response.status == "ok"
+
+    def test_readiness_response(self) -> None:
+        """ReadinessResponse has status ok by default."""
+        response = ReadinessResponse()
+        assert response.status == "ok"
+
+
+# ============================================================================
+# GET /health Tests
+# ============================================================================
+
+
+class TestHealthEndpoint:
+    """Tests for GET /health endpoint."""
+
+    def test_health_returns_healthy_status(self, client: TestClient) -> None:
+        """Health check returns healthy when database is available."""
+        response = client.get("/api/analytics/health")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "healthy"
+        assert data["version"] == __version__
+        assert "uptime_seconds" in data
+        assert "checks" in data
+        assert data["checks"]["database"]["status"] == "healthy"
+
+    def test_health_returns_version(self, client: TestClient) -> None:
+        """Health check returns correct version."""
+        response = client.get("/api/analytics/health")
+
+        data = response.json()
+        assert data["version"] == __version__
+
+    def test_health_returns_uptime(self, client: TestClient) -> None:
+        """Health check returns uptime."""
+        response = client.get("/api/analytics/health")
+
+        data = response.json()
+        assert data["uptime_seconds"] >= 0
+
+    def test_health_includes_database_check(self, client: TestClient) -> None:
+        """Health check includes database status."""
+        response = client.get("/api/analytics/health")
+
+        data = response.json()
+        assert "database" in data["checks"]
+        db_check = data["checks"]["database"]
+        assert db_check["status"] == "healthy"
+        assert "latency_ms" in db_check
+
+    def test_health_unhealthy_when_db_fails(
+        self, sample_schema: DatabaseSchema, mock_engine: MagicMock
+    ) -> None:
+        """Health check returns unhealthy when database fails."""
+
+        async def failing_check_connection() -> bool:
+            raise ConnectionError("Database unavailable")
+
+        mock_engine.check_connection = failing_check_connection
+
+        app = FastAPI()
+        router = create_router(mock_engine)
+        app.include_router(router, prefix="/api/analytics")
+        client = TestClient(app)
+
+        response = client.get("/api/analytics/health")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "unhealthy"
+        assert data["checks"]["database"]["status"] == "unhealthy"
+        assert "Database unavailable" in data["checks"]["database"]["message"]
+
+
+# ============================================================================
+# GET /health/live Tests
+# ============================================================================
+
+
+class TestLivenessEndpoint:
+    """Tests for GET /health/live endpoint."""
+
+    def test_liveness_returns_ok(self, client: TestClient) -> None:
+        """Liveness probe returns ok."""
+        response = client.get("/api/analytics/health/live")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "ok"
+
+
+# ============================================================================
+# GET /health/ready Tests
+# ============================================================================
+
+
+class TestReadinessEndpoint:
+    """Tests for GET /health/ready endpoint."""
+
+    def test_readiness_returns_ok_when_db_available(self, client: TestClient) -> None:
+        """Readiness probe returns ok when database is available."""
+        response = client.get("/api/analytics/health/ready")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "ok"
+
+    def test_readiness_returns_503_when_db_unavailable(
+        self, sample_schema: DatabaseSchema, mock_engine: MagicMock
+    ) -> None:
+        """Readiness probe returns 503 when database is unavailable."""
+
+        async def failing_check_connection() -> bool:
+            raise ConnectionError("Database unavailable")
+
+        mock_engine.check_connection = failing_check_connection
+
+        app = FastAPI()
+        router = create_router(mock_engine)
+        app.include_router(router, prefix="/api/analytics")
+        client = TestClient(app)
+
+        response = client.get("/api/analytics/health/ready")
+
+        assert response.status_code == 503
+        data = response.json()
+        assert "Service not ready" in data["detail"]
 
 
 # ============================================================================

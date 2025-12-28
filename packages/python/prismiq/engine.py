@@ -160,6 +160,31 @@ class PrismiqEngine:
         self._schema = None
 
     # ========================================================================
+    # Health Check Methods
+    # ========================================================================
+
+    async def check_connection(self) -> bool:
+        """
+        Check if the database connection is healthy.
+
+        Executes a simple query to verify the database connection.
+
+        Returns:
+            True if the connection is healthy.
+
+        Raises:
+            RuntimeError: If the engine has not been started.
+            Exception: If the database connection fails.
+        """
+        self._ensure_started()
+        assert self._pool is not None
+
+        async with self._pool.acquire() as conn:
+            await conn.fetchval("SELECT 1")
+
+        return True
+
+    # ========================================================================
     # Schema Methods
     # ========================================================================
 
