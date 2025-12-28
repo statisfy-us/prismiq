@@ -68,3 +68,12 @@ export {
   MultiSelectFilter,
   TextFilter,
 } from './filters';
+
+// Editor components
+export {
+  DashboardEditor,
+  EditorToolbar,
+  WidgetPalette,
+  WidgetEditor,
+} from './DashboardEditor';
+export type { EditorToolbarProps } from './DashboardEditor';

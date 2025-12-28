@@ -1,5 +1,6 @@
 /**
  * Dashboard grid layout component using react-grid-layout.
+ * Supports responsive breakpoints for mobile-friendly layouts.
  */
 
 import { useCallback, useMemo } from 'react';
@@ -7,8 +8,8 @@ import GridLayout from 'react-grid-layout';
 import { useTheme } from '../../theme';
 import type { DashboardLayoutProps, Widget, WidgetPosition } from '../types';
 
-// Re-export Layout type for convenience
-type LayoutItem = {
+// Layout item type for react-grid-layout
+interface LayoutItem {
   i: string;
   x: number;
   y: number;
@@ -18,15 +19,37 @@ type LayoutItem = {
   minH?: number;
   maxW?: number;
   maxH?: number;
-};
+  static?: boolean;
+}
 
-// Apply width provider for responsive behavior
-// Use dynamic import pattern to work around WidthProvider typing issues
+// Layouts type for responsive grid
+interface Layouts {
+  [breakpoint: string]: LayoutItem[];
+}
+
+// Access Responsive and WidthProvider from the module
+// The module exports these as additional properties on the default export
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const RGL = GridLayout as any;
-const ResponsiveGridLayout = RGL.WidthProvider
-  ? RGL.WidthProvider(GridLayout)
-  : GridLayout;
+const ResponsiveGridLayout = RGL.WidthProvider(RGL.Responsive || RGL);
+
+// Responsive breakpoints
+const BREAKPOINTS = {
+  lg: 1200,
+  md: 996,
+  sm: 768,
+  xs: 480,
+  xxs: 0,
+};
+
+// Column counts per breakpoint
+const COLS = {
+  lg: 12,
+  md: 10,
+  sm: 6,
+  xs: 4,
+  xxs: 2,
+};
 
 /**
  * Convert Widget positions to react-grid-layout Layout format.
@@ -38,11 +61,57 @@ function widgetsToLayout(widgets: Widget[]): LayoutItem[] {
     y: widget.position.y,
     w: widget.position.w,
     h: widget.position.h,
-    minW: widget.position.minW,
-    minH: widget.position.minH,
+    minW: widget.position.minW ?? 2,
+    minH: widget.position.minH ?? 2,
     maxW: widget.position.maxW,
     maxH: widget.position.maxH,
   }));
+}
+
+/**
+ * Generate responsive layouts from base layout.
+ * Adjusts positions for smaller screens.
+ */
+function generateResponsiveLayouts(
+  baseLayout: LayoutItem[],
+  baseCols: number
+): Layouts {
+  const layouts: Layouts = {
+    lg: baseLayout,
+  };
+
+  // For medium screens, scale down positions
+  layouts.md = baseLayout.map((item) => ({
+    ...item,
+    x: Math.floor((item.x / baseCols) * COLS.md),
+    w: Math.min(item.w, COLS.md),
+  }));
+
+  // For small screens, stack items more
+  layouts.sm = baseLayout.map((item, index) => ({
+    ...item,
+    x: (index % 2) * 3,
+    y: Math.floor(index / 2) * item.h,
+    w: Math.min(item.w, COLS.sm),
+  }));
+
+  // For extra small screens, full width
+  layouts.xs = baseLayout.map((item, index) => ({
+    ...item,
+    x: 0,
+    y: index * item.h,
+    w: COLS.xs,
+  }));
+
+  // For mobile, single column
+  layouts.xxs = baseLayout.map((item, index) => ({
+    ...item,
+    x: 0,
+    y: index * item.h,
+    w: COLS.xxs,
+  }));
+
+  return layouts;
 }
 
 /**
@@ -70,7 +139,8 @@ function layoutToPositions(layout: LayoutItem[]): Record<string, WidgetPosition>
 /**
  * Dashboard grid layout component.
  *
- * Uses react-grid-layout to provide a draggable and resizable grid.
+ * Uses react-grid-layout to provide a responsive, draggable and resizable grid.
+ * Supports multiple breakpoints for mobile-friendly layouts.
  *
  * @example
  * ```tsx
@@ -94,13 +164,19 @@ export function DashboardLayout({
   const { theme } = useTheme();
 
   // Convert widgets to grid layout
-  const gridLayout = useMemo(() => widgetsToLayout(widgets), [widgets]);
+  const baseLayout = useMemo(() => widgetsToLayout(widgets), [widgets]);
+
+  // Generate responsive layouts
+  const responsiveLayouts = useMemo(
+    () => generateResponsiveLayouts(baseLayout, layout.columns || 12),
+    [baseLayout, layout.columns]
+  );
 
   // Handle layout changes
   const handleLayoutChange = useCallback(
-    (newLayout: LayoutItem[]) => {
+    (currentLayout: LayoutItem[]) => {
       if (onLayoutChange) {
-        const positions = layoutToPositions(newLayout);
+        const positions = layoutToPositions(currentLayout);
         onLayoutChange(positions);
       }
     },
@@ -133,8 +209,9 @@ export function DashboardLayout({
   return (
     <div className={className} style={containerStyle}>
       <ResponsiveGridLayout
-        layout={gridLayout}
-        cols={layout.columns || 12}
+        layouts={responsiveLayouts}
+        breakpoints={BREAKPOINTS}
+        cols={COLS}
         rowHeight={layout.row_height || 60}
         margin={layout.margin || [16, 16]}
         containerPadding={[16, 16]}
@@ -246,6 +323,20 @@ export function DashboardLayout({
           transition-duration: 100ms;
           z-index: 2;
           user-select: none;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+          .react-grid-item > .react-resizable-handle {
+            width: 16px;
+            height: 16px;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .react-grid-item > .react-resizable-handle {
+            display: none;
+          }
         }
       `}</style>
     </div>

@@ -4,7 +4,7 @@
  * These types define dashboards, widgets, and filters.
  */
 
-import type { QueryDefinition, QueryResult } from '../types';
+import type { QueryDefinition, QueryResult, DatabaseSchema } from '../types';
 
 // ============================================================================
 // Widget Types
@@ -463,6 +463,8 @@ export interface WidgetPaletteProps {
 export interface WidgetEditorProps {
   /** Widget to edit. */
   widget: Widget;
+  /** Database schema for column selection. */
+  schema: DatabaseSchema;
   /** Callback when widget is saved. */
   onSave: (widget: Widget) => void;
   /** Callback when editing is cancelled. */
