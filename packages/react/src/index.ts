@@ -8,6 +8,7 @@
  *   ThemeProvider,
  *   QueryBuilder,
  *   BarChart,
+ *   Dashboard,
  *   useQuery
  * } from '@prismiq/react';
  *
@@ -15,8 +16,7 @@
  *   return (
  *     <ThemeProvider>
  *       <AnalyticsProvider config={{ endpoint: 'https://api.example.com' }}>
- *         <QueryBuilder onExecute={(result) => console.log(result)} />
- *         <BarChart data={result} xAxis="month" yAxis="revenue" />
+ *         <Dashboard id="my-dashboard" />
  *       </AnalyticsProvider>
  *     </ThemeProvider>
  *   );
@@ -237,6 +237,77 @@ export type {
   QueryBuilderToolbarProps,
   QueryPreviewProps,
 } from './components';
+
+// ============================================================================
+// Dashboard
+// ============================================================================
+
+export {
+  // Main components
+  Dashboard,
+  DashboardProvider,
+  DashboardLayoutComponent,
+  // Widget components
+  Widget,
+  WidgetHeader,
+  WidgetContent,
+  // Filter components
+  FilterBar,
+  DateRangeFilter,
+  SelectFilter,
+  MultiSelectFilter,
+  TextFilter,
+  // Hooks
+  useDashboard,
+  useDashboardFilters,
+  useWidget,
+  useAutoRefresh,
+  useFullscreen,
+  // Context
+  DashboardContext,
+} from './dashboard';
+
+export type {
+  // Widget types
+  WidgetType,
+  WidgetPosition,
+  WidgetConfig,
+  WidgetDefinition,
+  // Filter types
+  DashboardFilterType,
+  FilterOption,
+  DashboardFilter,
+  FilterValue,
+  DateRangeValue,
+  NumberRangeValue,
+  // Dashboard types
+  DashboardLayout,
+  DashboardDefinition,
+  // Context types
+  DashboardContextValue,
+  DashboardEditorContextValue,
+  // Component props
+  DashboardProviderProps,
+  DashboardProps,
+  DashboardEditorProps,
+  DashboardLayoutProps,
+  WidgetProps,
+  WidgetHeaderProps,
+  FilterBarProps,
+  DateRangeFilterProps,
+  SelectFilterProps,
+  MultiSelectFilterProps,
+  TextFilterProps,
+  WidgetPaletteProps,
+  WidgetEditorProps,
+  WidgetContentProps,
+  // Hook result types
+  UseDashboardFiltersResult,
+  UseWidgetResult,
+  UseAutoRefreshOptions,
+  UseAutoRefreshResult,
+  UseFullscreenResult,
+} from './dashboard';
 
 // ============================================================================
 // Version

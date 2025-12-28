@@ -1,0 +1,364 @@
+/**
+ * Widget content renderer that displays the appropriate chart or component.
+ */
+
+import { useMemo } from 'react';
+import { useTheme } from '../../theme';
+import {
+  MetricCard,
+  BarChart,
+  LineChart,
+  AreaChart,
+  PieChart,
+  ScatterChart,
+} from '../../charts';
+import { ResultsTable } from '../../components';
+import type { Widget, WidgetConfig } from '../types';
+import type { QueryResult } from '../../types';
+import type { ChartDataPoint } from '../../charts/types';
+
+/**
+ * Props for WidgetContent.
+ */
+export interface WidgetContentProps {
+  /** Widget to render. */
+  widget: Widget;
+  /** Query result data. */
+  result: QueryResult | null;
+  /** Whether data is loading. */
+  isLoading?: boolean;
+  /** Error if query failed. */
+  error?: Error | null;
+}
+
+/**
+ * Render text/markdown content.
+ */
+function TextContent({ config }: { config: WidgetConfig }): JSX.Element {
+  const { theme } = useTheme();
+
+  const contentStyle: React.CSSProperties = {
+    padding: theme.spacing.md,
+    fontSize: theme.fontSizes.base,
+    color: theme.colors.text,
+    lineHeight: 1.6,
+  };
+
+  if (!config.content) {
+    return <div style={contentStyle}>No content</div>;
+  }
+
+  // For now, just render plain text. In the future, could add markdown support.
+  return (
+    <div style={contentStyle}>
+      {config.content.split('\n').map((line, i) => (
+        <p key={i} style={{ margin: `${theme.spacing.xs} 0` }}>
+          {line}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Render loading state.
+ */
+function LoadingState(): JSX.Element {
+  const { theme } = useTheme();
+
+  const containerStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+    minHeight: '100px',
+    color: theme.colors.textMuted,
+  };
+
+  const spinnerStyle: React.CSSProperties = {
+    width: '32px',
+    height: '32px',
+    border: `3px solid ${theme.colors.border}`,
+    borderTopColor: theme.colors.primary,
+    borderRadius: '50%',
+    animation: 'prismiq-widget-spin 1s linear infinite',
+  };
+
+  return (
+    <div style={containerStyle}>
+      <div style={spinnerStyle} />
+      <style>{`
+        @keyframes prismiq-widget-spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+/**
+ * Render error state.
+ */
+function ErrorState({ error }: { error: Error }): JSX.Element {
+  const { theme } = useTheme();
+
+  const containerStyle: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+    minHeight: '100px',
+    padding: theme.spacing.md,
+    textAlign: 'center',
+  };
+
+  const iconStyle: React.CSSProperties = {
+    fontSize: '24px',
+    marginBottom: theme.spacing.sm,
+    color: theme.colors.error,
+  };
+
+  const messageStyle: React.CSSProperties = {
+    fontSize: theme.fontSizes.sm,
+    color: theme.colors.error,
+  };
+
+  return (
+    <div style={containerStyle}>
+      <div style={iconStyle}>!</div>
+      <div style={messageStyle}>{error.message}</div>
+    </div>
+  );
+}
+
+/**
+ * Render empty state.
+ */
+function EmptyState(): JSX.Element {
+  const { theme } = useTheme();
+
+  const containerStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+    minHeight: '100px',
+    color: theme.colors.textMuted,
+    fontSize: theme.fontSizes.sm,
+  };
+
+  return <div style={containerStyle}>No data</div>;
+}
+
+/**
+ * Convert QueryResult to ChartDataPoint array.
+ */
+function resultToDataPoints(result: QueryResult): ChartDataPoint[] {
+  return result.rows.map((row) => {
+    const record: ChartDataPoint = {};
+    result.columns.forEach((col, i) => {
+      const value = row[i];
+      // Only include string, number, or null values
+      if (typeof value === 'string' || typeof value === 'number' || value === null) {
+        record[col] = value;
+      } else if (value !== undefined) {
+        record[col] = String(value);
+      }
+    });
+    return record;
+  });
+}
+
+/**
+ * Widget content renderer.
+ *
+ * Renders the appropriate visualization based on widget type.
+ */
+export function WidgetContent({
+  widget,
+  result,
+  isLoading = false,
+  error,
+}: WidgetContentProps): JSX.Element {
+  const { theme } = useTheme();
+
+  // Container style
+  const containerStyle: React.CSSProperties = {
+    flex: 1,
+    overflow: 'auto',
+    position: 'relative',
+  };
+
+  // Handle loading state
+  if (isLoading && !result) {
+    return (
+      <div style={containerStyle}>
+        <LoadingState />
+      </div>
+    );
+  }
+
+  // Handle error state
+  if (error) {
+    return (
+      <div style={containerStyle}>
+        <ErrorState error={error} />
+      </div>
+    );
+  }
+
+  // Handle text widgets (no query result needed)
+  if (widget.type === 'text') {
+    return (
+      <div style={containerStyle}>
+        <TextContent config={widget.config} />
+      </div>
+    );
+  }
+
+  // Handle empty result
+  if (!result || result.row_count === 0) {
+    return (
+      <div style={containerStyle}>
+        <EmptyState />
+      </div>
+    );
+  }
+
+  // Convert result rows to chart data format
+  const data = useMemo(() => resultToDataPoints(result), [result]);
+
+  // Extract chart configuration from widget config
+  const xAxis = widget.config.x_axis ?? result.columns[0] ?? '';
+  const yAxisConfig = widget.config.y_axis ?? [result.columns[1] ?? result.columns[0] ?? ''];
+  const yAxis: string[] = yAxisConfig.filter((y): y is string => y !== undefined);
+  const showLegend = widget.config.show_legend ?? true;
+  const showDataLabels = widget.config.show_data_labels ?? false;
+  const colors = widget.config.colors ?? theme.chart.colors;
+
+  // Render based on widget type
+  switch (widget.type) {
+    case 'metric': {
+      const value = result.rows[0]?.[0];
+      const comparisonValue = widget.config.trend_comparison
+        ? result.rows[0]?.[result.columns.indexOf(widget.config.trend_comparison)]
+        : undefined;
+
+      return (
+        <div style={containerStyle}>
+          <MetricCard
+            title=""
+            value={typeof value === 'number' ? value : Number(value) || 0}
+            format={widget.config.format ?? 'number'}
+            trend={
+              comparisonValue !== undefined
+                ? {
+                    value: Number(comparisonValue) || 0,
+                    direction:
+                      Number(comparisonValue) > 0
+                        ? 'up'
+                        : Number(comparisonValue) < 0
+                          ? 'down'
+                          : 'flat',
+                  }
+                : undefined
+            }
+          />
+        </div>
+      );
+    }
+
+    case 'bar_chart':
+      return (
+        <div style={containerStyle}>
+          <BarChart
+            data={data}
+            xAxis={xAxis}
+            yAxis={yAxis}
+            orientation={widget.config.orientation ?? 'vertical'}
+            stacked={widget.config.stacked}
+            showLegend={showLegend}
+            showDataLabels={showDataLabels}
+            colors={colors}
+            height="100%"
+          />
+        </div>
+      );
+
+    case 'line_chart':
+      return (
+        <div style={containerStyle}>
+          <LineChart
+            data={data}
+            xAxis={xAxis}
+            yAxis={yAxis}
+            showLegend={showLegend}
+            showDataLabels={showDataLabels}
+            colors={colors}
+            height="100%"
+          />
+        </div>
+      );
+
+    case 'area_chart':
+      return (
+        <div style={containerStyle}>
+          <AreaChart
+            data={data}
+            xAxis={xAxis}
+            yAxis={yAxis}
+            stacked={widget.config.stacked}
+            showLegend={showLegend}
+            colors={colors}
+            height="100%"
+          />
+        </div>
+      );
+
+    case 'pie_chart':
+      return (
+        <div style={containerStyle}>
+          <PieChart
+            data={data}
+            labelColumn={xAxis}
+            valueColumn={yAxis[0] ?? ''}
+            showLegend={showLegend}
+            showLabels={showDataLabels}
+            colors={colors}
+            height="100%"
+          />
+        </div>
+      );
+
+    case 'scatter_chart':
+      return (
+        <div style={containerStyle}>
+          <ScatterChart
+            data={data}
+            xAxis={xAxis}
+            yAxis={yAxis[0] ?? ''}
+            height="100%"
+          />
+        </div>
+      );
+
+    case 'table':
+      return (
+        <div style={containerStyle}>
+          <ResultsTable
+            result={result}
+            pageSize={widget.config.page_size ?? 10}
+            sortable={widget.config.sortable ?? true}
+          />
+        </div>
+      );
+
+    default:
+      return (
+        <div style={containerStyle}>
+          <EmptyState />
+        </div>
+      );
+  }
+}

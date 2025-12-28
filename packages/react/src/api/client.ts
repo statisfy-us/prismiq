@@ -116,6 +116,62 @@ export class PrismiqClient {
     return response.json() as Promise<T>;
   }
 
+  // ============================================================================
+  // Generic Methods
+  // ============================================================================
+
+  /**
+   * Make a GET request to the API.
+   *
+   * @param path - API path (starting with /)
+   * @returns Response data
+   */
+  async get<T>(path: string): Promise<T> {
+    return this.request<T>(path);
+  }
+
+  /**
+   * Make a POST request to the API.
+   *
+   * @param path - API path (starting with /)
+   * @param body - Request body (will be JSON stringified)
+   * @returns Response data
+   */
+  async post<T>(path: string, body?: unknown): Promise<T> {
+    return this.request<T>(path, {
+      method: 'POST',
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  }
+
+  /**
+   * Make a PUT request to the API.
+   *
+   * @param path - API path (starting with /)
+   * @param body - Request body (will be JSON stringified)
+   * @returns Response data
+   */
+  async put<T>(path: string, body?: unknown): Promise<T> {
+    return this.request<T>(path, {
+      method: 'PUT',
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  }
+
+  /**
+   * Make a DELETE request to the API.
+   *
+   * @param path - API path (starting with /)
+   * @returns Response data
+   */
+  async delete<T>(path: string): Promise<T> {
+    return this.request<T>(path, { method: 'DELETE' });
+  }
+
+  // ============================================================================
+  // Schema Methods
+  // ============================================================================
+
   /**
    * Get the complete database schema.
    *
@@ -143,6 +199,10 @@ export class PrismiqClient {
   async getTable(tableName: string): Promise<TableSchema> {
     return this.request<TableSchema>(`/tables/${encodeURIComponent(tableName)}`);
   }
+
+  // ============================================================================
+  // Query Methods
+  // ============================================================================
 
   /**
    * Validate a query without executing it.
