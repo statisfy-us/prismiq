@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAnalytics } from '../context/AnalyticsProvider';
-import type { Dashboard } from '../types';
+import type { Dashboard, Widget, WidgetPosition, WidgetPositionUpdate } from '../types';
 
 // ============================================================================
 // Types
@@ -36,6 +36,13 @@ export interface UseDashboardResult {
   error: Error | null;
   /** Function to manually refresh the dashboard. */
   refetch: () => Promise<void>;
+  /**
+   * Optimistically update widget positions.
+   * Updates local state immediately without waiting for API.
+   */
+  optimisticUpdatePositions: (
+    positions: Record<string, WidgetPosition> | WidgetPositionUpdate[]
+  ) => void;
 }
 
 // ============================================================================
@@ -106,6 +113,50 @@ export function useDashboard(
     await fetchDashboard();
   }, [fetchDashboard]);
 
+  /**
+   * Optimistically update widget positions in local state.
+   * This updates the UI immediately without waiting for API response.
+   */
+  const optimisticUpdatePositions = useCallback(
+    (positions: Record<string, WidgetPosition> | WidgetPositionUpdate[]) => {
+      setData((currentData) => {
+        if (!currentData) return currentData;
+
+        // Convert array format to record format if needed
+        const positionMap: Record<string, WidgetPosition> = Array.isArray(positions)
+          ? positions.reduce((acc, update) => {
+              acc[update.widget_id] = update.position;
+              return acc;
+            }, {} as Record<string, WidgetPosition>)
+          : positions;
+
+        // Update widget positions
+        const updatedWidgets: Widget[] = currentData.widgets.map((widget) => {
+          const newPosition = positionMap[widget.id];
+          if (newPosition) {
+            return {
+              ...widget,
+              position: {
+                ...widget.position,
+                x: newPosition.x,
+                y: newPosition.y,
+                w: newPosition.w,
+                h: newPosition.h,
+              },
+            };
+          }
+          return widget;
+        });
+
+        return {
+          ...currentData,
+          widgets: updatedWidgets,
+        };
+      });
+    },
+    []
+  );
+
   useEffect(() => {
     // Reset data when ID changes
     if (dashboardId !== previousIdRef.current) {
@@ -129,5 +180,6 @@ export function useDashboard(
     isLoading,
     error,
     refetch,
+    optimisticUpdatePositions,
   };
 }

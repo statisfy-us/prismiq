@@ -54,11 +54,12 @@ export type { UseFullscreenResult } from './useFullscreen';
 
 // Main components
 export { Dashboard } from './Dashboard';
-export { DashboardLayout as DashboardLayoutComponent } from './DashboardLayout';
+export { DashboardLayout as DashboardLayoutComponent, EditableDashboardLayout } from './DashboardLayout';
+export type { EditableDashboardLayoutProps } from './DashboardLayout';
 
 // Widget components
-export { Widget, WidgetHeader, WidgetContent } from './Widget';
-export type { WidgetContentProps } from './Widget';
+export { Widget, WidgetHeader, WidgetContent, WidgetContainer } from './Widget';
+export type { WidgetContentProps, WidgetContainerProps } from './Widget';
 
 // Filter components
 export {

@@ -1203,6 +1203,52 @@ def create_router(
             raise HTTPException(status_code=404, detail=f"Widget '{widget_id}' not found")
         return duplicated
 
+    # ========================================================================
+    # Layout Update Endpoints
+    # ========================================================================
+
+    @router.put("/dashboards/{dashboard_id}/layout", response_model=Dashboard)
+    async def update_layout(
+        dashboard_id: str,
+        positions: list[dict[str, Any]],
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> Dashboard:
+        """
+        Batch update widget positions in a dashboard.
+
+        Args:
+            dashboard_id: Dashboard ID.
+            positions: List of position updates, each with widget_id and position.
+
+        Returns:
+            Updated dashboard with new widget positions.
+
+        Raises:
+            404: If dashboard not found.
+            403: If user lacks permission to edit.
+            400: If update fails.
+        """
+        dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
+        if dashboard is None:
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+
+        if not can_edit_dashboard(dashboard, auth.user_id):
+            raise HTTPException(status_code=403, detail="Permission denied")
+
+        success = await store.update_widget_positions(
+            dashboard_id=dashboard_id,
+            positions=positions,
+            tenant_id=auth.tenant_id,
+        )
+        if not success:
+            raise HTTPException(status_code=400, detail="Failed to update layout")
+
+        # Return updated dashboard
+        updated = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
+        if updated is None:
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+        return updated
+
     @router.post(
         "/dashboards/{dashboard_id}/widgets/{widget_id}/execute",
         response_model=QueryResult,

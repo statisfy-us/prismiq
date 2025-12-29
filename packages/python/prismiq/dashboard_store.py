@@ -21,6 +21,7 @@ from prismiq.dashboards import (
     Widget,
     WidgetConfig,
     WidgetCreate,
+    WidgetPosition,
     WidgetUpdate,
 )
 
@@ -167,6 +168,24 @@ class DashboardStore(Protocol):
 
         Returns:
             The new duplicated widget, or None if not found.
+        """
+        ...
+
+    async def update_widget_positions(
+        self,
+        dashboard_id: str,
+        positions: list[dict[str, object]],
+        tenant_id: str,
+    ) -> bool:
+        """Batch update widget positions.
+
+        Args:
+            dashboard_id: The dashboard ID.
+            positions: List of position updates with widget_id and position.
+            tenant_id: Tenant ID for isolation.
+
+        Returns:
+            True if updated, False if dashboard not found.
         """
         ...
 
@@ -569,6 +588,62 @@ class InMemoryDashboardStore:
             self._widget_to_dashboard[new_widget.id] = dashboard_id
 
             return self._copy_widget(new_widget)
+
+    async def update_widget_positions(
+        self,
+        dashboard_id: str,
+        positions: list[dict[str, object]],
+        tenant_id: str,
+    ) -> bool:
+        """Batch update widget positions with tenant check.
+
+        Args:
+            dashboard_id: The dashboard ID.
+            positions: List of position updates with widget_id and position.
+            tenant_id: Tenant ID for isolation.
+
+        Returns:
+            True if updated, False if dashboard not found.
+        """
+        async with self._lock:
+            dashboard = self._dashboards.get(dashboard_id)
+            if dashboard is None:
+                return False
+            # Check tenant ownership
+            if self._dashboard_tenants.get(dashboard_id) != tenant_id:
+                return False
+
+            # Build a map of widget_id -> new position
+            position_map: dict[str, WidgetPosition] = {}
+            for pos in positions:
+                widget_id = str(pos.get("widget_id") or pos.get("id", ""))
+                position_data = pos.get("position", pos)
+                if isinstance(position_data, dict):
+                    position_map[widget_id] = WidgetPosition(
+                        x=int(position_data.get("x", 0)),  # type: ignore[arg-type]
+                        y=int(position_data.get("y", 0)),  # type: ignore[arg-type]
+                        w=int(position_data.get("w", 4)),  # type: ignore[arg-type]
+                        h=int(position_data.get("h", 3)),  # type: ignore[arg-type]
+                    )
+
+            # Update widgets with new positions
+            now = _utc_now()
+            new_widgets: list[Widget] = []
+            for widget in dashboard.widgets:
+                if widget.id in position_map:
+                    updated = widget.model_copy(
+                        update={"position": position_map[widget.id], "updated_at": now}
+                    )
+                    new_widgets.append(updated)
+                else:
+                    new_widgets.append(widget)
+
+            # Update dashboard
+            updated_dashboard = dashboard.model_copy(
+                update={"widgets": new_widgets, "updated_at": now}
+            )
+            self._dashboards[dashboard_id] = updated_dashboard
+            return True
 
     def _copy_dashboard(self, dashboard: Dashboard) -> Dashboard:
         """Create a deep copy of a dashboard."""

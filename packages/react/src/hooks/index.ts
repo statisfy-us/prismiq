@@ -24,3 +24,10 @@ export type {
   MutationState,
   UseDashboardMutationsResult,
 } from './useDashboardMutations';
+
+export { useDebouncedLayoutSave } from './useDebouncedLayoutSave';
+export type {
+  SaveStatus,
+  UseDebouncedLayoutSaveOptions,
+  UseDebouncedLayoutSaveResult,
+} from './useDebouncedLayoutSave';

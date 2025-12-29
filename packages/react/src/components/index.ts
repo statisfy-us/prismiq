@@ -184,3 +184,11 @@ export type {
   QueryBuilderToolbarProps,
   QueryPreviewProps,
 } from './QueryBuilder';
+
+// ============================================================================
+// Auto Save Indicator
+// ============================================================================
+
+export { AutoSaveIndicator } from './AutoSaveIndicator';
+
+export type { AutoSaveIndicatorProps } from './AutoSaveIndicator';
