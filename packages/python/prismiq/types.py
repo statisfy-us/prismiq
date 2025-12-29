@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 class ColumnSchema(BaseModel):
     """Schema information for a single database column."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     name: str
     """Column name."""
@@ -44,7 +44,7 @@ class ColumnSchema(BaseModel):
 class TableSchema(BaseModel):
     """Schema information for a database table."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     name: str
     """Table name."""
@@ -70,7 +70,7 @@ class TableSchema(BaseModel):
 class Relationship(BaseModel):
     """Foreign key relationship between two tables."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     from_table: str
     """Name of the table containing the foreign key."""
@@ -88,7 +88,7 @@ class Relationship(BaseModel):
 class DatabaseSchema(BaseModel):
     """Complete schema for an exposed database."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     tables: list[TableSchema]
     """List of exposed tables."""
@@ -120,7 +120,7 @@ class DatabaseSchema(BaseModel):
 class QueryTable(BaseModel):
     """A table reference in a query."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     id: str
     """Unique identifier for this table in the query (e.g., 't1', 't2')."""
@@ -144,7 +144,7 @@ class JoinType(str, Enum):
 class JoinDefinition(BaseModel):
     """Definition of a join between two tables."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     from_table_id: str
     """ID of the left table in the join."""
@@ -177,7 +177,7 @@ class AggregationType(str, Enum):
 class ColumnSelection(BaseModel):
     """A column to select in a query."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     table_id: str
     """ID of the table containing the column."""
@@ -213,7 +213,7 @@ class FilterOperator(str, Enum):
 class FilterDefinition(BaseModel):
     """A filter condition in a query."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     table_id: str
     """ID of the table containing the column to filter."""
@@ -244,7 +244,7 @@ class SortDirection(str, Enum):
 class SortDefinition(BaseModel):
     """A sort order definition."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     table_id: str
     """ID of the table containing the column to sort by."""
@@ -259,7 +259,7 @@ class SortDefinition(BaseModel):
 class GroupByDefinition(BaseModel):
     """A group by column definition."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     table_id: str
     """ID of the table containing the column."""
@@ -275,7 +275,7 @@ class TimeSeriesConfig(BaseModel):
     bucket dates using PostgreSQL's date_trunc function.
     """
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     table_id: str
     """ID of the table containing the date column."""
@@ -310,7 +310,7 @@ class TimeSeriesConfig(BaseModel):
 class QueryDefinition(BaseModel):
     """Complete query definition."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     tables: list[QueryTable]
     """Tables used in the query."""
@@ -445,7 +445,7 @@ class QueryDefinition(BaseModel):
 class QueryResult(BaseModel):
     """Result of executing a query."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     columns: list[str]
     """Column names in the result."""
