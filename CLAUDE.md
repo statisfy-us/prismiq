@@ -280,20 +280,141 @@ git commit -m "test: add schema introspection tests"
 ## Code Standards
 
 ### Python
+
+**Requirements:**
 - Python 3.10+
 - Type hints everywhere (Pyright strict mode)
 - `from __future__ import annotations`
 - Async/await for all I/O
-- Parameterized SQL queries only (never interpolate)
-- Quote all SQL identifiers with double quotes
-- **Ruff** for linting + formatting (replaces Black, isort, flake8)
-- **uv** for package management (10-100x faster than pip)
+- **Ruff** for linting + formatting
+- **uv** for package management
+
+**Pydantic Models:**
+```python
+from pydantic import BaseModel, ConfigDict
+
+class TableSchema(BaseModel):
+    # Note: Don't use strict=True with JSON APIs
+    name: str
+    schema_name: str = "public"
+    columns: list[ColumnSchema]
+```
+
+**Async Patterns:**
+```python
+async def execute_query(self, query: QueryDefinition) -> QueryResult:
+    async with self.pool.acquire() as conn:
+        rows = await conn.fetch(sql, *params)
+        return QueryResult(data=rows)
+```
+
+**SQL Safety (Critical):**
+```python
+# ALWAYS parameterize — use $1, $2 placeholders
+sql = 'SELECT * FROM "public"."users" WHERE id = $1'
+await conn.fetch(sql, user_id)
+
+# ALWAYS quote identifiers with double quotes
+sql = f'SELECT "{column}" FROM "{schema}"."{table}"'
+
+# NEVER interpolate values
+sql = f'SELECT * FROM users WHERE id = {user_id}'  # WRONG - SQL injection!
+```
 
 ### React/TypeScript
-- Strict TypeScript
+
+**Requirements:**
+- TypeScript strict mode
+- Functional components + hooks only
 - Export types from types.ts
 - Handle loading/error states in all data hooks
-- Memoize expensive computations
+
+**Custom Hooks Pattern:**
+```typescript
+export function useQuery(query: QueryDefinition | null): UseQueryResult {
+  const client = useAnalyticsClient();
+  const [state, setState] = useState<QueryState>({
+    data: null,
+    isLoading: false,
+    error: null,
+  });
+
+  useEffect(() => {
+    if (!query) return;
+
+    let cancelled = false;
+    setState(s => ({ ...s, isLoading: true }));
+
+    client.executeQuery(query)
+      .then(data => {
+        if (!cancelled) setState({ data, isLoading: false, error: null });
+      })
+      .catch(error => {
+        if (!cancelled) setState({ data: null, isLoading: false, error });
+      });
+
+    return () => { cancelled = true; };  // Cleanup on unmount
+  }, [query, client]);
+
+  return state;
+}
+```
+
+**Error Handling Pattern:**
+```typescript
+// Always handle all states
+if (isLoading) return <LoadingSpinner />;
+if (error) return <ErrorDisplay error={error} />;
+if (!data) return null;
+return <DataDisplay data={data} />;
+```
+
+### Testing
+
+**Python Tests (pytest):**
+```python
+import pytest
+from unittest.mock import AsyncMock, MagicMock
+
+@pytest.fixture
+def mock_pool():
+    pool = MagicMock()
+    pool.acquire = MagicMock(return_value=AsyncMock())
+    return pool
+
+class TestSchemaIntrospector:
+    @pytest.mark.asyncio
+    async def test_get_schema_returns_all_tables(self, mock_pool):
+        # Arrange
+        mock_conn = AsyncMock()
+        mock_conn.fetch.return_value = [{"table_name": "users"}]
+        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+
+        # Act
+        schema = await introspector.get_schema()
+
+        # Assert
+        assert len(schema.tables) == 1
+```
+
+**Test Categories:**
+1. **Happy path** — Normal expected behavior
+2. **Edge cases** — Empty inputs, boundaries
+3. **Error cases** — Invalid inputs, exceptions
+4. **Integration** — Components working together
+
+**Parametrize for Multiple Cases:**
+```python
+@pytest.mark.parametrize("operator,expected", [
+    ("eq", "= $1"),
+    ("gt", "> $1"),
+    ("in_", "= ANY($1)"),
+])
+def test_filter_operator_sql(operator, expected):
+    filter_def = FilterDefinition(column="id", operator=operator, value=5)
+    sql = build_filter_clause(filter_def)
+    assert expected in sql
+```
 
 ## Running the Demo
 
