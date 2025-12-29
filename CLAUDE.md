@@ -20,7 +20,7 @@ make check                       # Should pass all checks
 
 **Then start development:**
 ```
-Use the orchestrator subagent to execute tasks in tasks/week1-python.md
+See tasks/ for sprint definitions, or just ask Claude to implement features directly.
 ```
 
 ## Recommended Plugins
@@ -81,11 +81,9 @@ prismiq/
 ├── packages/
 │   ├── python/prismiq/      # Python backend (FastAPI + asyncpg)
 │   └── react/src/           # React SDK (@prismiq/react)
+├── examples/demo/           # Demo app (backend + frontend)
 ├── .claude/
-│   ├── agents/              # Subagents for delegation
-│   ├── skills/              # Domain knowledge
-│   ├── commands/            # Custom slash commands
-│   └── state/               # Progress tracking
+│   └── skills/              # Domain knowledge (analytics-patterns)
 └── tasks/                   # Sprint task definitions
 ```
 
@@ -124,26 +122,6 @@ prismiq/
 ```
 
 Commands run with `uv run` auto-use this venv.
-
-## Subagents
-
-| Agent | Purpose | When to Use |
-|-------|---------|-------------|
-| `orchestrator` | Plans and delegates | Start of any multi-task work |
-| `python-implementer` | Writes Python code | Any Python file creation/modification |
-| `react-developer` | Writes React/TypeScript | Any React component or hook |
-| `test-writer` | Creates tests | After implementation |
-| `code-reviewer` | Reviews code (read-only) | Before marking task complete |
-
-## Workflow
-
-For each task:
-1. Orchestrator creates plan
-2. Delegates to appropriate implementer
-3. Implementer writes code, runs validation
-4. Test-writer creates tests
-5. Code-reviewer verifies quality
-6. Orchestrator updates progress, moves to next task
 
 ## Tech Stack
 
