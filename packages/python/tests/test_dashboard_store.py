@@ -24,6 +24,9 @@ from prismiq.types import (
     QueryTable,
 )
 
+# Test tenant ID for all tests
+TEST_TENANT_ID = "test_tenant"
+
 # ============================================================================
 # InMemoryDashboardStore Tests
 # ============================================================================
@@ -39,33 +42,39 @@ class TestInMemoryDashboardStoreListDashboards:
 
     async def test_empty_store_returns_empty_list(self, store: InMemoryDashboardStore) -> None:
         """Test listing dashboards from empty store."""
-        dashboards = await store.list_dashboards()
+        dashboards = await store.list_dashboards(TEST_TENANT_ID)
         assert dashboards == []
 
     async def test_list_all_dashboards(self, store: InMemoryDashboardStore) -> None:
         """Test listing all dashboards."""
-        await store.create_dashboard(DashboardCreate(name="Dashboard 1"))
-        await store.create_dashboard(DashboardCreate(name="Dashboard 2"))
-        await store.create_dashboard(DashboardCreate(name="Dashboard 3"))
+        await store.create_dashboard(DashboardCreate(name="Dashboard 1"), TEST_TENANT_ID)
+        await store.create_dashboard(DashboardCreate(name="Dashboard 2"), TEST_TENANT_ID)
+        await store.create_dashboard(DashboardCreate(name="Dashboard 3"), TEST_TENANT_ID)
 
-        dashboards = await store.list_dashboards()
+        dashboards = await store.list_dashboards(TEST_TENANT_ID)
         assert len(dashboards) == 3
         names = {d.name for d in dashboards}
         assert names == {"Dashboard 1", "Dashboard 2", "Dashboard 3"}
 
     async def test_list_dashboards_filter_by_owner(self, store: InMemoryDashboardStore) -> None:
         """Test filtering dashboards by owner."""
-        await store.create_dashboard(DashboardCreate(name="D1"), owner_id="user_1")
-        await store.create_dashboard(DashboardCreate(name="D2"), owner_id="user_1")
-        await store.create_dashboard(DashboardCreate(name="D3"), owner_id="user_2")
+        await store.create_dashboard(
+            DashboardCreate(name="D1"), tenant_id=TEST_TENANT_ID, owner_id="user_1"
+        )
+        await store.create_dashboard(
+            DashboardCreate(name="D2"), tenant_id=TEST_TENANT_ID, owner_id="user_1"
+        )
+        await store.create_dashboard(
+            DashboardCreate(name="D3"), tenant_id=TEST_TENANT_ID, owner_id="user_2"
+        )
 
-        user1_dashboards = await store.list_dashboards(owner_id="user_1")
+        user1_dashboards = await store.list_dashboards(TEST_TENANT_ID, owner_id="user_1")
         assert len(user1_dashboards) == 2
 
-        user2_dashboards = await store.list_dashboards(owner_id="user_2")
+        user2_dashboards = await store.list_dashboards(TEST_TENANT_ID, owner_id="user_2")
         assert len(user2_dashboards) == 1
 
-        user3_dashboards = await store.list_dashboards(owner_id="user_3")
+        user3_dashboards = await store.list_dashboards(TEST_TENANT_ID, owner_id="user_3")
         assert len(user3_dashboards) == 0
 
 
@@ -79,8 +88,10 @@ class TestInMemoryDashboardStoreGetDashboard:
 
     async def test_get_existing_dashboard(self, store: InMemoryDashboardStore) -> None:
         """Test getting an existing dashboard."""
-        created = await store.create_dashboard(DashboardCreate(name="Test Dashboard"))
-        retrieved = await store.get_dashboard(created.id)
+        created = await store.create_dashboard(
+            DashboardCreate(name="Test Dashboard"), TEST_TENANT_ID
+        )
+        retrieved = await store.get_dashboard(created.id, TEST_TENANT_ID)
 
         assert retrieved is not None
         assert retrieved.id == created.id
@@ -90,13 +101,13 @@ class TestInMemoryDashboardStoreGetDashboard:
         self, store: InMemoryDashboardStore
     ) -> None:
         """Test getting a nonexistent dashboard returns None."""
-        result = await store.get_dashboard("nonexistent_id")
+        result = await store.get_dashboard("nonexistent_id", TEST_TENANT_ID)
         assert result is None
 
     async def test_returned_dashboard_is_copy(self, store: InMemoryDashboardStore) -> None:
         """Test that returned dashboard is a deep copy."""
-        created = await store.create_dashboard(DashboardCreate(name="Original"))
-        retrieved = await store.get_dashboard(created.id)
+        created = await store.create_dashboard(DashboardCreate(name="Original"), TEST_TENANT_ID)
+        retrieved = await store.get_dashboard(created.id, TEST_TENANT_ID)
 
         # Modifying retrieved should not affect stored
         assert retrieved is not None
@@ -114,7 +125,7 @@ class TestInMemoryDashboardStoreCreateDashboard:
 
     async def test_create_minimal_dashboard(self, store: InMemoryDashboardStore) -> None:
         """Test creating a dashboard with minimal data."""
-        dashboard = await store.create_dashboard(DashboardCreate(name="Minimal"))
+        dashboard = await store.create_dashboard(DashboardCreate(name="Minimal"), TEST_TENANT_ID)
 
         assert dashboard.id is not None
         assert dashboard.name == "Minimal"
@@ -125,7 +136,7 @@ class TestInMemoryDashboardStoreCreateDashboard:
     async def test_create_dashboard_with_description(self, store: InMemoryDashboardStore) -> None:
         """Test creating a dashboard with description."""
         dashboard = await store.create_dashboard(
-            DashboardCreate(name="Sales", description="Sales metrics dashboard")
+            DashboardCreate(name="Sales", description="Sales metrics dashboard"), TEST_TENANT_ID
         )
 
         assert dashboard.description == "Sales metrics dashboard"
@@ -133,14 +144,18 @@ class TestInMemoryDashboardStoreCreateDashboard:
     async def test_create_dashboard_with_custom_layout(self, store: InMemoryDashboardStore) -> None:
         """Test creating a dashboard with custom layout."""
         layout = DashboardLayout(columns=24, row_height=30)
-        dashboard = await store.create_dashboard(DashboardCreate(name="Custom", layout=layout))
+        dashboard = await store.create_dashboard(
+            DashboardCreate(name="Custom", layout=layout), TEST_TENANT_ID
+        )
 
         assert dashboard.layout.columns == 24
         assert dashboard.layout.row_height == 30
 
     async def test_create_dashboard_sets_owner_id(self, store: InMemoryDashboardStore) -> None:
         """Test creating a dashboard sets owner ID."""
-        dashboard = await store.create_dashboard(DashboardCreate(name="Owned"), owner_id="user_123")
+        dashboard = await store.create_dashboard(
+            DashboardCreate(name="Owned"), tenant_id=TEST_TENANT_ID, owner_id="user_123"
+        )
 
         assert dashboard.owner_id == "user_123"
 
@@ -148,15 +163,17 @@ class TestInMemoryDashboardStoreCreateDashboard:
         self, store: InMemoryDashboardStore
     ) -> None:
         """Test that each dashboard gets a unique ID."""
-        d1 = await store.create_dashboard(DashboardCreate(name="D1"))
-        d2 = await store.create_dashboard(DashboardCreate(name="D2"))
-        d3 = await store.create_dashboard(DashboardCreate(name="D3"))
+        d1 = await store.create_dashboard(DashboardCreate(name="D1"), TEST_TENANT_ID)
+        d2 = await store.create_dashboard(DashboardCreate(name="D2"), TEST_TENANT_ID)
+        d3 = await store.create_dashboard(DashboardCreate(name="D3"), TEST_TENANT_ID)
 
         assert len({d1.id, d2.id, d3.id}) == 3
 
     async def test_create_dashboard_sets_timestamps(self, store: InMemoryDashboardStore) -> None:
         """Test that created_at and updated_at are set."""
-        dashboard = await store.create_dashboard(DashboardCreate(name="Timestamped"))
+        dashboard = await store.create_dashboard(
+            DashboardCreate(name="Timestamped"), TEST_TENANT_ID
+        )
 
         assert dashboard.created_at is not None
         assert dashboard.updated_at is not None
@@ -173,8 +190,10 @@ class TestInMemoryDashboardStoreUpdateDashboard:
 
     async def test_update_dashboard_name(self, store: InMemoryDashboardStore) -> None:
         """Test updating dashboard name."""
-        created = await store.create_dashboard(DashboardCreate(name="Original"))
-        updated = await store.update_dashboard(created.id, DashboardUpdate(name="Updated"))
+        created = await store.create_dashboard(DashboardCreate(name="Original"), TEST_TENANT_ID)
+        updated = await store.update_dashboard(
+            created.id, DashboardUpdate(name="Updated"), TEST_TENANT_ID
+        )
 
         assert updated is not None
         assert updated.name == "Updated"
@@ -184,9 +203,11 @@ class TestInMemoryDashboardStoreUpdateDashboard:
     ) -> None:
         """Test that unchanged fields are preserved."""
         created = await store.create_dashboard(
-            DashboardCreate(name="Test", description="Original description")
+            DashboardCreate(name="Test", description="Original description"), TEST_TENANT_ID
         )
-        updated = await store.update_dashboard(created.id, DashboardUpdate(name="New Name"))
+        updated = await store.update_dashboard(
+            created.id, DashboardUpdate(name="New Name"), TEST_TENANT_ID
+        )
 
         assert updated is not None
         assert updated.name == "New Name"
@@ -194,8 +215,10 @@ class TestInMemoryDashboardStoreUpdateDashboard:
 
     async def test_update_dashboard_updates_timestamp(self, store: InMemoryDashboardStore) -> None:
         """Test that updated_at is changed on update."""
-        created = await store.create_dashboard(DashboardCreate(name="Test"))
-        updated = await store.update_dashboard(created.id, DashboardUpdate(description="New desc"))
+        created = await store.create_dashboard(DashboardCreate(name="Test"), TEST_TENANT_ID)
+        updated = await store.update_dashboard(
+            created.id, DashboardUpdate(description="New desc"), TEST_TENANT_ID
+        )
 
         assert updated is not None
         assert updated.updated_at > created.updated_at
@@ -204,12 +227,14 @@ class TestInMemoryDashboardStoreUpdateDashboard:
         self, store: InMemoryDashboardStore
     ) -> None:
         """Test updating nonexistent dashboard returns None."""
-        result = await store.update_dashboard("nonexistent", DashboardUpdate(name="Test"))
+        result = await store.update_dashboard(
+            "nonexistent", DashboardUpdate(name="Test"), TEST_TENANT_ID
+        )
         assert result is None
 
     async def test_update_dashboard_filters(self, store: InMemoryDashboardStore) -> None:
         """Test updating dashboard filters."""
-        created = await store.create_dashboard(DashboardCreate(name="Test"))
+        created = await store.create_dashboard(DashboardCreate(name="Test"), TEST_TENANT_ID)
         filters = [
             DashboardFilter(
                 id="f1",
@@ -218,7 +243,9 @@ class TestInMemoryDashboardStoreUpdateDashboard:
                 field="status",
             )
         ]
-        updated = await store.update_dashboard(created.id, DashboardUpdate(filters=filters))
+        updated = await store.update_dashboard(
+            created.id, DashboardUpdate(filters=filters), TEST_TENANT_ID
+        )
 
         assert updated is not None
         assert len(updated.filters) == 1
@@ -226,12 +253,13 @@ class TestInMemoryDashboardStoreUpdateDashboard:
 
     async def test_update_dashboard_visibility(self, store: InMemoryDashboardStore) -> None:
         """Test updating dashboard visibility."""
-        created = await store.create_dashboard(DashboardCreate(name="Test"))
+        created = await store.create_dashboard(DashboardCreate(name="Test"), TEST_TENANT_ID)
         assert created.is_public is False
 
         updated = await store.update_dashboard(
             created.id,
             DashboardUpdate(is_public=True, allowed_viewers=["user_1", "user_2"]),
+            TEST_TENANT_ID,
         )
 
         assert updated is not None
@@ -249,24 +277,24 @@ class TestInMemoryDashboardStoreDeleteDashboard:
 
     async def test_delete_existing_dashboard(self, store: InMemoryDashboardStore) -> None:
         """Test deleting an existing dashboard."""
-        created = await store.create_dashboard(DashboardCreate(name="ToDelete"))
-        result = await store.delete_dashboard(created.id)
+        created = await store.create_dashboard(DashboardCreate(name="ToDelete"), TEST_TENANT_ID)
+        result = await store.delete_dashboard(created.id, TEST_TENANT_ID)
 
         assert result is True
-        assert await store.get_dashboard(created.id) is None
+        assert await store.get_dashboard(created.id, TEST_TENANT_ID) is None
 
     async def test_delete_nonexistent_dashboard_returns_false(
         self, store: InMemoryDashboardStore
     ) -> None:
         """Test deleting nonexistent dashboard returns False."""
-        result = await store.delete_dashboard("nonexistent")
+        result = await store.delete_dashboard("nonexistent", TEST_TENANT_ID)
         assert result is False
 
     async def test_delete_dashboard_removes_widget_mappings(
         self, store: InMemoryDashboardStore
     ) -> None:
         """Test that widget mappings are removed when dashboard is deleted."""
-        dashboard = await store.create_dashboard(DashboardCreate(name="Test"))
+        dashboard = await store.create_dashboard(DashboardCreate(name="Test"), TEST_TENANT_ID)
         widget = await store.add_widget(
             dashboard.id,
             WidgetCreate(
@@ -274,13 +302,16 @@ class TestInMemoryDashboardStoreDeleteDashboard:
                 title="Data",
                 position=WidgetPosition(x=0, y=0, w=12, h=6),
             ),
+            TEST_TENANT_ID,
         )
         assert widget is not None
 
-        await store.delete_dashboard(dashboard.id)
+        await store.delete_dashboard(dashboard.id, TEST_TENANT_ID)
 
         # Widget should not be updatable after dashboard deletion
-        update_result = await store.update_widget(widget.id, WidgetUpdate(title="New"))
+        update_result = await store.update_widget(
+            widget.id, WidgetUpdate(title="New"), TEST_TENANT_ID
+        )
         assert update_result is None
 
 
@@ -294,7 +325,7 @@ class TestInMemoryDashboardStoreWidgetOperations:
 
     async def test_add_widget_to_dashboard(self, store: InMemoryDashboardStore) -> None:
         """Test adding a widget to a dashboard."""
-        dashboard = await store.create_dashboard(DashboardCreate(name="Test"))
+        dashboard = await store.create_dashboard(DashboardCreate(name="Test"), TEST_TENANT_ID)
         widget = await store.add_widget(
             dashboard.id,
             WidgetCreate(
@@ -303,6 +334,7 @@ class TestInMemoryDashboardStoreWidgetOperations:
                 position=WidgetPosition(x=0, y=0, w=6, h=4),
                 config=WidgetConfig(orientation="horizontal"),
             ),
+            TEST_TENANT_ID,
         )
 
         assert widget is not None
@@ -313,7 +345,7 @@ class TestInMemoryDashboardStoreWidgetOperations:
 
     async def test_add_widget_updates_dashboard(self, store: InMemoryDashboardStore) -> None:
         """Test that adding a widget updates the dashboard."""
-        dashboard = await store.create_dashboard(DashboardCreate(name="Test"))
+        dashboard = await store.create_dashboard(DashboardCreate(name="Test"), TEST_TENANT_ID)
         original_updated = dashboard.updated_at
 
         await store.add_widget(
@@ -323,9 +355,10 @@ class TestInMemoryDashboardStoreWidgetOperations:
                 title="Data",
                 position=WidgetPosition(x=0, y=0, w=12, h=6),
             ),
+            TEST_TENANT_ID,
         )
 
-        updated_dashboard = await store.get_dashboard(dashboard.id)
+        updated_dashboard = await store.get_dashboard(dashboard.id, TEST_TENANT_ID)
         assert updated_dashboard is not None
         assert len(updated_dashboard.widgets) == 1
         assert updated_dashboard.updated_at > original_updated
@@ -341,12 +374,13 @@ class TestInMemoryDashboardStoreWidgetOperations:
                 title="Data",
                 position=WidgetPosition(x=0, y=0, w=12, h=6),
             ),
+            TEST_TENANT_ID,
         )
         assert result is None
 
     async def test_add_widget_with_query(self, store: InMemoryDashboardStore) -> None:
         """Test adding a widget with a query."""
-        dashboard = await store.create_dashboard(DashboardCreate(name="Test"))
+        dashboard = await store.create_dashboard(DashboardCreate(name="Test"), TEST_TENANT_ID)
         query = QueryDefinition(
             tables=[QueryTable(id="t1", name="orders")],
             columns=[
@@ -361,6 +395,7 @@ class TestInMemoryDashboardStoreWidgetOperations:
                 query=query,
                 position=WidgetPosition(x=0, y=0, w=3, h=2),
             ),
+            TEST_TENANT_ID,
         )
 
         assert widget is not None
@@ -369,7 +404,7 @@ class TestInMemoryDashboardStoreWidgetOperations:
 
     async def test_update_widget(self, store: InMemoryDashboardStore) -> None:
         """Test updating a widget."""
-        dashboard = await store.create_dashboard(DashboardCreate(name="Test"))
+        dashboard = await store.create_dashboard(DashboardCreate(name="Test"), TEST_TENANT_ID)
         widget = await store.add_widget(
             dashboard.id,
             WidgetCreate(
@@ -377,10 +412,13 @@ class TestInMemoryDashboardStoreWidgetOperations:
                 title="Original",
                 position=WidgetPosition(x=0, y=0, w=12, h=6),
             ),
+            TEST_TENANT_ID,
         )
         assert widget is not None
 
-        updated = await store.update_widget(widget.id, WidgetUpdate(title="Updated"))
+        updated = await store.update_widget(
+            widget.id, WidgetUpdate(title="Updated"), TEST_TENANT_ID
+        )
 
         assert updated is not None
         assert updated.title == "Updated"
@@ -388,7 +426,7 @@ class TestInMemoryDashboardStoreWidgetOperations:
 
     async def test_update_widget_position(self, store: InMemoryDashboardStore) -> None:
         """Test updating widget position."""
-        dashboard = await store.create_dashboard(DashboardCreate(name="Test"))
+        dashboard = await store.create_dashboard(DashboardCreate(name="Test"), TEST_TENANT_ID)
         widget = await store.add_widget(
             dashboard.id,
             WidgetCreate(
@@ -396,11 +434,12 @@ class TestInMemoryDashboardStoreWidgetOperations:
                 title="Data",
                 position=WidgetPosition(x=0, y=0, w=6, h=4),
             ),
+            TEST_TENANT_ID,
         )
         assert widget is not None
 
         updated = await store.update_widget(
-            widget.id, WidgetUpdate(position=WidgetPosition(x=6, y=0, w=6, h=4))
+            widget.id, WidgetUpdate(position=WidgetPosition(x=6, y=0, w=6, h=4)), TEST_TENANT_ID
         )
 
         assert updated is not None
@@ -410,12 +449,12 @@ class TestInMemoryDashboardStoreWidgetOperations:
         self, store: InMemoryDashboardStore
     ) -> None:
         """Test updating nonexistent widget returns None."""
-        result = await store.update_widget("nonexistent", WidgetUpdate(title="New"))
+        result = await store.update_widget("nonexistent", WidgetUpdate(title="New"), TEST_TENANT_ID)
         assert result is None
 
     async def test_delete_widget(self, store: InMemoryDashboardStore) -> None:
         """Test deleting a widget."""
-        dashboard = await store.create_dashboard(DashboardCreate(name="Test"))
+        dashboard = await store.create_dashboard(DashboardCreate(name="Test"), TEST_TENANT_ID)
         widget = await store.add_widget(
             dashboard.id,
             WidgetCreate(
@@ -423,13 +462,14 @@ class TestInMemoryDashboardStoreWidgetOperations:
                 title="Data",
                 position=WidgetPosition(x=0, y=0, w=12, h=6),
             ),
+            TEST_TENANT_ID,
         )
         assert widget is not None
 
-        result = await store.delete_widget(widget.id)
+        result = await store.delete_widget(widget.id, TEST_TENANT_ID)
 
         assert result is True
-        updated_dashboard = await store.get_dashboard(dashboard.id)
+        updated_dashboard = await store.get_dashboard(dashboard.id, TEST_TENANT_ID)
         assert updated_dashboard is not None
         assert len(updated_dashboard.widgets) == 0
 
@@ -437,12 +477,12 @@ class TestInMemoryDashboardStoreWidgetOperations:
         self, store: InMemoryDashboardStore
     ) -> None:
         """Test deleting nonexistent widget returns False."""
-        result = await store.delete_widget("nonexistent")
+        result = await store.delete_widget("nonexistent", TEST_TENANT_ID)
         assert result is False
 
     async def test_duplicate_widget(self, store: InMemoryDashboardStore) -> None:
         """Test duplicating a widget."""
-        dashboard = await store.create_dashboard(DashboardCreate(name="Test"))
+        dashboard = await store.create_dashboard(DashboardCreate(name="Test"), TEST_TENANT_ID)
         original = await store.add_widget(
             dashboard.id,
             WidgetCreate(
@@ -451,10 +491,11 @@ class TestInMemoryDashboardStoreWidgetOperations:
                 position=WidgetPosition(x=0, y=0, w=6, h=4),
                 config=WidgetConfig(stacked=True),
             ),
+            TEST_TENANT_ID,
         )
         assert original is not None
 
-        duplicate = await store.duplicate_widget(original.id)
+        duplicate = await store.duplicate_widget(original.id, TEST_TENANT_ID)
 
         assert duplicate is not None
         assert duplicate.id != original.id
@@ -465,7 +506,7 @@ class TestInMemoryDashboardStoreWidgetOperations:
 
     async def test_duplicate_widget_with_query(self, store: InMemoryDashboardStore) -> None:
         """Test duplicating a widget preserves query."""
-        dashboard = await store.create_dashboard(DashboardCreate(name="Test"))
+        dashboard = await store.create_dashboard(DashboardCreate(name="Test"), TEST_TENANT_ID)
         query = QueryDefinition(
             tables=[QueryTable(id="t1", name="orders")],
             columns=[ColumnSelection(table_id="t1", column="id")],
@@ -478,10 +519,11 @@ class TestInMemoryDashboardStoreWidgetOperations:
                 query=query,
                 position=WidgetPosition(x=0, y=0, w=12, h=6),
             ),
+            TEST_TENANT_ID,
         )
         assert original is not None
 
-        duplicate = await store.duplicate_widget(original.id)
+        duplicate = await store.duplicate_widget(original.id, TEST_TENANT_ID)
 
         assert duplicate is not None
         assert duplicate.query is not None
@@ -493,7 +535,7 @@ class TestInMemoryDashboardStoreWidgetOperations:
         self, store: InMemoryDashboardStore
     ) -> None:
         """Test duplicating nonexistent widget returns None."""
-        result = await store.duplicate_widget("nonexistent")
+        result = await store.duplicate_widget("nonexistent", TEST_TENANT_ID)
         assert result is None
 
 
@@ -507,7 +549,7 @@ class TestInMemoryDashboardStoreMultipleWidgets:
 
     async def test_add_multiple_widgets(self, store: InMemoryDashboardStore) -> None:
         """Test adding multiple widgets to a dashboard."""
-        dashboard = await store.create_dashboard(DashboardCreate(name="Test"))
+        dashboard = await store.create_dashboard(DashboardCreate(name="Test"), TEST_TENANT_ID)
 
         await store.add_widget(
             dashboard.id,
@@ -516,6 +558,7 @@ class TestInMemoryDashboardStoreMultipleWidgets:
                 title="Metric 1",
                 position=WidgetPosition(x=0, y=0, w=3, h=2),
             ),
+            TEST_TENANT_ID,
         )
         await store.add_widget(
             dashboard.id,
@@ -524,6 +567,7 @@ class TestInMemoryDashboardStoreMultipleWidgets:
                 title="Metric 2",
                 position=WidgetPosition(x=3, y=0, w=3, h=2),
             ),
+            TEST_TENANT_ID,
         )
         await store.add_widget(
             dashboard.id,
@@ -532,15 +576,16 @@ class TestInMemoryDashboardStoreMultipleWidgets:
                 title="Chart",
                 position=WidgetPosition(x=0, y=2, w=12, h=4),
             ),
+            TEST_TENANT_ID,
         )
 
-        updated = await store.get_dashboard(dashboard.id)
+        updated = await store.get_dashboard(dashboard.id, TEST_TENANT_ID)
         assert updated is not None
         assert len(updated.widgets) == 3
 
     async def test_delete_one_widget_preserves_others(self, store: InMemoryDashboardStore) -> None:
         """Test deleting one widget preserves the others."""
-        dashboard = await store.create_dashboard(DashboardCreate(name="Test"))
+        dashboard = await store.create_dashboard(DashboardCreate(name="Test"), TEST_TENANT_ID)
 
         w1 = await store.add_widget(
             dashboard.id,
@@ -549,6 +594,7 @@ class TestInMemoryDashboardStoreMultipleWidgets:
                 title="Keep",
                 position=WidgetPosition(x=0, y=0, w=3, h=2),
             ),
+            TEST_TENANT_ID,
         )
         w2 = await store.add_widget(
             dashboard.id,
@@ -557,13 +603,14 @@ class TestInMemoryDashboardStoreMultipleWidgets:
                 title="Delete",
                 position=WidgetPosition(x=3, y=0, w=3, h=2),
             ),
+            TEST_TENANT_ID,
         )
         assert w1 is not None
         assert w2 is not None
 
-        await store.delete_widget(w2.id)
+        await store.delete_widget(w2.id, TEST_TENANT_ID)
 
-        updated = await store.get_dashboard(dashboard.id)
+        updated = await store.get_dashboard(dashboard.id, TEST_TENANT_ID)
         assert updated is not None
         assert len(updated.widgets) == 1
         assert updated.widgets[0].id == w1.id

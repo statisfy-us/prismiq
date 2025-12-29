@@ -139,6 +139,9 @@ from prismiq.middleware import (
     TokenBucket,
     create_rate_limiter,
 )
+
+# Database persistence
+from prismiq.persistence import PostgresDashboardStore, drop_tables, ensure_tables
 from prismiq.query import QueryBuilder, ValidationError, ValidationResult
 from prismiq.schema import SchemaIntrospector
 
@@ -274,6 +277,8 @@ __all__ = [
     "Metrics",
     # Number formatting
     "NumberFormat",
+    # Database persistence
+    "PostgresDashboardStore",
     # Main engine
     "PrismiqEngine",
     # Exception types
@@ -361,6 +366,8 @@ __all__ = [
     "create_router",
     "date_add",
     "date_trunc",
+    "drop_tables",
+    "ensure_tables",
     # Transform functions
     "fill_missing_buckets",
     "fill_nulls",

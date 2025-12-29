@@ -35,12 +35,14 @@ class DashboardStore(Protocol):
 
     Implementations can store dashboards in memory, database, or other backends.
     All operations are async to support different storage backends.
+    All operations require tenant_id for multi-tenant isolation.
     """
 
-    async def list_dashboards(self, owner_id: str | None = None) -> list[Dashboard]:
-        """List all dashboards, optionally filtered by owner.
+    async def list_dashboards(self, tenant_id: str, owner_id: str | None = None) -> list[Dashboard]:
+        """List all dashboards for a tenant, optionally filtered by owner.
 
         Args:
+            tenant_id: Tenant ID for isolation.
             owner_id: Optional owner ID to filter by.
 
         Returns:
@@ -48,11 +50,12 @@ class DashboardStore(Protocol):
         """
         ...
 
-    async def get_dashboard(self, dashboard_id: str) -> Dashboard | None:
+    async def get_dashboard(self, dashboard_id: str, tenant_id: str) -> Dashboard | None:
         """Get a dashboard by ID.
 
         Args:
             dashboard_id: The dashboard ID.
+            tenant_id: Tenant ID for isolation.
 
         Returns:
             The dashboard, or None if not found.
@@ -60,12 +63,13 @@ class DashboardStore(Protocol):
         ...
 
     async def create_dashboard(
-        self, dashboard: DashboardCreate, owner_id: str | None = None
+        self, dashboard: DashboardCreate, tenant_id: str, owner_id: str | None = None
     ) -> Dashboard:
         """Create a new dashboard.
 
         Args:
             dashboard: Dashboard creation data.
+            tenant_id: Tenant ID for isolation.
             owner_id: Optional owner ID.
 
         Returns:
@@ -74,70 +78,92 @@ class DashboardStore(Protocol):
         ...
 
     async def update_dashboard(
-        self, dashboard_id: str, update: DashboardUpdate
+        self, dashboard_id: str, update: DashboardUpdate, tenant_id: str
     ) -> Dashboard | None:
         """Update a dashboard.
 
         Args:
             dashboard_id: The dashboard ID.
             update: Fields to update.
+            tenant_id: Tenant ID for isolation.
 
         Returns:
             The updated dashboard, or None if not found.
         """
         ...
 
-    async def delete_dashboard(self, dashboard_id: str) -> bool:
+    async def delete_dashboard(self, dashboard_id: str, tenant_id: str) -> bool:
         """Delete a dashboard.
 
         Args:
             dashboard_id: The dashboard ID.
+            tenant_id: Tenant ID for isolation.
 
         Returns:
             True if deleted, False if not found.
         """
         ...
 
-    async def add_widget(self, dashboard_id: str, widget: WidgetCreate) -> Widget | None:
+    async def add_widget(
+        self, dashboard_id: str, widget: WidgetCreate, tenant_id: str
+    ) -> Widget | None:
         """Add a widget to a dashboard.
 
         Args:
             dashboard_id: The dashboard ID.
             widget: Widget creation data.
+            tenant_id: Tenant ID for isolation.
 
         Returns:
             The created widget, or None if dashboard not found.
         """
         ...
 
-    async def update_widget(self, widget_id: str, update: WidgetUpdate) -> Widget | None:
+    async def get_widget(self, widget_id: str, tenant_id: str) -> Widget | None:
+        """Get a widget by ID.
+
+        Args:
+            widget_id: The widget ID.
+            tenant_id: Tenant ID for isolation.
+
+        Returns:
+            The widget, or None if not found.
+        """
+        ...
+
+    async def update_widget(
+        self, widget_id: str, update: WidgetUpdate, tenant_id: str
+    ) -> Widget | None:
         """Update a widget.
 
         Args:
             widget_id: The widget ID.
             update: Fields to update.
+            tenant_id: Tenant ID for isolation.
 
         Returns:
             The updated widget, or None if not found.
         """
         ...
 
-    async def delete_widget(self, widget_id: str) -> bool:
+    async def delete_widget(self, widget_id: str, tenant_id: str) -> bool:
         """Delete a widget.
 
         Args:
             widget_id: The widget ID.
+            tenant_id: Tenant ID for isolation.
 
         Returns:
             True if deleted, False if not found.
         """
         ...
 
-    async def duplicate_widget(self, widget_id: str) -> Widget | None:
+    async def duplicate_widget(self, widget_id: str, tenant_id: str) -> Widget | None:
         """Duplicate a widget.
 
         Args:
             widget_id: The widget ID to duplicate.
+            tenant_id: Tenant ID for isolation.
 
         Returns:
             The new duplicated widget, or None if not found.
@@ -150,46 +176,61 @@ class InMemoryDashboardStore:
 
     Stores dashboards in a dict for testing and development.
     Thread-safe through asyncio locks.
+    Tenant isolation is simulated via tenant_id stored on dashboards.
 
     Example:
         >>> store = InMemoryDashboardStore()
         >>> dashboard = await store.create_dashboard(
         ...     DashboardCreate(name="Sales Dashboard"),
+        ...     tenant_id="tenant_123",
         ...     owner_id="user_123",
         ... )
         >>> widget = await store.add_widget(
         ...     dashboard.id,
         ...     WidgetCreate(type=WidgetType.TABLE, title="Data", position=...),
+        ...     tenant_id="tenant_123",
         ... )
     """
 
     def __init__(self) -> None:
         """Initialize the in-memory store."""
         self._dashboards: dict[str, Dashboard] = {}
+        self._dashboard_tenants: dict[str, str] = {}  # dashboard_id -> tenant_id
         self._widget_to_dashboard: dict[str, str] = {}
         self._lock = asyncio.Lock()
 
-    async def list_dashboards(self, owner_id: str | None = None) -> list[Dashboard]:
-        """List all dashboards, optionally filtered by owner.
+    async def list_dashboards(self, tenant_id: str, owner_id: str | None = None) -> list[Dashboard]:
+        """List all dashboards for a tenant, optionally filtered by owner.
 
         Args:
+            tenant_id: Tenant ID for isolation.
             owner_id: Optional owner ID to filter by.
 
         Returns:
             List of dashboards (deep copies).
         """
         async with self._lock:
-            dashboards = list(self._dashboards.values())
+            # Filter by tenant
+            dashboards = [
+                d
+                for d in self._dashboards.values()
+                if self._dashboard_tenants.get(d.id) == tenant_id
+            ]
             if owner_id is not None:
-                dashboards = [d for d in dashboards if d.owner_id == owner_id]
+                dashboards = [
+                    d
+                    for d in dashboards
+                    if d.owner_id == owner_id or d.is_public or owner_id in d.allowed_viewers
+                ]
             # Return deep copies to prevent external mutation
             return [self._copy_dashboard(d) for d in dashboards]
 
-    async def get_dashboard(self, dashboard_id: str) -> Dashboard | None:
-        """Get a dashboard by ID.
+    async def get_dashboard(self, dashboard_id: str, tenant_id: str) -> Dashboard | None:
+        """Get a dashboard by ID with tenant check.
 
         Args:
             dashboard_id: The dashboard ID.
+            tenant_id: Tenant ID for isolation.
 
         Returns:
             Deep copy of the dashboard, or None if not found.
@@ -198,15 +239,19 @@ class InMemoryDashboardStore:
             dashboard = self._dashboards.get(dashboard_id)
             if dashboard is None:
                 return None
+            # Check tenant ownership
+            if self._dashboard_tenants.get(dashboard_id) != tenant_id:
+                return None
             return self._copy_dashboard(dashboard)
 
     async def create_dashboard(
-        self, dashboard: DashboardCreate, owner_id: str | None = None
+        self, dashboard: DashboardCreate, tenant_id: str, owner_id: str | None = None
     ) -> Dashboard:
         """Create a new dashboard.
 
         Args:
             dashboard: Dashboard creation data.
+            tenant_id: Tenant ID for isolation.
             owner_id: Optional owner ID.
 
         Returns:
@@ -228,16 +273,18 @@ class InMemoryDashboardStore:
                 allowed_viewers=[],
             )
             self._dashboards[new_dashboard.id] = new_dashboard
+            self._dashboard_tenants[new_dashboard.id] = tenant_id
             return self._copy_dashboard(new_dashboard)
 
     async def update_dashboard(
-        self, dashboard_id: str, update: DashboardUpdate
+        self, dashboard_id: str, update: DashboardUpdate, tenant_id: str
     ) -> Dashboard | None:
-        """Update a dashboard.
+        """Update a dashboard with tenant check.
 
         Args:
             dashboard_id: The dashboard ID.
             update: Fields to update.
+            tenant_id: Tenant ID for isolation.
 
         Returns:
             The updated dashboard, or None if not found.
@@ -245,6 +292,9 @@ class InMemoryDashboardStore:
         async with self._lock:
             dashboard = self._dashboards.get(dashboard_id)
             if dashboard is None:
+                return None
+            # Check tenant ownership
+            if self._dashboard_tenants.get(dashboard_id) != tenant_id:
                 return None
 
             # Build update data
@@ -267,17 +317,21 @@ class InMemoryDashboardStore:
             self._dashboards[dashboard_id] = updated
             return self._copy_dashboard(updated)
 
-    async def delete_dashboard(self, dashboard_id: str) -> bool:
-        """Delete a dashboard.
+    async def delete_dashboard(self, dashboard_id: str, tenant_id: str) -> bool:
+        """Delete a dashboard with tenant check.
 
         Args:
             dashboard_id: The dashboard ID.
+            tenant_id: Tenant ID for isolation.
 
         Returns:
             True if deleted, False if not found.
         """
         async with self._lock:
             if dashboard_id not in self._dashboards:
+                return False
+            # Check tenant ownership
+            if self._dashboard_tenants.get(dashboard_id) != tenant_id:
                 return False
 
             # Remove widget mappings
@@ -286,14 +340,18 @@ class InMemoryDashboardStore:
                 self._widget_to_dashboard.pop(widget.id, None)
 
             del self._dashboards[dashboard_id]
+            del self._dashboard_tenants[dashboard_id]
             return True
 
-    async def add_widget(self, dashboard_id: str, widget: WidgetCreate) -> Widget | None:
-        """Add a widget to a dashboard.
+    async def add_widget(
+        self, dashboard_id: str, widget: WidgetCreate, tenant_id: str
+    ) -> Widget | None:
+        """Add a widget to a dashboard with tenant check.
 
         Args:
             dashboard_id: The dashboard ID.
             widget: Widget creation data.
+            tenant_id: Tenant ID for isolation.
 
         Returns:
             The created widget, or None if dashboard not found.
@@ -301,6 +359,9 @@ class InMemoryDashboardStore:
         async with self._lock:
             dashboard = self._dashboards.get(dashboard_id)
             if dashboard is None:
+                return None
+            # Check tenant ownership
+            if self._dashboard_tenants.get(dashboard_id) != tenant_id:
                 return None
 
             now = _utc_now()
@@ -327,12 +388,42 @@ class InMemoryDashboardStore:
 
             return self._copy_widget(new_widget)
 
-    async def update_widget(self, widget_id: str, update: WidgetUpdate) -> Widget | None:
-        """Update a widget.
+    async def get_widget(self, widget_id: str, tenant_id: str) -> Widget | None:
+        """Get a widget by ID with tenant check.
+
+        Args:
+            widget_id: The widget ID.
+            tenant_id: Tenant ID for isolation.
+
+        Returns:
+            The widget, or None if not found.
+        """
+        async with self._lock:
+            dashboard_id = self._widget_to_dashboard.get(widget_id)
+            if dashboard_id is None:
+                return None
+            # Check tenant ownership
+            if self._dashboard_tenants.get(dashboard_id) != tenant_id:
+                return None
+
+            dashboard = self._dashboards.get(dashboard_id)
+            if dashboard is None:
+                return None
+
+            for widget in dashboard.widgets:
+                if widget.id == widget_id:
+                    return self._copy_widget(widget)
+            return None
+
+    async def update_widget(
+        self, widget_id: str, update: WidgetUpdate, tenant_id: str
+    ) -> Widget | None:
+        """Update a widget with tenant check.
 
         Args:
             widget_id: The widget ID.
             update: Fields to update.
+            tenant_id: Tenant ID for isolation.
 
         Returns:
             The updated widget, or None if not found.
@@ -340,6 +431,9 @@ class InMemoryDashboardStore:
         async with self._lock:
             dashboard_id = self._widget_to_dashboard.get(widget_id)
             if dashboard_id is None:
+                return None
+            # Check tenant ownership
+            if self._dashboard_tenants.get(dashboard_id) != tenant_id:
                 return None
 
             dashboard = self._dashboards.get(dashboard_id)
@@ -379,11 +473,12 @@ class InMemoryDashboardStore:
 
             return self._copy_widget(updated_widget)
 
-    async def delete_widget(self, widget_id: str) -> bool:
-        """Delete a widget.
+    async def delete_widget(self, widget_id: str, tenant_id: str) -> bool:
+        """Delete a widget with tenant check.
 
         Args:
             widget_id: The widget ID.
+            tenant_id: Tenant ID for isolation.
 
         Returns:
             True if deleted, False if not found.
@@ -391,6 +486,9 @@ class InMemoryDashboardStore:
         async with self._lock:
             dashboard_id = self._widget_to_dashboard.get(widget_id)
             if dashboard_id is None:
+                return False
+            # Check tenant ownership
+            if self._dashboard_tenants.get(dashboard_id) != tenant_id:
                 return False
 
             dashboard = self._dashboards.get(dashboard_id)
@@ -413,11 +511,12 @@ class InMemoryDashboardStore:
             del self._widget_to_dashboard[widget_id]
             return True
 
-    async def duplicate_widget(self, widget_id: str) -> Widget | None:
-        """Duplicate a widget.
+    async def duplicate_widget(self, widget_id: str, tenant_id: str) -> Widget | None:
+        """Duplicate a widget with tenant check.
 
         Args:
             widget_id: The widget ID to duplicate.
+            tenant_id: Tenant ID for isolation.
 
         Returns:
             The new duplicated widget, or None if not found.
@@ -425,6 +524,9 @@ class InMemoryDashboardStore:
         async with self._lock:
             dashboard_id = self._widget_to_dashboard.get(widget_id)
             if dashboard_id is None:
+                return None
+            # Check tenant ownership
+            if self._dashboard_tenants.get(dashboard_id) != tenant_id:
                 return None
 
             dashboard = self._dashboards.get(dashboard_id)

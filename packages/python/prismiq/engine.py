@@ -14,8 +14,10 @@ from typing import TYPE_CHECKING
 import asyncpg
 
 from prismiq.cache import CacheBackend, CacheConfig, QueryCache
+from prismiq.dashboard_store import DashboardStore, InMemoryDashboardStore
 from prismiq.executor import QueryExecutor
 from prismiq.metrics import record_cache_hit, record_query_execution, set_active_connections
+from prismiq.persistence import PostgresDashboardStore, ensure_tables
 from prismiq.query import QueryBuilder, ValidationResult
 from prismiq.schema import SchemaIntrospector
 from prismiq.schema_config import (
@@ -99,6 +101,7 @@ class PrismiqEngine:
         cache: CacheBackend | None = None,
         cache_ttl: int = 300,
         enable_metrics: bool = True,
+        persist_dashboards: bool = False,
     ) -> None:
         """
         Initialize the Prismiq engine.
@@ -113,6 +116,7 @@ class PrismiqEngine:
             cache: Optional cache backend for query result caching.
             cache_ttl: Default cache TTL in seconds (default: 300).
             enable_metrics: Whether to record Prometheus metrics (default: True).
+            persist_dashboards: Store dashboards in PostgreSQL (default: False uses in-memory).
         """
         self._database_url = database_url
         self._exposed_tables = exposed_tables
@@ -121,6 +125,7 @@ class PrismiqEngine:
         self._schema_name = schema_name
         self._cache_ttl = cache_ttl
         self._enable_metrics = enable_metrics
+        self._persist_dashboards = persist_dashboards
 
         # Schema config manager
         self._schema_config_manager = SchemaConfigManager(schema_config)
@@ -142,11 +147,26 @@ class PrismiqEngine:
         self._executor: QueryExecutor | None = None
         self._builder: QueryBuilder | None = None
         self._schema: DatabaseSchema | None = None
+        self._dashboard_store: DashboardStore | None = None
 
     @property
     def cache(self) -> CacheBackend | None:
         """Get the cache backend."""
         return self._cache
+
+    @property
+    def dashboard_store(self) -> DashboardStore:
+        """Get the dashboard store.
+
+        Returns:
+            The dashboard store (PostgreSQL or in-memory).
+
+        Raises:
+            RuntimeError: If engine has not been started.
+        """
+        if self._dashboard_store is None:
+            raise RuntimeError("Engine not started. Call 'await engine.startup()' first.")
+        return self._dashboard_store
 
     async def startup(self) -> None:
         """
@@ -183,6 +203,14 @@ class PrismiqEngine:
             max_rows=self._max_rows,
         )
 
+        # Initialize dashboard store
+        if self._persist_dashboards:
+            # Create tables if they don't exist
+            await ensure_tables(self._pool)
+            self._dashboard_store = PostgresDashboardStore(self._pool)
+        else:
+            self._dashboard_store = InMemoryDashboardStore()
+
         # Update metrics
         if self._enable_metrics:
             set_active_connections(self._pool.get_size())
@@ -201,6 +229,7 @@ class PrismiqEngine:
         self._executor = None
         self._builder = None
         self._schema = None
+        self._dashboard_store = None
 
         # Update metrics
         if self._enable_metrics:

@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict
 
 from prismiq import __version__
-from prismiq.dashboard_store import DashboardStore, InMemoryDashboardStore
+from prismiq.dashboard_store import DashboardStore
 from prismiq.dashboards import (
     Dashboard,
     DashboardCreate,
@@ -51,6 +51,10 @@ if TYPE_CHECKING:
 
 # Track startup time for uptime calculation
 _startup_time: float | None = None
+
+# Default tenant ID for Phase 1 (before proper auth is implemented)
+# Phase 2 will replace this with auth context from request headers
+DEFAULT_TENANT_ID = "default"
 
 
 def _get_uptime() -> float:
@@ -318,13 +322,13 @@ def create_router(
     Args:
         engine: Initialized PrismiqEngine instance.
         dashboard_store: Optional dashboard storage backend.
-            If not provided, uses InMemoryDashboardStore.
+            If not provided, uses the engine's dashboard store.
 
     Returns:
         APIRouter with analytics endpoints.
 
     Example:
-        >>> engine = PrismiqEngine(database_url)
+        >>> engine = PrismiqEngine(database_url, persist_dashboards=True)
         >>> await engine.startup()
         >>> router = create_router(engine)
         >>> app.include_router(router, prefix="/api/analytics")
@@ -334,8 +338,8 @@ def create_router(
 
     router = APIRouter(tags=["analytics"])
 
-    # Use provided store or create in-memory store
-    store = dashboard_store or InMemoryDashboardStore()
+    # Use provided store or engine's store
+    store = dashboard_store or engine.dashboard_store
 
     # ========================================================================
     # Health Check Endpoints
@@ -926,7 +930,7 @@ def create_router(
         Returns:
             List of dashboards.
         """
-        dashboards = await store.list_dashboards(owner_id)
+        dashboards = await store.list_dashboards(tenant_id=DEFAULT_TENANT_ID, owner_id=owner_id)
         return DashboardListResponse(dashboards=dashboards)
 
     @router.get("/dashboards/{dashboard_id}", response_model=Dashboard)
@@ -943,7 +947,7 @@ def create_router(
         Raises:
             404: If dashboard not found.
         """
-        dashboard = await store.get_dashboard(dashboard_id)
+        dashboard = await store.get_dashboard(dashboard_id, tenant_id=DEFAULT_TENANT_ID)
         if dashboard is None:
             raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
         return dashboard
@@ -963,7 +967,9 @@ def create_router(
         Returns:
             Created dashboard.
         """
-        return await store.create_dashboard(dashboard, owner_id)
+        return await store.create_dashboard(
+            dashboard, tenant_id=DEFAULT_TENANT_ID, owner_id=owner_id
+        )
 
     @router.patch("/dashboards/{dashboard_id}", response_model=Dashboard)
     async def update_dashboard(
@@ -983,7 +989,7 @@ def create_router(
         Raises:
             404: If dashboard not found.
         """
-        updated = await store.update_dashboard(dashboard_id, update)
+        updated = await store.update_dashboard(dashboard_id, update, tenant_id=DEFAULT_TENANT_ID)
         if updated is None:
             raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
         return updated
@@ -1002,7 +1008,7 @@ def create_router(
         Raises:
             404: If dashboard not found.
         """
-        deleted = await store.delete_dashboard(dashboard_id)
+        deleted = await store.delete_dashboard(dashboard_id, tenant_id=DEFAULT_TENANT_ID)
         if not deleted:
             raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
         return SuccessResponse(message=f"Dashboard '{dashboard_id}' deleted")
@@ -1030,7 +1036,7 @@ def create_router(
         Raises:
             404: If dashboard not found.
         """
-        created = await store.add_widget(dashboard_id, widget)
+        created = await store.add_widget(dashboard_id, widget, tenant_id=DEFAULT_TENANT_ID)
         if created is None:
             raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
         return created
@@ -1050,7 +1056,7 @@ def create_router(
         Raises:
             404: If widget not found.
         """
-        updated = await store.update_widget(widget_id, update)
+        updated = await store.update_widget(widget_id, update, tenant_id=DEFAULT_TENANT_ID)
         if updated is None:
             raise HTTPException(status_code=404, detail=f"Widget '{widget_id}' not found")
         return updated
@@ -1069,7 +1075,7 @@ def create_router(
         Raises:
             404: If widget not found.
         """
-        deleted = await store.delete_widget(widget_id)
+        deleted = await store.delete_widget(widget_id, tenant_id=DEFAULT_TENANT_ID)
         if not deleted:
             raise HTTPException(status_code=404, detail=f"Widget '{widget_id}' not found")
         return SuccessResponse(message=f"Widget '{widget_id}' deleted")
@@ -1088,7 +1094,7 @@ def create_router(
         Raises:
             404: If widget not found.
         """
-        duplicated = await store.duplicate_widget(widget_id)
+        duplicated = await store.duplicate_widget(widget_id, tenant_id=DEFAULT_TENANT_ID)
         if duplicated is None:
             raise HTTPException(status_code=404, detail=f"Widget '{widget_id}' not found")
         return duplicated
@@ -1117,7 +1123,7 @@ def create_router(
             404: If dashboard or widget not found.
             400: If widget has no query or query fails validation.
         """
-        dashboard = await store.get_dashboard(dashboard_id)
+        dashboard = await store.get_dashboard(dashboard_id, tenant_id=DEFAULT_TENANT_ID)
         if dashboard is None:
             raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
 
@@ -1170,7 +1176,7 @@ def create_router(
         Raises:
             404: If dashboard not found.
         """
-        dashboard = await store.get_dashboard(dashboard_id)
+        dashboard = await store.get_dashboard(dashboard_id, tenant_id=DEFAULT_TENANT_ID)
         if dashboard is None:
             raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
 
@@ -1217,6 +1223,7 @@ def create_router(
                 description=export_data.description,
                 layout=export_data.layout,
             ),
+            tenant_id=DEFAULT_TENANT_ID,
             owner_id=owner_id,
         )
 
@@ -1225,6 +1232,7 @@ def create_router(
             await store.update_dashboard(
                 dashboard.id,
                 DashboardUpdate(filters=export_data.filters),
+                tenant_id=DEFAULT_TENANT_ID,
             )
 
         # Add widgets
@@ -1238,10 +1246,11 @@ def create_router(
                     position=widget_dict["position"],
                     config=widget_dict.get("config"),
                 ),
+                tenant_id=DEFAULT_TENANT_ID,
             )
 
         # Return the complete dashboard
-        result = await store.get_dashboard(dashboard.id)
+        result = await store.get_dashboard(dashboard.id, tenant_id=DEFAULT_TENANT_ID)
         if result is None:
             raise HTTPException(status_code=500, detail="Failed to retrieve imported dashboard")
         return result
