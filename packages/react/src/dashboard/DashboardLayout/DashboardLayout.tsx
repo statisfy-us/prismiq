@@ -4,10 +4,8 @@
  */
 
 import { useCallback, useMemo } from 'react';
-import type { ComponentClass } from 'react';
-import ReactGridLayout from 'react-grid-layout';
+import { Responsive, WidthProvider } from 'react-grid-layout/legacy';
 import 'react-grid-layout/css/styles.css';
-import 'react-resizable/css/styles.css';
 import { useTheme } from '../../theme';
 import type { DashboardLayoutProps, Widget, WidgetPosition } from '../types';
 
@@ -30,12 +28,8 @@ interface Layouts {
   [breakpoint: string]: LayoutItem[];
 }
 
-// react-grid-layout exports Responsive and WidthProvider as module properties
-// but the TypeScript types don't correctly represent this CommonJS pattern
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const RGLAny = ReactGridLayout as any;
-const ResponsiveGridLayout: ComponentClass<ReactGridLayout.ResponsiveProps & ReactGridLayout.WidthProviderProps> =
-  RGLAny.WidthProvider(RGLAny.Responsive);
+// Create responsive grid layout with width provider HOC
+const ResponsiveGridLayout = WidthProvider(Responsive);
 
 // Responsive breakpoints
 const BREAKPOINTS = {
@@ -177,10 +171,12 @@ export function DashboardLayout({
   );
 
   // Handle layout changes
+  // The legacy API passes (currentLayout, allLayouts) but we only need currentLayout
   const handleLayoutChange = useCallback(
-    (currentLayout: LayoutItem[]) => {
+    (currentLayout: readonly LayoutItem[]) => {
       if (onLayoutChange) {
-        const positions = layoutToPositions(currentLayout);
+        // Convert readonly array to mutable for our internal function
+        const positions = layoutToPositions([...currentLayout]);
         onLayoutChange(positions);
       }
     },
