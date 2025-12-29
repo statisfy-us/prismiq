@@ -48,6 +48,24 @@ claude plugin install frontend-design@claude-plugins-official
 | **pr-review-toolkit** | Specialized review agents (tests, errors, types, quality) | Before merging code |
 | **frontend-design** | UI/UX design guidance | Building React components |
 
+### Autonomous Quality Checks
+
+When completing implementation tasks, **automatically** invoke these subagents via the Task tool:
+
+| Subagent | Trigger | Purpose |
+|----------|---------|---------|
+| `pr-review-toolkit:code-reviewer` | After completing any implementation | Check style, patterns, issues |
+| `pr-review-toolkit:type-design-analyzer` | When adding new types/classes | Verify type design quality |
+| `pr-review-toolkit:silent-failure-hunter` | When adding try/catch or error handling | Find silent failures |
+| `pr-review-toolkit:code-simplifier` | When code exceeds 50 lines | Simplify for maintainability |
+
+**For PR creation**, invoke the skill:
+```
+/pr-review-toolkit:review-pr
+```
+
+This runs comprehensive review including all specialized agents.
+
 ## Project Goal
 
 Replace Reveal BI with a customizable, embeddable analytics solution that:
@@ -212,9 +230,41 @@ git commit -m "test: add schema introspection tests"
 - Handle loading/error states in all data hooks
 - Memoize expensive computations
 
+## Running the Demo
+
+```bash
+# 1. Start PostgreSQL (native or Docker)
+# Native (Mac): Postgres.app or brew services start postgresql
+# Docker: docker compose up -d postgres
+
+# 2. Set DATABASE_URL in examples/demo/.env
+DATABASE_URL=postgresql://youruser@localhost:5432/prismiq_demo
+
+# 3. Seed sample data
+cd examples/demo/backend && python seed_data.py
+
+# 4. Start backend (terminal 1)
+cd examples/demo/backend && python main.py
+
+# 5. Start frontend (terminal 2)
+cd examples/demo/frontend && npm install && npm run dev
+
+# 6. Open http://localhost:5173
+```
+
 ## Current Sprint
 
-See `tasks/week1-python.md` and `tasks/week1-react.md`
+Core features complete. See `tasks/` for remaining work.
+
+## Known Issues & Workarounds
+
+| Issue | Workaround |
+|-------|------------|
+| react-grid-layout types | Import from `react-grid-layout/legacy` for WidthProvider/Responsive |
+| Pydantic strict mode | Don't use `model_config = ConfigDict(strict=True)` with JSON APIs |
+| Dropdown z-index | Use React Portal to render at document.body level |
+| Multi-table queries | Ensure all tables in `query.tables` get added to FROM clause |
+| Vite hot reload for linked packages | Configure `resolve.alias` + `server.fs.allow` + `optimizeDeps.exclude` |
 
 ## Key Decisions Log
 

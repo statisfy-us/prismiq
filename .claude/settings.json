@@ -1,9 +1,4 @@
 {
-  "enabledPlugins": {
-    "feature-dev@claude-plugins-official": true,
-    "pr-review-toolkit@claude-plugins-official": true,
-    "frontend-design@claude-plugins-official": true
-  },
   "permissions": {
     "allow": [
       "Bash(make:*)",
@@ -16,6 +11,7 @@
       "Bash(npm test:*)",
       "Bash(npm ci:*)",
       "Bash(npx:*)",
+      "Bash(npm ls:*)",
       "Bash(git status:*)",
       "Bash(git diff:*)",
       "Bash(git log:*)",
@@ -38,7 +34,21 @@
       "Bash(touch:*)",
       "Bash(cp:*)",
       "Bash(mv:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(find:*)",
+      "Bash(uv run ruff:*)",
+      "Bash(du:*)",
+      "Bash(grep:*)",
+      "Bash(cat:*)",
+      "Bash(python3:*)",
+      "Bash(curl:*)",
+      "Read(tasks/**)"
     ]
+  },
+  "enabledPlugins": {
+    "feature-dev@claude-plugins-official": true,
+    "pr-review-toolkit@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": true,
+    "playwright@claude-plugins-official": true
   }
 }

@@ -18,12 +18,18 @@ class QueryTable(BaseModel):
     name: str                  # Actual table name in database
     alias: str | None = None   # Optional alias
 
+class JoinType(str, Enum):
+    INNER = "INNER"
+    LEFT = "LEFT"
+    RIGHT = "RIGHT"
+    FULL = "FULL"
+
 class JoinDefinition(BaseModel):
     from_table_id: str
     from_column: str
     to_table_id: str
     to_column: str
-    join_type: Literal["inner", "left", "right"] = "left"
+    join_type: JoinType = JoinType.INNER
 
 class AggregationType(str, Enum):
     NONE = "none"
@@ -102,14 +108,14 @@ ORDER BY table_name;
 
 ### Get Columns
 ```sql
-SELECT 
+SELECT
     column_name,
     data_type,
     is_nullable,
     column_default,
     ordinal_position
 FROM information_schema.columns
-WHERE table_schema = $1 
+WHERE table_schema = $1
   AND table_name = $2
 ORDER BY ordinal_position;
 ```
@@ -118,7 +124,7 @@ ORDER BY ordinal_position;
 ```sql
 SELECT kcu.column_name
 FROM information_schema.table_constraints tc
-JOIN information_schema.key_column_usage kcu 
+JOIN information_schema.key_column_usage kcu
     ON tc.constraint_name = kcu.constraint_name
     AND tc.table_schema = kcu.table_schema
 WHERE tc.constraint_type = 'PRIMARY KEY'
@@ -179,7 +185,7 @@ OPERATOR_MAP = {
 
 def build_filter(filter: FilterDefinition, param_index: int) -> tuple[str, Any]:
     col = f'"{filter.table_id}"."{filter.column}"'
-    
+
     if filter.operator == FilterOperator.IS_NULL:
         return f"{col} IS NULL", None
     if filter.operator == FilterOperator.IS_NOT_NULL:
@@ -188,7 +194,7 @@ def build_filter(filter: FilterDefinition, param_index: int) -> tuple[str, Any]:
         return f"{col} = ANY(${param_index})", filter.value
     if filter.operator == FilterOperator.BETWEEN:
         return f"{col} BETWEEN ${param_index} AND ${param_index + 1}", filter.value
-    
+
     op = OPERATOR_MAP[filter.operator]
     return f"{col} {op} ${param_index}", filter.value
 ```
@@ -235,10 +241,10 @@ function queryReducer(state: QueryBuilderState, action: QueryAction): QueryBuild
 ### Chart Type Selection
 ```typescript
 function suggestChartType(columns: ColumnSelection[], data: QueryResult): ChartType {
-  const hasTimeSeries = columns.some(c => 
+  const hasTimeSeries = columns.some(c =>
     ['date', 'timestamp', 'timestamptz'].includes(getColumnType(c, data))
   );
-  const numericCount = columns.filter(c => 
+  const numericCount = columns.filter(c =>
     c.aggregation !== 'none' || isNumericType(getColumnType(c, data))
   ).length;
   const categoricalCount = columns.length - numericCount;
@@ -247,7 +253,7 @@ function suggestChartType(columns: ColumnSelection[], data: QueryResult): ChartT
   if (categoricalCount === 1 && numericCount === 1) return 'bar';
   if (categoricalCount === 1 && numericCount === 1 && data.row_count <= 10) return 'pie';
   if (numericCount >= 2) return 'scatter';
-  
+
   return 'table';
 }
 ```
@@ -259,3 +265,89 @@ function suggestChartType(columns: ColumnSelection[], data: QueryResult): ChartT
 3. **Cache schema metadata** — TTL of 5-10 minutes
 4. **Query timeout** — 30 second hard limit
 5. **Result caching** — Redis with query hash as key, 5-min TTL
+
+## Common Pitfalls & Solutions
+
+### React Grid Layout
+```typescript
+// WRONG - types don't export from main
+import { Responsive, WidthProvider } from 'react-grid-layout';
+
+// CORRECT - use legacy subpath
+import { Responsive, WidthProvider } from 'react-grid-layout/legacy';
+```
+
+### Pydantic Strict Mode
+```python
+# WRONG - breaks JSON serialization
+class MyModel(BaseModel):
+    model_config = ConfigDict(strict=True)
+
+# CORRECT - omit strict for API models
+class MyModel(BaseModel):
+    model_config = ConfigDict()  # No strict=True
+```
+
+### Dropdown Z-Index (Stacking Contexts)
+```typescript
+// WRONG - overflow:hidden creates stacking context
+<div style={{ overflow: 'hidden' }}>
+  <Dropdown />  {/* Menu gets clipped */}
+</div>
+
+// CORRECT - use React Portal
+import { createPortal } from 'react-dom';
+
+const menuContent = createPortal(
+  <div style={{ position: 'fixed', zIndex: 10000 }}>
+    {children}
+  </div>,
+  document.body
+);
+```
+
+### Multi-Table FROM Clause
+```python
+# WRONG - only includes first table + joined tables
+def _build_from(self, query):
+    sql = first_table
+    for join in joins:
+        sql += f" JOIN {join.to_table}"
+    return sql  # Missing tables not in joins!
+
+# CORRECT - track and include all tables
+def _build_from(self, query):
+    tables_in_from = {first_table.id}
+    sql = first_table
+    for join in joins:
+        sql += f" JOIN {join.to_table}"
+        tables_in_from.add(join.to_table_id)
+    # Add remaining tables (implicit cross join)
+    for table in query.tables[1:]:
+        if table.id not in tables_in_from:
+            sql += f", {table.name}"
+    return sql
+```
+
+### Vite Hot Reload for Linked Packages
+```typescript
+// vite.config.ts
+export default defineConfig({
+  resolve: {
+    alias: {
+      '@prismiq/react': path.resolve(__dirname, '../../../packages/react/src'),
+    },
+  },
+  server: {
+    fs: {
+      allow: ['.', '../../../packages/react/src'],
+    },
+    watch: {
+      usePolling: true,  // For cross-filesystem
+    },
+  },
+  optimizeDeps: {
+    exclude: ['@prismiq/react'],  // Don't pre-bundle linked package
+  },
+});
+```
