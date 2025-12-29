@@ -1,33 +1,24 @@
-import { useState, useEffect, CSSProperties } from 'react'
-import { useTheme, useAnalytics, Dashboard } from '@prismiq/react'
-import type { DashboardDefinition } from '@prismiq/react'
+import { useState, CSSProperties } from 'react'
+import {
+  useTheme,
+  useDashboards,
+  useDashboardMutations,
+  Dashboard,
+  DashboardList,
+  DashboardDialog,
+} from '@prismiq/react'
+import type { Dashboard as DashboardType, DashboardCreate, DashboardUpdate } from '@prismiq/react'
 
 export function DashboardPage() {
   const { resolvedMode } = useTheme()
-  const { client } = useAnalytics()
-  const [dashboards, setDashboards] = useState<DashboardDefinition[]>([])
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const { data: dashboards, isLoading: loading, error: fetchError, refetch } = useDashboards()
+  const { createDashboard, updateDashboard, deleteDashboard, state: mutationState } = useDashboardMutations()
 
-  // Fetch available dashboards
-  useEffect(() => {
-    async function fetchDashboards() {
-      try {
-        setLoading(true)
-        const response = await client.get<{ dashboards: DashboardDefinition[] }>('/dashboards')
-        setDashboards(response.dashboards)
-        if (response.dashboards.length > 0 && !selectedId) {
-          setSelectedId(response.dashboards[0].id)
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load dashboards')
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchDashboards()
-  }, [client])
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editingDashboard, setEditingDashboard] = useState<DashboardType | null>(null)
+
+  const error = fetchError?.message ?? null
 
   const containerStyle: CSSProperties = {
     padding: '24px',
@@ -84,14 +75,49 @@ export function DashboardPage() {
     color: '#ef4444',
   }
 
-  const emptyStyle: CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '300px',
-    color: resolvedMode === 'dark' ? '#a1a1aa' : '#6b7280',
-    gap: '12px',
+  // Handle dialog submit
+  const handleDialogSubmit = async (data: DashboardCreate | DashboardUpdate) => {
+    if (editingDashboard) {
+      await updateDashboard(editingDashboard.id, data)
+    } else {
+      await createDashboard(data as DashboardCreate)
+    }
+    setDialogOpen(false)
+    setEditingDashboard(null)
+    await refetch()
+  }
+
+  // Handle dashboard click
+  const handleDashboardClick = (dashboard: DashboardType) => {
+    setSelectedId(dashboard.id)
+  }
+
+  // Handle edit
+  const handleEdit = (dashboard: DashboardType) => {
+    setEditingDashboard(dashboard)
+    setDialogOpen(true)
+  }
+
+  // Handle delete
+  const handleDelete = async (dashboard: DashboardType) => {
+    if (window.confirm(`Are you sure you want to delete "${dashboard.name}"?`)) {
+      await deleteDashboard(dashboard.id)
+      if (selectedId === dashboard.id) {
+        setSelectedId(null)
+      }
+      await refetch()
+    }
+  }
+
+  // Handle create
+  const handleCreate = () => {
+    setEditingDashboard(null)
+    setDialogOpen(true)
+  }
+
+  // Handle back to list
+  const handleBackToList = () => {
+    setSelectedId(null)
   }
 
   if (loading) {
@@ -110,39 +136,75 @@ export function DashboardPage() {
     )
   }
 
+  // Show dashboard view when one is selected
+  if (selectedId) {
+    return (
+      <div style={containerStyle}>
+        <div style={headerStyle}>
+          <button
+            onClick={handleBackToList}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 16px',
+              border: `1px solid ${resolvedMode === 'dark' ? '#3f3f46' : '#d1d5db'}`,
+              borderRadius: '6px',
+              backgroundColor: 'transparent',
+              color: resolvedMode === 'dark' ? '#f4f4f5' : '#111827',
+              cursor: 'pointer',
+              fontSize: '14px',
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+            Back to List
+          </button>
+          {dashboards && dashboards.length > 0 && (
+            <select
+              style={selectStyle}
+              value={selectedId}
+              onChange={(e) => setSelectedId(e.target.value)}
+            >
+              {dashboards.map(d => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+          )}
+        </div>
+        <div style={contentStyle}>
+          <Dashboard id={selectedId} showTitle />
+        </div>
+      </div>
+    )
+  }
+
+  // Show dashboard list
   return (
     <div style={containerStyle}>
-      <div style={headerStyle}>
-        <h1 style={titleStyle}>Dashboards</h1>
-        {dashboards.length > 0 && (
-          <select
-            style={selectStyle}
-            value={selectedId || ''}
-            onChange={(e) => setSelectedId(e.target.value)}
-          >
-            {dashboards.map(d => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
-          </select>
-        )}
-      </div>
+      <DashboardList
+        dashboards={dashboards}
+        isLoading={loading}
+        error={fetchError}
+        onDashboardClick={handleDashboardClick}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        onCreate={handleCreate}
+        columns={3}
+      />
 
-      <div style={contentStyle}>
-        {!selectedId ? (
-          <div style={emptyStyle}>
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <rect x="3" y="3" width="7" height="7" rx="1" />
-              <rect x="14" y="3" width="7" height="7" rx="1" />
-              <rect x="3" y="14" width="7" height="7" rx="1" />
-              <rect x="14" y="14" width="7" height="7" rx="1" />
-            </svg>
-            <span>No dashboards available</span>
-            <span style={{ fontSize: '14px' }}>Run the seed script to create sample dashboards</span>
-          </div>
-        ) : (
-          <Dashboard id={selectedId} showTitle={false} />
-        )}
-      </div>
+      <DashboardDialog
+        open={dialogOpen}
+        onClose={() => {
+          setDialogOpen(false)
+          setEditingDashboard(null)
+        }}
+        onSubmit={handleDialogSubmit}
+        dashboard={editingDashboard}
+        isLoading={mutationState.isLoading}
+        error={mutationState.error?.message}
+      />
     </div>
   )
 }

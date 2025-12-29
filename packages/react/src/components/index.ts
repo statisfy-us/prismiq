@@ -19,6 +19,9 @@ export {
   DropdownItem,
   DropdownSeparator,
   Icon,
+  Dialog,
+  DialogHeader,
+  DialogFooter,
 } from './ui';
 
 export type {
@@ -34,6 +37,9 @@ export type {
   DropdownSeparatorProps,
   IconProps,
   IconName,
+  DialogProps,
+  DialogHeaderProps,
+  DialogFooterProps,
 } from './ui';
 
 // ============================================================================

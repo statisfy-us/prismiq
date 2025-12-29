@@ -25,3 +25,6 @@ export type { DropdownProps, DropdownItemProps, DropdownSeparatorProps } from '.
 
 export { Icon } from './Icon';
 export type { IconProps, IconName } from './Icon';
+
+export { Dialog, DialogHeader, DialogFooter } from './Dialog';
+export type { DialogProps, DialogHeaderProps, DialogFooterProps } from './Dialog';

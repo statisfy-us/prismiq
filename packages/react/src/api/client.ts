@@ -5,11 +5,18 @@
  */
 
 import type {
+  Dashboard,
+  DashboardCreate,
+  DashboardUpdate,
   DatabaseSchema,
   QueryDefinition,
   QueryResult,
   TableSchema,
   ValidationResult,
+  Widget,
+  WidgetCreate,
+  WidgetPositionUpdate,
+  WidgetUpdate,
 } from '../types';
 
 // ============================================================================
@@ -289,5 +296,144 @@ export class PrismiqClient {
       method: 'POST',
       body: JSON.stringify(query),
     });
+  }
+
+  // ============================================================================
+  // Dashboard Methods
+  // ============================================================================
+
+  /**
+   * List all dashboards accessible to the current user.
+   *
+   * @returns Array of dashboards.
+   */
+  async listDashboards(): Promise<Dashboard[]> {
+    return this.request<Dashboard[]>('/dashboards');
+  }
+
+  /**
+   * Get a specific dashboard by ID.
+   *
+   * @param id - The dashboard ID.
+   * @returns The dashboard with all widgets.
+   */
+  async getDashboard(id: string): Promise<Dashboard> {
+    return this.request<Dashboard>(`/dashboards/${encodeURIComponent(id)}`);
+  }
+
+  /**
+   * Create a new dashboard.
+   *
+   * @param data - Dashboard creation data.
+   * @returns The created dashboard.
+   */
+  async createDashboard(data: DashboardCreate): Promise<Dashboard> {
+    return this.request<Dashboard>('/dashboards', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Update an existing dashboard.
+   *
+   * @param id - The dashboard ID.
+   * @param data - Dashboard update data.
+   * @returns The updated dashboard.
+   */
+  async updateDashboard(id: string, data: DashboardUpdate): Promise<Dashboard> {
+    return this.request<Dashboard>(`/dashboards/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Delete a dashboard.
+   *
+   * @param id - The dashboard ID.
+   */
+  async deleteDashboard(id: string): Promise<void> {
+    await this.request<void>(`/dashboards/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ============================================================================
+  // Widget Methods
+  // ============================================================================
+
+  /**
+   * Add a widget to a dashboard.
+   *
+   * @param dashboardId - The dashboard ID.
+   * @param data - Widget creation data.
+   * @returns The created widget.
+   */
+  async addWidget(dashboardId: string, data: WidgetCreate): Promise<Widget> {
+    return this.request<Widget>(
+      `/dashboards/${encodeURIComponent(dashboardId)}/widgets`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    );
+  }
+
+  /**
+   * Update a widget.
+   *
+   * @param dashboardId - The dashboard ID.
+   * @param widgetId - The widget ID.
+   * @param data - Widget update data.
+   * @returns The updated widget.
+   */
+  async updateWidget(
+    dashboardId: string,
+    widgetId: string,
+    data: WidgetUpdate
+  ): Promise<Widget> {
+    return this.request<Widget>(
+      `/dashboards/${encodeURIComponent(dashboardId)}/widgets/${encodeURIComponent(widgetId)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }
+    );
+  }
+
+  /**
+   * Delete a widget from a dashboard.
+   *
+   * @param dashboardId - The dashboard ID.
+   * @param widgetId - The widget ID.
+   */
+  async deleteWidget(dashboardId: string, widgetId: string): Promise<void> {
+    await this.request<void>(
+      `/dashboards/${encodeURIComponent(dashboardId)}/widgets/${encodeURIComponent(widgetId)}`,
+      {
+        method: 'DELETE',
+      }
+    );
+  }
+
+  /**
+   * Update the layout (positions) of multiple widgets.
+   *
+   * @param dashboardId - The dashboard ID.
+   * @param positions - Array of widget position updates.
+   * @returns The updated dashboard.
+   */
+  async updateLayout(
+    dashboardId: string,
+    positions: WidgetPositionUpdate[]
+  ): Promise<Dashboard> {
+    return this.request<Dashboard>(
+      `/dashboards/${encodeURIComponent(dashboardId)}/layout`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(positions),
+      }
+    );
   }
 }

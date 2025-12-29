@@ -41,13 +41,17 @@ export type IconName =
   | 'warning'
   | 'error'
   | 'more'
+  | 'more-vertical'
   | 'expand'
   | 'fullscreen'
   | 'minimize'
   | 'chart-bar'
   | 'chart-line'
   | 'chart-pie'
-  | 'grid';
+  | 'grid'
+  | 'layout'
+  | 'calendar'
+  | 'alert-circle';
 
 export interface IconProps extends SVGAttributes<SVGSVGElement> {
   /** Icon name. */
@@ -98,6 +102,10 @@ const iconPaths: Record<IconName, string> = {
   'chart-line': 'M3 12l2-2m0 0l7-7 4 4 6-6m-9 9l4 4m2-2l4-4m-5 5v4m-6 0h3',
   'chart-pie': 'M11 3.055A9.001 9.001 0 1020.945 13H11V3.055zM20.488 9H15V3.512A9.025 9.025 0 0120.488 9z',
   'grid': 'M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z',
+  'more-vertical': 'M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z',
+  'layout': 'M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm5 0v14m-5-5h14',
+  'calendar': 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
+  'alert-circle': 'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
 };
 
 // ============================================================================

@@ -95,8 +95,25 @@ export type {
 // Hooks
 // ============================================================================
 
-export { useSchema, useQuery, useChartData } from './hooks';
-export type { UseSchemaResult, UseQueryResult, UseQueryOptions } from './hooks';
+export {
+  useSchema,
+  useQuery,
+  useChartData,
+  useDashboards,
+  useDashboard as useDashboardData,
+  useDashboardMutations,
+} from './hooks';
+export type {
+  UseSchemaResult,
+  UseQueryResult,
+  UseQueryOptions,
+  UseDashboardsOptions,
+  UseDashboardsResult,
+  UseDashboardOptions,
+  UseDashboardResult,
+  MutationState,
+  UseDashboardMutationsResult,
+} from './hooks';
 
 // ============================================================================
 // Charts
@@ -176,6 +193,9 @@ export {
   DropdownItem,
   DropdownSeparator,
   Icon,
+  Dialog,
+  DialogHeader,
+  DialogFooter,
   // Skeleton Loading
   Skeleton,
   SkeletonText,
@@ -233,6 +253,9 @@ export type {
   DropdownSeparatorProps,
   IconProps,
   IconName,
+  DialogProps,
+  DialogHeaderProps,
+  DialogFooterProps,
   // Skeleton Loading
   SkeletonProps,
   SkeletonTextProps,
@@ -326,6 +349,10 @@ export {
   EditorToolbar,
   WidgetPalette,
   WidgetEditor,
+  // List components
+  DashboardList,
+  DashboardCard,
+  DashboardDialog,
   // Hooks
   useDashboard,
   useDashboardFilters,
@@ -371,6 +398,10 @@ export type {
   WidgetEditorProps,
   WidgetContentProps,
   EditorToolbarProps,
+  // List component props
+  DashboardListProps,
+  DashboardCardProps,
+  DashboardDialogProps,
   // Hook result types
   UseDashboardFiltersResult,
   UseWidgetResult,

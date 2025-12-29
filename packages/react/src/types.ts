@@ -246,3 +246,230 @@ export interface ValidationResult {
   /** List of validation errors, if any. */
   errors: string[];
 }
+
+// ============================================================================
+// Dashboard Types
+// ============================================================================
+
+/**
+ * Widget types available in Prismiq.
+ */
+export enum WidgetType {
+  METRIC = 'metric',
+  BAR_CHART = 'bar_chart',
+  LINE_CHART = 'line_chart',
+  AREA_CHART = 'area_chart',
+  PIE_CHART = 'pie_chart',
+  SCATTER_CHART = 'scatter_chart',
+  TABLE = 'table',
+  TEXT = 'text',
+}
+
+/**
+ * Widget position on the dashboard grid.
+ */
+export interface WidgetPosition {
+  /** X coordinate (column). */
+  x: number;
+  /** Y coordinate (row). */
+  y: number;
+  /** Width in columns. */
+  w: number;
+  /** Height in rows. */
+  h: number;
+}
+
+/**
+ * Widget display configuration.
+ */
+export interface WidgetConfig {
+  /** X-axis column for charts. */
+  xAxis?: string;
+  /** Y-axis column for charts. */
+  yAxis?: string;
+  /** Value column for metrics. */
+  valueColumn?: string;
+  /** Number format for metrics. */
+  format?: 'number' | 'currency' | 'percent' | 'compact';
+  /** Show trend indicator for metrics. */
+  showTrend?: boolean;
+  /** Chart orientation. */
+  orientation?: 'vertical' | 'horizontal';
+  /** Stack bars. */
+  stacked?: boolean;
+  /** Show data points. */
+  showPoints?: boolean;
+  /** Donut style for pie charts. */
+  donut?: boolean;
+  /** Striped rows for tables. */
+  striped?: boolean;
+  /** Allow column sorting for tables. */
+  sortable?: boolean;
+  /** Rows per page for tables. */
+  pageSize?: number;
+  /** Text content for text widgets. */
+  content?: string;
+  /** Additional config options. */
+  [key: string]: unknown;
+}
+
+/**
+ * A widget on a dashboard.
+ */
+export interface Widget {
+  /** Unique widget ID. */
+  id: string;
+  /** Widget type. */
+  type: WidgetType;
+  /** Widget title. */
+  title: string;
+  /** Query definition for data widgets. */
+  query: QueryDefinition | null;
+  /** Position on the dashboard grid. */
+  position: WidgetPosition;
+  /** Display configuration. */
+  config: WidgetConfig;
+  /** Creation timestamp. */
+  created_at: string;
+  /** Last update timestamp. */
+  updated_at: string;
+}
+
+/**
+ * Data for creating a new widget.
+ */
+export interface WidgetCreate {
+  /** Widget type. */
+  type: WidgetType;
+  /** Widget title. */
+  title: string;
+  /** Query definition for data widgets. */
+  query?: QueryDefinition | null;
+  /** Position on the dashboard grid. */
+  position: WidgetPosition;
+  /** Display configuration. */
+  config?: WidgetConfig;
+}
+
+/**
+ * Data for updating a widget.
+ */
+export interface WidgetUpdate {
+  /** Widget title. */
+  title?: string;
+  /** Query definition. */
+  query?: QueryDefinition | null;
+  /** Position on the grid. */
+  position?: WidgetPosition;
+  /** Display configuration. */
+  config?: WidgetConfig;
+}
+
+/**
+ * Dashboard filter types.
+ */
+export enum DashboardFilterType {
+  TEXT = 'text',
+  SELECT = 'select',
+  MULTI_SELECT = 'multi_select',
+  DATE = 'date',
+  DATE_RANGE = 'date_range',
+  NUMBER = 'number',
+  NUMBER_RANGE = 'number_range',
+}
+
+/**
+ * A filter on a dashboard.
+ */
+export interface DashboardFilter {
+  /** Unique filter ID. */
+  id: string;
+  /** Filter type. */
+  type: DashboardFilterType;
+  /** Filter label. */
+  label: string;
+  /** Column to filter on. */
+  column: string;
+  /** Table containing the column. */
+  table_id: string;
+  /** Default value. */
+  default_value?: unknown;
+}
+
+/**
+ * Dashboard layout options.
+ */
+export interface DashboardLayout {
+  /** Number of columns in the grid. */
+  columns?: number;
+  /** Row height in pixels. */
+  row_height?: number;
+}
+
+/**
+ * A dashboard.
+ */
+export interface Dashboard {
+  /** Unique dashboard ID. */
+  id: string;
+  /** Dashboard name. */
+  name: string;
+  /** Dashboard description. */
+  description: string | null;
+  /** Owner user ID. */
+  owner_id: string | null;
+  /** Whether the dashboard is public. */
+  is_public: boolean;
+  /** List of user IDs with view access. */
+  allowed_viewers: string[];
+  /** Widgets on the dashboard. */
+  widgets: Widget[];
+  /** Dashboard filters. */
+  filters: DashboardFilter[];
+  /** Layout configuration. */
+  layout: DashboardLayout;
+  /** Creation timestamp. */
+  created_at: string;
+  /** Last update timestamp. */
+  updated_at: string;
+}
+
+/**
+ * Data for creating a new dashboard.
+ */
+export interface DashboardCreate {
+  /** Dashboard name. */
+  name: string;
+  /** Dashboard description. */
+  description?: string;
+  /** Layout configuration. */
+  layout?: DashboardLayout;
+}
+
+/**
+ * Data for updating a dashboard.
+ */
+export interface DashboardUpdate {
+  /** Dashboard name. */
+  name?: string;
+  /** Dashboard description. */
+  description?: string | null;
+  /** Whether the dashboard is public. */
+  is_public?: boolean;
+  /** List of user IDs with view access. */
+  allowed_viewers?: string[];
+  /** Dashboard filters. */
+  filters?: DashboardFilter[];
+  /** Layout configuration. */
+  layout?: DashboardLayout;
+}
+
+/**
+ * Position update for a widget.
+ */
+export interface WidgetPositionUpdate {
+  /** Widget ID. */
+  widget_id: string;
+  /** New position. */
+  position: WidgetPosition;
+}
