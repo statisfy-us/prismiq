@@ -252,13 +252,6 @@ async def create_sales_overview_dashboard(store: DashboardStore) -> None:
                 group_by=[
                     GroupByDefinition(table_id="c", column="region"),
                 ],
-                order_by=[
-                    SortDefinition(
-                        table_id="o",
-                        column="revenue",
-                        direction=SortDirection.DESC,
-                    )
-                ],
             ),
             config={
                 "xField": "region",
@@ -351,7 +344,7 @@ async def create_sales_overview_dashboard(store: DashboardStore) -> None:
                 order_by=[
                     SortDefinition(
                         table_id="o",
-                        column="date",
+                        column="order_date",
                         direction=SortDirection.ASC,
                     )
                 ],
@@ -402,13 +395,6 @@ async def create_sales_overview_dashboard(store: DashboardStore) -> None:
                 group_by=[
                     GroupByDefinition(table_id="c", column="id"),
                     GroupByDefinition(table_id="c", column="name"),
-                ],
-                order_by=[
-                    SortDefinition(
-                        table_id="o",
-                        column="total_spend",
-                        direction=SortDirection.DESC,
-                    )
                 ],
                 limit=10,
             ),
@@ -600,13 +586,6 @@ async def create_product_analytics_dashboard(store: DashboardStore) -> None:
                 group_by=[
                     GroupByDefinition(table_id="p", column="name"),
                 ],
-                order_by=[
-                    SortDefinition(
-                        table_id="oi",
-                        column="units_sold",
-                        direction=SortDirection.DESC,
-                    )
-                ],
                 limit=10,
             ),
             config={
@@ -670,7 +649,7 @@ async def create_product_analytics_dashboard(store: DashboardStore) -> None:
                 ],
                 order_by=[
                     SortDefinition(
-                        table_id="o", column="date", direction=SortDirection.ASC
+                        table_id="o", column="order_date", direction=SortDirection.ASC
                     ),
                 ],
             ),
@@ -760,11 +739,6 @@ async def create_product_analytics_dashboard(store: DashboardStore) -> None:
                 ],
                 group_by=[
                     GroupByDefinition(table_id="p", column="category"),
-                ],
-                order_by=[
-                    SortDefinition(
-                        table_id="p", column="total_stock", direction=SortDirection.DESC
-                    ),
                 ],
             ),
             config={

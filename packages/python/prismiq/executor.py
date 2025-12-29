@@ -9,7 +9,11 @@ from __future__ import annotations
 
 import asyncio
 import time
+from datetime import date, datetime, timedelta
+from datetime import time as time_type
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
 from prismiq.query import QueryBuilder
 from prismiq.types import (
@@ -23,6 +27,30 @@ from prismiq.types import (
 
 if TYPE_CHECKING:
     from asyncpg import Pool
+
+
+def _serialize_value(value: Any) -> Any:
+    """Convert database values to JSON-serializable Python types."""
+    if value is None:
+        return None
+    if isinstance(value, Decimal):
+        # Convert Decimal to float for JSON serialization
+        return float(value)
+    if isinstance(value, datetime | date):
+        return value.isoformat()
+    if isinstance(value, time_type):
+        return value.isoformat()
+    if isinstance(value, timedelta):
+        return value.total_seconds()
+    if isinstance(value, UUID):
+        return str(value)
+    if isinstance(value, bytes):
+        return value.hex()
+    if isinstance(value, list | tuple):
+        return [_serialize_value(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _serialize_value(v) for k, v in value.items()}
+    return value
 
 
 class QueryExecutor:
@@ -202,16 +230,17 @@ class QueryExecutor:
         columns = list(first_row.keys())
 
         # Get column types (using Python type names)
+        # Note: Must iterate over keys(), not the record itself (which yields values)
         column_types: list[str] = []
-        for key in first_row:
+        for key in columns:
             value = first_row[key]
             if value is None:
                 column_types.append("unknown")
             else:
                 column_types.append(type(value).__name__)
 
-        # Convert rows to lists
-        result_rows = [list(row.values()) for row in rows]
+        # Convert rows to lists with JSON-serializable values
+        result_rows = [[_serialize_value(v) for v in row.values()] for row in rows]
 
         return QueryResult(
             columns=columns,

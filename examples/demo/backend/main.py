@@ -112,9 +112,17 @@ async def root() -> dict[str, str]:
 
 
 if __name__ == "__main__":
+    # Get the project root (3 levels up from this file)
+    project_root = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    )
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
         port=8000,
         reload=True,
+        reload_dirs=[
+            os.path.dirname(__file__),  # demo/backend
+            os.path.join(project_root, "packages", "python"),  # prismiq package
+        ],
     )
