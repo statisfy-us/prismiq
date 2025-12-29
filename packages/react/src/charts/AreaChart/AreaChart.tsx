@@ -2,7 +2,7 @@
  * AreaChart component for Prismiq.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import { useTheme } from '../../theme';
 import { EChartWrapper } from '../EChartWrapper';
 import {
@@ -49,6 +49,8 @@ export function AreaChart({
   width = '100%',
   className,
   onDataPointClick,
+  crossFilter,
+  selectedValue,
 }: AreaChartProps): JSX.Element {
   const { theme } = useTheme();
 
@@ -110,16 +112,38 @@ export function AreaChart({
       };
     }
 
-    // Build series
+    // Build series with cross-filter support
     const series = processedData.series.map((s, index) => {
       const color = seriesColors[index] ?? theme.colors.primary;
+
+      // Build data with cross-filter highlighting
+      const seriesData = s.data.map((value, dataIndex) => {
+        const categoryValue = processedData.categories[dataIndex];
+        const isSelected = selectedValue != null && categoryValue === selectedValue;
+        const isOther = selectedValue != null && categoryValue !== selectedValue;
+
+        return {
+          value,
+          itemStyle: {
+            opacity: isOther ? 0.3 : 1,
+          },
+          // Show marker on selected point
+          symbol: isSelected ? 'circle' : 'none',
+          symbolSize: isSelected ? 8 : 0,
+        };
+      });
+
+      // Calculate base opacity - dim when filtering
+      const baseOpacity = selectedValue != null ? opacity * 0.5 : opacity;
+
       return {
         type: 'line',
         name: s.name,
-        data: s.data,
+        data: seriesData,
         stack: stacked ? 'stack' : undefined,
         smooth: smooth ? 0.3 : false,
-        symbol: 'none',
+        symbol: selectedValue != null ? 'circle' : 'none',
+        symbolSize: 6,
         itemStyle: {
           color,
         },
@@ -129,12 +153,14 @@ export function AreaChart({
         },
         areaStyle: {
           color: stacked
-            ? adjustColorOpacity(color, opacity)
-            : createGradientColor(color, opacity),
+            ? adjustColorOpacity(color, baseOpacity)
+            : createGradientColor(color, baseOpacity),
         },
         emphasis: {
           focus: 'series',
         },
+        // Enable cursor pointer when cross-filter is enabled
+        cursor: crossFilter?.enabled ? 'pointer' : 'default',
       };
     });
 
@@ -229,25 +255,44 @@ export function AreaChart({
     yAxisLabel,
     theme,
     yColumns.length,
+    selectedValue,
+    crossFilter?.enabled,
   ]);
 
-  // Handle click events
+  // Handle click events (both cross-filter and custom handler)
+  const handleClick = useCallback(
+    (params: unknown) => {
+      const p = params as {
+        seriesName?: string;
+        dataIndex?: number;
+        value?: number | { value?: number };
+        name?: string;
+      };
+
+      // Extract value (ECharts may wrap it in an object)
+      const rawValue = typeof p.value === 'object' ? p.value?.value : p.value;
+
+      const clickParams: ChartClickParams = {
+        seriesName: p.seriesName ?? '',
+        dataIndex: p.dataIndex ?? 0,
+        value: rawValue ?? 0,
+        name: p.name ?? '',
+      };
+
+      // Call custom handler if provided
+      onDataPointClick?.(clickParams);
+    },
+    [onDataPointClick]
+  );
+
+  // Build events object
   const handleEvents = useMemo(() => {
-    if (!onDataPointClick) return undefined;
+    if (!onDataPointClick && !crossFilter?.enabled) return undefined;
 
     return {
-      click: (params: unknown) => {
-        const p = params as { seriesName?: string; dataIndex?: number; value?: number; name?: string };
-        const clickParams: ChartClickParams = {
-          seriesName: p.seriesName ?? '',
-          dataIndex: p.dataIndex ?? 0,
-          value: p.value ?? 0,
-          name: p.name ?? '',
-        };
-        onDataPointClick(clickParams);
-      },
+      click: handleClick,
     };
-  }, [onDataPointClick]);
+  }, [onDataPointClick, crossFilter?.enabled, handleClick]);
 
   // Handle error state
   if (error) {

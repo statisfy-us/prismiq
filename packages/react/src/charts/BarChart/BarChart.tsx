@@ -2,7 +2,7 @@
  * BarChart component for Prismiq.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import { useTheme } from '../../theme';
 import { EChartWrapper } from '../EChartWrapper';
 import {
@@ -52,6 +52,8 @@ export function BarChart({
   width = '100%',
   className,
   onDataPointClick,
+  crossFilter,
+  selectedValue,
 }: BarChartProps): JSX.Element {
   const { theme } = useTheme();
 
@@ -111,41 +113,61 @@ export function BarChart({
       },
     };
 
-    // Build series
-    const series = chartData.series.map((s, index) => ({
-      type: 'bar',
-      name: s.name,
-      data: s.data,
-      stack: stacked ? 'stack' : undefined,
-      itemStyle: {
-        color: seriesColors[index] ?? theme.colors.primary,
-        borderRadius: stacked ? 0 : [4, 4, 0, 0],
-      },
-      label: showDataLabels
-        ? {
-            show: true,
-            position: isHorizontal ? 'right' : 'top',
-            formatter: (params: { value: number | null }) =>
-              params.value !== null
-                ? formatAxisLabel(params.value, yAxisFormat)
-                : '',
-            fontSize: 10,
-            color: theme.colors.textMuted,
-          }
-        : undefined,
-      emphasis: {
-        focus: 'series',
-        itemStyle: {
-          shadowBlur: 10,
-          shadowOffsetX: 0,
-          shadowColor: 'rgba(0, 0, 0, 0.2)',
-        },
-      },
-      markLine:
-        index === 0 && referenceLines
-          ? createMarkLines(referenceLines, theme)
+    // Build series with cross-filter highlight support
+    const series = chartData.series.map((s, index) => {
+      const baseColor = seriesColors[index] ?? theme.colors.primary;
+
+      return {
+        type: 'bar',
+        name: s.name,
+        data: s.data.map((value, dataIndex) => {
+          const categoryValue = chartData.categories[dataIndex];
+          const isSelected = selectedValue != null && categoryValue === selectedValue;
+          const isOther = selectedValue != null && categoryValue !== selectedValue;
+
+          return {
+            value,
+            itemStyle: {
+              color: baseColor,
+              opacity: isOther ? 0.3 : 1,
+              borderRadius: stacked ? 0 : [4, 4, 0, 0],
+              // Highlight selected bar
+              ...(isSelected && {
+                borderColor: theme.colors.primary,
+                borderWidth: 2,
+              }),
+            },
+          };
+        }),
+        stack: stacked ? 'stack' : undefined,
+        label: showDataLabels
+          ? {
+              show: true,
+              position: isHorizontal ? 'right' : 'top',
+              formatter: (params: { value: number | null }) =>
+                params.value !== null
+                  ? formatAxisLabel(params.value, yAxisFormat)
+                  : '',
+              fontSize: 10,
+              color: theme.colors.textMuted,
+            }
           : undefined,
-    }));
+        emphasis: {
+          focus: 'series',
+          itemStyle: {
+            shadowBlur: 10,
+            shadowOffsetX: 0,
+            shadowColor: 'rgba(0, 0, 0, 0.2)',
+          },
+        },
+        markLine:
+          index === 0 && referenceLines
+            ? createMarkLines(referenceLines, theme)
+            : undefined,
+        // Enable cursor pointer when cross-filter is enabled
+        cursor: crossFilter?.enabled ? 'pointer' : 'default',
+      };
+    });
 
     // Legend config
     const legend = showLegend
@@ -210,25 +232,44 @@ export function BarChart({
     referenceLines,
     theme,
     yColumns.length,
+    selectedValue,
+    crossFilter?.enabled,
   ]);
 
-  // Handle click events
+  // Handle click events (both cross-filter and custom handler)
+  const handleClick = useCallback(
+    (params: unknown) => {
+      const p = params as {
+        seriesName?: string;
+        dataIndex?: number;
+        value?: number | { value?: number };
+        name?: string;
+      };
+
+      // Extract value (ECharts may wrap it in an object)
+      const rawValue = typeof p.value === 'object' ? p.value?.value : p.value;
+
+      const clickParams: ChartClickParams = {
+        seriesName: p.seriesName ?? '',
+        dataIndex: p.dataIndex ?? 0,
+        value: rawValue ?? 0,
+        name: p.name ?? '',
+      };
+
+      // Call custom handler if provided
+      onDataPointClick?.(clickParams);
+    },
+    [onDataPointClick]
+  );
+
+  // Build events object
   const handleEvents = useMemo(() => {
-    if (!onDataPointClick) return undefined;
+    if (!onDataPointClick && !crossFilter?.enabled) return undefined;
 
     return {
-      click: (params: unknown) => {
-        const p = params as { seriesName?: string; dataIndex?: number; value?: number; name?: string };
-        const clickParams: ChartClickParams = {
-          seriesName: p.seriesName ?? '',
-          dataIndex: p.dataIndex ?? 0,
-          value: p.value ?? 0,
-          name: p.name ?? '',
-        };
-        onDataPointClick(clickParams);
-      },
+      click: handleClick,
     };
-  }, [onDataPointClick]);
+  }, [onDataPointClick, crossFilter?.enabled, handleClick]);
 
   // Handle error state
   if (error) {

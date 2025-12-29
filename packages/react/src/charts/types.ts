@@ -34,6 +34,20 @@ export interface ChartSeries {
 // ============================================================================
 
 /**
+ * Cross-filter configuration for charts.
+ */
+export interface CrossFilterConfig {
+  /** Enable cross-filtering on this chart. */
+  enabled: boolean;
+  /** Widget ID (required for cross-filtering). */
+  widgetId: string;
+  /** Column to filter on (defaults to xAxis). */
+  column?: string;
+  /** Table for the filter (optional). */
+  table?: string;
+}
+
+/**
  * Base props shared by all chart components.
  */
 export interface BaseChartProps {
@@ -51,6 +65,10 @@ export interface BaseChartProps {
   className?: string;
   /** Callback when a data point is clicked. */
   onDataPointClick?: (params: ChartClickParams) => void;
+  /** Cross-filter configuration. */
+  crossFilter?: CrossFilterConfig;
+  /** Currently selected value for cross-filter highlight. */
+  selectedValue?: string | number | null;
 }
 
 /**

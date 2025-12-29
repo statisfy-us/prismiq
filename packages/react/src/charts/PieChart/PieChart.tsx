@@ -2,7 +2,7 @@
  * PieChart component for Prismiq.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import { useTheme } from '../../theme';
 import { EChartWrapper } from '../EChartWrapper';
 import {
@@ -48,6 +48,8 @@ export function PieChart({
   width = '100%',
   className,
   onDataPointClick,
+  crossFilter,
+  selectedValue,
 }: PieChartProps): JSX.Element {
   const { theme } = useTheme();
 
@@ -171,12 +173,26 @@ export function PieChart({
           radius: [innerRadius, outerRadius],
           center: showLegend ? ['40%', '50%'] : ['50%', '50%'],
           startAngle,
-          data: pieData.map((item, index) => ({
-            ...item,
-            itemStyle: {
-              color: seriesColors[index] ?? theme.colors.primary,
-            },
-          })),
+          data: pieData.map((item, index) => {
+            const baseColor = seriesColors[index] ?? theme.colors.primary;
+            const isSelected = selectedValue != null && item.name === selectedValue;
+            const isOther = selectedValue != null && item.name !== selectedValue;
+
+            return {
+              ...item,
+              itemStyle: {
+                color: baseColor,
+                opacity: isOther ? 0.3 : 1,
+                // Highlight selected slice
+                ...(isSelected && {
+                  borderColor: theme.colors.primary,
+                  borderWidth: 3,
+                  shadowBlur: 15,
+                  shadowColor: 'rgba(0, 0, 0, 0.3)',
+                }),
+              },
+            };
+          }),
           label,
           labelLine,
           emphasis: {
@@ -191,6 +207,8 @@ export function PieChart({
               fontWeight: 'bold',
             },
           },
+          // Enable cursor pointer when cross-filter is enabled
+          cursor: crossFilter?.enabled ? 'pointer' : 'default',
           animationType: 'scale',
           animationEasing: 'elasticOut',
         },
@@ -208,25 +226,41 @@ export function PieChart({
     startAngle,
     seriesColors,
     theme,
+    selectedValue,
+    crossFilter?.enabled,
   ]);
 
-  // Handle click events
+  // Handle click events (both cross-filter and custom handler)
+  const handleClick = useCallback(
+    (params: unknown) => {
+      const p = params as {
+        seriesName?: string;
+        dataIndex?: number;
+        value?: number;
+        name?: string;
+      };
+
+      const clickParams: ChartClickParams = {
+        seriesName: p.seriesName ?? valueColumn,
+        dataIndex: p.dataIndex ?? 0,
+        value: p.value ?? 0,
+        name: p.name ?? '',
+      };
+
+      // Call custom handler if provided
+      onDataPointClick?.(clickParams);
+    },
+    [onDataPointClick, valueColumn]
+  );
+
+  // Build events object
   const handleEvents = useMemo(() => {
-    if (!onDataPointClick) return undefined;
+    if (!onDataPointClick && !crossFilter?.enabled) return undefined;
 
     return {
-      click: (params: unknown) => {
-        const p = params as { seriesName?: string; dataIndex?: number; value?: number; name?: string };
-        const clickParams: ChartClickParams = {
-          seriesName: p.seriesName ?? valueColumn,
-          dataIndex: p.dataIndex ?? 0,
-          value: p.value ?? 0,
-          name: p.name ?? '',
-        };
-        onDataPointClick(clickParams);
-      },
+      click: handleClick,
     };
-  }, [onDataPointClick, valueColumn]);
+  }, [onDataPointClick, crossFilter?.enabled, handleClick]);
 
   // Handle error state
   if (error) {

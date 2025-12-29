@@ -46,6 +46,18 @@ export interface WidgetPosition {
 }
 
 /**
+ * Cross-filter widget configuration.
+ */
+export interface WidgetCrossFilterConfig {
+  /** Enable cross-filtering on this widget. */
+  enabled: boolean;
+  /** Column to filter on (defaults to x_axis). */
+  column?: string;
+  /** Table for the filter (optional). */
+  table?: string;
+}
+
+/**
  * Widget-specific configuration options.
  */
 export interface WidgetConfig {
@@ -64,6 +76,10 @@ export interface WidgetConfig {
   show_data_labels?: boolean;
   /** Custom color palette for the chart. */
   colors?: string[];
+
+  // Cross-filter options
+  /** Cross-filter configuration for this widget. */
+  cross_filter?: WidgetCrossFilterConfig;
 
   // MetricCard options
   /** Number format for metric display. */

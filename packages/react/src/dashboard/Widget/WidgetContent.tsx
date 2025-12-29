@@ -2,7 +2,7 @@
  * Widget content renderer that displays the appropriate chart or component.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import { useTheme } from '../../theme';
 import {
   MetricCard,
@@ -13,9 +13,10 @@ import {
   ScatterChart,
 } from '../../charts';
 import { ResultsTable } from '../../components';
+import { useCrossFilterOptional } from '../../context';
 import type { Widget, WidgetConfig } from '../types';
 import type { QueryResult } from '../../types';
-import type { ChartDataPoint } from '../../charts/types';
+import type { ChartDataPoint, ChartClickParams, CrossFilterConfig } from '../../charts/types';
 
 /**
  * Props for WidgetContent.
@@ -183,8 +184,55 @@ export function WidgetContent({
 }: WidgetContentProps): JSX.Element {
   const { theme } = useTheme();
 
+  // Get cross-filter context (may be null if not wrapped in CrossFilterProvider)
+  const crossFilterContext = useCrossFilterOptional();
+
   // Convert result rows to chart data format - must be called unconditionally (Rules of Hooks)
   const data = useMemo(() => (result ? resultToDataPoints(result) : []), [result]);
+
+  // Determine if cross-filtering is enabled for this widget
+  const crossFilterEnabled = widget.config.cross_filter?.enabled ?? false;
+  const crossFilterColumn = widget.config.cross_filter?.column ?? widget.config.x_axis;
+
+  // Build cross-filter config for chart components
+  const crossFilterConfig: CrossFilterConfig | undefined = useMemo(() => {
+    if (!crossFilterEnabled || !crossFilterContext) return undefined;
+    return {
+      enabled: true,
+      widgetId: widget.id,
+      column: crossFilterColumn,
+    };
+  }, [crossFilterEnabled, crossFilterContext, widget.id, crossFilterColumn]);
+
+  // Get selected value for this widget (from cross-filters applied by other widgets)
+  const selectedValue = useMemo((): string | number | null => {
+    if (!crossFilterContext) return null;
+    // Find any filter that applies to this widget's filter column
+    const applicableFilter = crossFilterContext.filters.find(
+      (f) => f.sourceWidgetId !== widget.id && f.column === crossFilterColumn
+    );
+    if (!applicableFilter) return null;
+    // If value is an array, use first value for single selection
+    const value = applicableFilter.value;
+    if (Array.isArray(value)) {
+      return value[0] ?? null;
+    }
+    return value;
+  }, [crossFilterContext, widget.id, crossFilterColumn]);
+
+  // Handle chart click for cross-filtering
+  const handleChartClick = useCallback(
+    (params: ChartClickParams) => {
+      if (!crossFilterContext || !crossFilterEnabled) return;
+
+      crossFilterContext.toggleFilter({
+        sourceWidgetId: widget.id,
+        column: crossFilterColumn ?? '',
+        value: params.name,
+      });
+    },
+    [crossFilterContext, crossFilterEnabled, widget.id, crossFilterColumn]
+  );
 
   // Container style
   const containerStyle: React.CSSProperties = {
@@ -282,6 +330,9 @@ export function WidgetContent({
             showDataLabels={showDataLabels}
             colors={colors}
             height="100%"
+            crossFilter={crossFilterConfig}
+            selectedValue={selectedValue}
+            onDataPointClick={crossFilterEnabled ? handleChartClick : undefined}
           />
         </div>
       );
@@ -297,6 +348,9 @@ export function WidgetContent({
             showDataLabels={showDataLabels}
             colors={colors}
             height="100%"
+            crossFilter={crossFilterConfig}
+            selectedValue={selectedValue}
+            onDataPointClick={crossFilterEnabled ? handleChartClick : undefined}
           />
         </div>
       );
@@ -312,6 +366,9 @@ export function WidgetContent({
             showLegend={showLegend}
             colors={colors}
             height="100%"
+            crossFilter={crossFilterConfig}
+            selectedValue={selectedValue}
+            onDataPointClick={crossFilterEnabled ? handleChartClick : undefined}
           />
         </div>
       );
@@ -327,6 +384,9 @@ export function WidgetContent({
             showLabels={showDataLabels}
             colors={colors}
             height="100%"
+            crossFilter={crossFilterConfig}
+            selectedValue={selectedValue}
+            onDataPointClick={crossFilterEnabled ? handleChartClick : undefined}
           />
         </div>
       );

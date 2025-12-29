@@ -2,7 +2,7 @@
  * LineChart component for Prismiq.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import { useTheme } from '../../theme';
 import { EChartWrapper } from '../EChartWrapper';
 import {
@@ -52,6 +52,8 @@ export function LineChart({
   width = '100%',
   className,
   onDataPointClick,
+  crossFilter,
+  selectedValue,
 }: LineChartProps): JSX.Element {
   const { theme } = useTheme();
 
@@ -84,15 +86,37 @@ export function LineChart({
       };
     }
 
-    // Build series
+    // Build series with cross-filter support
     const series = chartData.series.map((s, index) => {
       const color = seriesColors[index] ?? theme.colors.primary;
+
+      // Build data with cross-filter highlighting for points
+      const seriesData = s.data.map((value, dataIndex) => {
+        const categoryValue = chartData.categories[dataIndex];
+        const isSelected = selectedValue != null && categoryValue === selectedValue;
+        const isOther = selectedValue != null && categoryValue !== selectedValue;
+
+        return {
+          value,
+          itemStyle: {
+            color,
+            opacity: isOther ? 0.3 : 1,
+            // Highlight selected point
+            ...(isSelected && {
+              borderColor: theme.colors.primary,
+              borderWidth: 3,
+            }),
+          },
+          symbolSize: isSelected ? 10 : showPoints ? 6 : 0,
+        };
+      });
+
       return {
         type: 'line',
         name: s.name,
-        data: s.data,
+        data: seriesData,
         smooth: smooth ? 0.3 : false,
-        symbol: showPoints ? 'circle' : 'none',
+        symbol: showPoints || selectedValue != null ? 'circle' : 'none',
         symbolSize: showPoints ? 6 : 0,
         itemStyle: {
           color,
@@ -100,10 +124,11 @@ export function LineChart({
         lineStyle: {
           color,
           width: 2,
+          opacity: selectedValue != null ? 0.5 : 1,
         },
         areaStyle: showArea
           ? {
-              color: createGradientColor(color, 0.3),
+              color: createGradientColor(color, selectedValue != null ? 0.15 : 0.3),
             }
           : undefined,
         label: showDataLabels
@@ -130,6 +155,8 @@ export function LineChart({
           index === 0 && referenceLines
             ? createMarkLines(referenceLines, theme)
             : undefined,
+        // Enable cursor pointer when cross-filter is enabled
+        cursor: crossFilter?.enabled ? 'pointer' : 'default',
       };
     });
 
@@ -211,25 +238,44 @@ export function LineChart({
     yAxisFormat,
     theme,
     yColumns.length,
+    selectedValue,
+    crossFilter?.enabled,
   ]);
 
-  // Handle click events
+  // Handle click events (both cross-filter and custom handler)
+  const handleClick = useCallback(
+    (params: unknown) => {
+      const p = params as {
+        seriesName?: string;
+        dataIndex?: number;
+        value?: number | { value?: number };
+        name?: string;
+      };
+
+      // Extract value (ECharts may wrap it in an object)
+      const rawValue = typeof p.value === 'object' ? p.value?.value : p.value;
+
+      const clickParams: ChartClickParams = {
+        seriesName: p.seriesName ?? '',
+        dataIndex: p.dataIndex ?? 0,
+        value: rawValue ?? 0,
+        name: p.name ?? '',
+      };
+
+      // Call custom handler if provided
+      onDataPointClick?.(clickParams);
+    },
+    [onDataPointClick]
+  );
+
+  // Build events object
   const handleEvents = useMemo(() => {
-    if (!onDataPointClick) return undefined;
+    if (!onDataPointClick && !crossFilter?.enabled) return undefined;
 
     return {
-      click: (params: unknown) => {
-        const p = params as { seriesName?: string; dataIndex?: number; value?: number; name?: string };
-        const clickParams: ChartClickParams = {
-          seriesName: p.seriesName ?? '',
-          dataIndex: p.dataIndex ?? 0,
-          value: p.value ?? 0,
-          name: p.name ?? '',
-        };
-        onDataPointClick(clickParams);
-      },
+      click: handleClick,
     };
-  }, [onDataPointClick]);
+  }, [onDataPointClick, crossFilter?.enabled, handleClick]);
 
   // Handle error state
   if (error) {

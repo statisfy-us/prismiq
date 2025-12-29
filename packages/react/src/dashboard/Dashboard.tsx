@@ -4,6 +4,8 @@
 
 import { useCallback } from 'react';
 import { useTheme } from '../theme';
+import { CrossFilterProvider, useCrossFilterOptional } from '../context';
+import { Button } from '../components/ui/Button';
 import { DashboardProvider } from './DashboardProvider';
 import { useDashboard } from './useDashboard';
 import { useDashboardFilters } from './useDashboardFilters';
@@ -32,6 +34,9 @@ function DashboardContent({
   } = useDashboard();
 
   const { filters, values, setValue, resetAll } = useDashboardFilters();
+
+  // Get cross-filter context
+  const crossFilterContext = useCrossFilterOptional();
 
   // Render widget function for DashboardLayout
   const renderWidget = useCallback(
@@ -77,6 +82,33 @@ function DashboardContent({
     marginTop: theme.spacing.xs,
     fontSize: theme.fontSizes.sm,
     color: theme.colors.textMuted,
+  };
+
+  // Cross-filter indicator styles
+  const crossFilterBarStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    padding: `${theme.spacing.sm} ${theme.spacing.md}`,
+    backgroundColor: `${theme.colors.primary}15`,
+    borderBottom: `1px solid ${theme.colors.border}`,
+    fontSize: theme.fontSizes.sm,
+    color: theme.colors.text,
+  };
+
+  const crossFilterLabelStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    fontWeight: 500,
+  };
+
+  const crossFilterValueStyle: React.CSSProperties = {
+    backgroundColor: theme.colors.primary,
+    color: '#fff',
+    padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+    borderRadius: theme.radius.sm,
+    fontSize: theme.fontSizes.xs,
   };
 
   const contentStyle: React.CSSProperties = {
@@ -173,6 +205,29 @@ function DashboardContent({
         />
       )}
 
+      {/* Cross-filter indicator bar */}
+      {crossFilterContext?.hasActiveFilters && (
+        <div style={crossFilterBarStyle}>
+          <span style={crossFilterLabelStyle}>
+            <span>🔗</span>
+            <span>Cross-filter active:</span>
+          </span>
+          {crossFilterContext.filters.map((filter) => (
+            <span key={filter.sourceWidgetId} style={crossFilterValueStyle}>
+              {filter.column}: {String(filter.value)}
+            </span>
+          ))}
+          <div style={{ flex: 1 }} />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => crossFilterContext.clearFilters()}
+          >
+            Clear filters
+          </Button>
+        </div>
+      )}
+
       <div style={contentStyle}>
         <DashboardLayout
           widgets={dashboard.widgets}
@@ -207,12 +262,14 @@ export function Dashboard({
   className = '',
 }: DashboardProps): JSX.Element {
   return (
-    <DashboardProvider dashboardId={id} refreshInterval={refreshInterval}>
-      <DashboardContent
-        showFilters={showFilters}
-        showTitle={showTitle}
-        className={className}
-      />
-    </DashboardProvider>
+    <CrossFilterProvider>
+      <DashboardProvider dashboardId={id} refreshInterval={refreshInterval}>
+        <DashboardContent
+          showFilters={showFilters}
+          showTitle={showTitle}
+          className={className}
+        />
+      </DashboardProvider>
+    </CrossFilterProvider>
   );
 }
