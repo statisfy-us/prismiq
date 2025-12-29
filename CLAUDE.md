@@ -66,6 +66,80 @@ When completing implementation tasks, **automatically** invoke these subagents v
 
 This runs comprehensive review including all specialized agents.
 
+### Sprint Execution
+
+To execute a full phase as a sprint:
+
+```bash
+# Use the sprint skill with the phase task file
+/sprint phase1-database-persistence
+```
+
+Or work through tasks manually:
+1. Read `tasks/phase1-database-persistence.md`
+2. Create a todo list with all tasks from the file
+3. Implement each task, committing after each
+4. Run validation after each task
+5. Mark task complete in todo list
+6. Move to next task
+
+### Checkpoint Validation
+
+After completing each phase, verify these checkpoints:
+
+**Phase 0 (E2E Testing):**
+- [ ] `npm test` runs Playwright tests successfully
+- [ ] CI workflow exists at `.github/workflows/e2e.yml`
+
+**Phase 1 (Database Persistence):**
+- [ ] `prismiq_dashboards` and `prismiq_widgets` tables auto-created
+- [ ] Dashboards survive backend restart
+- [ ] All existing tests still pass
+
+**Phase 2 (Multi-Tenancy):**
+- [ ] Tenant A cannot see Tenant B's dashboards
+- [ ] Permission checks enforce owner_id
+- [ ] React SDK sends X-Tenant-ID header
+
+**Phase 3 (Dashboard Management UI):**
+- [ ] Can create/edit/delete dashboards via UI
+- [ ] Can add/edit/delete widgets via UI
+- [ ] WidgetEditor wizard works end-to-end
+
+**Phase 4 (Layout Persistence):**
+- [ ] Drag-drop changes persist after reload
+- [ ] AutoSaveIndicator shows saving/saved states
+- [ ] Resize changes persist
+
+### Error Recovery
+
+If a task fails during autonomous execution:
+
+1. **Validation fails:**
+   - Read the error message carefully
+   - Fix the specific issue (don't rewrite everything)
+   - Run validation again before proceeding
+
+2. **E2E test fails:**
+   - Use `npm run test:debug` for step-by-step debugging
+   - Check if the demo servers are running
+   - Verify data-testid attributes match
+
+3. **Import/type errors:**
+   - Check if new dependencies need to be installed
+   - Ensure exports are added to `index.ts` files
+   - Run `npm run typecheck` for detailed errors
+
+4. **Database errors:**
+   - Verify DATABASE_URL is set correctly
+   - Check if tables exist: `psql -c "\dt prismiq_*"`
+   - Run `seed_data.py` to reset demo data
+
+5. **Stuck on a task:**
+   - Commit working code so far
+   - Use `/feature-dev:code-explorer` to understand existing patterns
+   - Break the task into smaller steps
+
 ## Project Goal
 
 Replace Reveal BI with a customizable, embeddable analytics solution that:
@@ -82,10 +156,23 @@ prismiq/
 │   ├── python/prismiq/      # Python backend (FastAPI + asyncpg)
 │   └── react/src/           # React SDK (@prismiq/react)
 ├── examples/demo/           # Demo app (backend + frontend)
+│   ├── backend/             # FastAPI demo server
+│   └── frontend/            # React demo app + Playwright tests
 ├── .claude/
 │   └── skills/              # Domain knowledge (analytics-patterns)
-└── tasks/                   # Sprint task definitions
+└── tasks/                   # Phase task definitions (phase0-5)
 ```
+
+### Skills
+
+Use `/analytics-patterns` when implementing:
+- Query builder components
+- SQL generation logic
+- Schema introspection
+- Visualization data transformations
+- Dashboard filter merging
+
+This skill contains reference patterns and data structures specific to analytics.
 
 ## Validation Commands
 
@@ -230,9 +317,137 @@ cd examples/demo/frontend && npm install && npm run dev
 # 6. Open http://localhost:5173
 ```
 
+## Development Roadmap
+
+The project follows a phased approach. Execute phases in order — each depends on the previous.
+
+| Phase | Task File | Priority | Description |
+|-------|-----------|----------|-------------|
+| **Phase 0** | `phase0-e2e-testing.md` | Foundation | Playwright setup, fixtures, CI |
+| **Phase 1** | `phase1-database-persistence.md` | Critical | PostgreSQL storage for dashboards/widgets |
+| **Phase 2** | `phase2-multi-tenancy.md` | Critical | AuthContext, tenant isolation, permissions |
+| **Phase 3** | `phase3-dashboard-management-ui.md` | Critical | DashboardList, Dialog, WidgetEditor |
+| **Phase 4** | `phase4-layout-persistence.md` | High | Debounced saves, drag-drop persistence |
+| **Phase 5** | `phase5-advanced-features.md` | Future | Cross-filtering, saved queries, RLS |
+
+### Autonomous Task Execution
+
+To execute a phase autonomously:
+
+1. **Read the task file** to understand scope and deliverables
+2. **Use feature-dev plugin** for architecture decisions:
+   ```
+   /feature-dev:feature-dev
+   ```
+3. **Implement each task** following the code examples in the file
+4. **Validate after each task** using the validation commands
+5. **Run E2E tests** to verify integration
+6. **Commit after each completed task** (not at the end)
+7. **Review with pr-review-toolkit** before moving to next phase
+
+### Task File Format
+
+Each task file contains:
+- **Overview**: What the phase accomplishes
+- **Prerequisites**: Required prior phases
+- **Validation Commands**: How to verify success
+- **Tasks 1-N**: Specific implementation steps with:
+  - File paths
+  - Code examples (reference, adapt as needed)
+  - Test requirements
+- **E2E Tests**: Playwright tests for integration validation
+- **Completion Criteria**: Checklist of deliverables
+
+### Validation Per Phase
+
+After completing each phase, run:
+
+```bash
+# Python validation
+make check                                    # lint + typecheck + test
+
+# React validation
+cd packages/react && npm run typecheck && npm run build
+
+# E2E validation (after Phase 0 is complete)
+cd examples/demo/frontend && npm test         # Playwright tests
+```
+
+### Plugin Usage by Phase
+
+| Phase | Recommended Plugins |
+|-------|---------------------|
+| Phase 0 | None (setup) |
+| Phase 1 | `feature-dev:code-architect` for store design |
+| Phase 2 | `pr-review-toolkit:type-design-analyzer` for AuthContext |
+| Phase 3 | `frontend-design:frontend-design` for UI components |
+| Phase 4 | `pr-review-toolkit:code-reviewer` for hook patterns |
+| Phase 5 | `feature-dev:code-explorer` for cross-cutting features |
+
+## E2E Testing
+
+After Phase 0 is complete, use Playwright for integration testing:
+
+```bash
+# Run all e2e tests
+cd examples/demo/frontend && npm test
+
+# Run specific test file
+cd examples/demo/frontend && npx playwright test e2e/dashboard.spec.ts
+
+# Run with UI for debugging
+cd examples/demo/frontend && npm run test:ui
+
+# Run headed (see browser)
+cd examples/demo/frontend && npm run test:headed
+```
+
+**Test files location:** `examples/demo/frontend/e2e/`
+
+**Page objects:** `examples/demo/frontend/e2e/fixtures.ts`
+
+### Writing E2E Tests
+
+Use data-testid attributes for reliable selectors:
+```tsx
+// Component
+<div data-testid="dashboard-container">
+
+// Test
+await page.locator('[data-testid="dashboard-container"]')
+```
+
+### Browser-Based Validation
+
+Use Playwright MCP tools to visually verify UI changes:
+
+```bash
+# Navigate to demo app
+mcp__plugin_playwright_playwright__browser_navigate url="http://localhost:5173"
+
+# Take a snapshot to see current state
+mcp__plugin_playwright_playwright__browser_snapshot
+
+# Click on elements
+mcp__plugin_playwright_playwright__browser_click element="Create Dashboard button" ref="[ref-from-snapshot]"
+
+# Fill forms
+mcp__plugin_playwright_playwright__browser_type element="Dashboard name input" ref="[ref]" text="My Dashboard"
+```
+
+**Before using browser tools:**
+1. Start demo backend: `cd examples/demo/backend && python main.py`
+2. Start demo frontend: `cd examples/demo/frontend && npm run dev`
+
+**Use browser validation for:**
+- Verifying UI components render correctly
+- Testing user flows (create dashboard, add widget, etc.)
+- Debugging E2E test failures
+- Visual regression checking
+
 ## Current Sprint
 
-Core features complete. See `tasks/` for remaining work.
+Core features complete. See `tasks/` for remaining work (Phases 0-5).
 
 ## Known Issues & Workarounds
 
