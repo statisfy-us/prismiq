@@ -15,6 +15,7 @@ import type {
   ColumnSelection,
   ColumnSchema,
   FilterDefinition,
+  JoinDefinition,
   QueryDefinition,
   QueryResult,
   SortDefinition,
@@ -22,6 +23,7 @@ import type {
 } from '../../types';
 import { ColumnSelector } from '../ColumnSelector';
 import { FilterBuilder } from '../FilterBuilder';
+import { JoinBuilder } from '../JoinBuilder';
 import { ResultsTable } from '../ResultsTable';
 import { SchemaExplorer } from '../SchemaExplorer';
 import { SortBuilder } from '../SortBuilder';
@@ -85,7 +87,7 @@ const horizontalLayoutStyles: React.CSSProperties = {
 };
 
 const sidebarStyles: React.CSSProperties = {
-  width: '280px',
+  width: '240px',
   flexShrink: 0,
   overflow: 'hidden',
 };
@@ -348,6 +350,11 @@ export function QueryBuilder({
     setQuery((prev) => ({ ...prev, order_by: sorts }));
   }, []);
 
+  // Handle joins change
+  const handleJoinsChange = useCallback((joins: JoinDefinition[]) => {
+    setQuery((prev) => ({ ...prev, joins }));
+  }, []);
+
   // Handle preview (limited rows)
   const handlePreview = useCallback(() => {
     setExecuteQuery({ ...query, limit: 100 });
@@ -399,6 +406,13 @@ export function QueryBuilder({
               tables={query.tables}
               columns={query.columns}
               onChange={handleColumnsChange}
+              schema={schema}
+            />
+
+            <JoinBuilder
+              tables={query.tables}
+              joins={query.joins ?? []}
+              onChange={handleJoinsChange}
               schema={schema}
             />
 

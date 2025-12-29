@@ -589,11 +589,15 @@ class QueryBuilder:
         if not query.tables:
             return ""
 
+        # Track which tables are already in the FROM clause
+        tables_in_from: set[str] = set()
+
         # First table
         first_table = query.tables[0]
         sql = self._quote_identifier(first_table.name)
         if first_table.alias:
             sql += f" AS {self._quote_identifier(first_table.alias)}"
+        tables_in_from.add(first_table.id)
 
         # Add JOINs
         for join in query.joins:
@@ -615,6 +619,17 @@ class QueryBuilder:
                 f"{from_ref}.{self._quote_identifier(join.from_column)} = "
                 f"{to_ref}.{self._quote_identifier(join.to_column)}"
             )
+            tables_in_from.add(join.to_table_id)
+
+        # Add any remaining tables that aren't joined (creates implicit cross join)
+        # This handles cases where columns are selected from multiple tables without explicit joins
+        for qt in query.tables[1:]:
+            if qt.id not in tables_in_from:
+                table_sql = self._quote_identifier(qt.name)
+                if qt.alias:
+                    table_sql += f" AS {self._quote_identifier(qt.alias)}"
+                sql += f", {table_sql}"
+                tables_in_from.add(qt.id)
 
         return sql
 

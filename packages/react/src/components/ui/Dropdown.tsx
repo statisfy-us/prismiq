@@ -8,12 +8,14 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type HTMLAttributes,
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
+import { createPortal } from 'react-dom';
 
 // ============================================================================
 // Types
@@ -61,15 +63,13 @@ const containerStyles: React.CSSProperties = {
 };
 
 const contentStyles: React.CSSProperties = {
-  position: 'absolute',
-  top: '100%',
-  marginTop: 'var(--prismiq-spacing-xs)',
+  position: 'fixed',
   minWidth: '160px',
   backgroundColor: 'var(--prismiq-color-background)',
   border: '1px solid var(--prismiq-color-border)',
   borderRadius: 'var(--prismiq-radius-md)',
   boxShadow: 'var(--prismiq-shadow-md)',
-  zIndex: 1000,
+  zIndex: 10000,
   padding: 'var(--prismiq-spacing-xs) 0',
   overflow: 'hidden',
 };
@@ -210,7 +210,9 @@ export const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(function Dropd
   ref
 ) {
   const [isOpen, setIsOpen] = useState(false);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const close = useCallback(() => {
     setIsOpen(false);
@@ -222,12 +224,38 @@ export const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(function Dropd
     }
   }, [disabled]);
 
+  // Update position when dropdown opens
+  useLayoutEffect(() => {
+    if (isOpen && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const menuWidth = 160; // min-width from styles
+
+      let left = align === 'end' ? rect.right - menuWidth : rect.left;
+      const top = rect.bottom + 4; // 4px gap
+
+      // Keep menu within viewport
+      if (left + menuWidth > window.innerWidth) {
+        left = window.innerWidth - menuWidth - 8;
+      }
+      if (left < 8) {
+        left = 8;
+      }
+
+      setPosition({ top, left });
+    }
+  }, [isOpen, align]);
+
   // Close dropdown when clicking outside
   useEffect(() => {
+    if (!isOpen) return;
+
     const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
       if (
         containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
+        !containerRef.current.contains(target) &&
+        menuRef.current &&
+        !menuRef.current.contains(target)
       ) {
         setIsOpen(false);
       }
@@ -235,7 +263,19 @@ export const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(function Dropd
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [isOpen]);
+
+  // Close on scroll
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleScroll = () => {
+      setIsOpen(false);
+    };
+
+    window.addEventListener('scroll', handleScroll, true);
+    return () => window.removeEventListener('scroll', handleScroll, true);
+  }, [isOpen]);
 
   // Handle keyboard navigation
   const handleKeyDown = useCallback(
@@ -262,6 +302,22 @@ export const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(function Dropd
     [isOpen, toggle]
   );
 
+  // Render menu in a portal at body level
+  const menuContent = isOpen && typeof document !== 'undefined' ? createPortal(
+    <div
+      ref={menuRef}
+      role="menu"
+      style={{
+        ...contentStyles,
+        top: position.top,
+        left: position.left,
+      }}
+    >
+      {children}
+    </div>,
+    document.body
+  ) : null;
+
   return (
     <DropdownContext.Provider value={{ close }}>
       <div
@@ -285,17 +341,7 @@ export const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(function Dropd
           {trigger}
         </div>
 
-        {isOpen && (
-          <div
-            role="menu"
-            style={{
-              ...contentStyles,
-              ...(align === 'end' ? { right: 0 } : { left: 0 }),
-            }}
-          >
-            {children}
-          </div>
-        )}
+        {menuContent}
       </div>
     </DropdownContext.Provider>
   );

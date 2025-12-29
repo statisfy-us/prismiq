@@ -5,7 +5,9 @@ import type { QueryDefinition } from '@prismiq/react'
 export function ExplorePage() {
   const { resolvedMode } = useTheme()
   const [query, setQuery] = useState<QueryDefinition | null>(null)
-  const { data, isLoading, error } = useQuery(query, { enabled: !!query })
+  // Only execute when query has tables AND columns (a valid query)
+  const canExecute = query && query.tables.length > 0 && query.columns.length > 0
+  const { data, isLoading, error } = useQuery(query, { enabled: canExecute })
 
   const containerStyle: CSSProperties = {
     display: 'flex',
@@ -14,7 +16,9 @@ export function ExplorePage() {
   }
 
   const sidebarStyle: CSSProperties = {
-    width: '400px',
+    width: '50%',
+    maxWidth: '700px',
+    minWidth: '500px',
     borderRight: `1px solid ${resolvedMode === 'dark' ? '#27272a' : '#e5e7eb'}`,
     backgroundColor: resolvedMode === 'dark' ? '#18181b' : '#ffffff',
     overflowY: 'auto',
@@ -98,7 +102,11 @@ export function ExplorePage() {
     <div style={containerStyle}>
       <div style={sidebarStyle}>
         <h2 style={titleStyle}>Query Builder</h2>
-        <QueryBuilder onQueryChange={setQuery} />
+        <QueryBuilder
+          onQueryChange={setQuery}
+          showResultsTable={false}
+          showSqlPreview={false}
+        />
       </div>
 
       <div style={mainStyle}>
@@ -113,7 +121,7 @@ export function ExplorePage() {
           </div>
 
           <div style={resultContentStyle}>
-            {!query && (
+            {!canExecute && (
               <div style={emptyStyle}>
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <circle cx="11" cy="11" r="8" />
@@ -121,12 +129,12 @@ export function ExplorePage() {
                 </svg>
                 <span>Build a query to see results</span>
                 <span style={{ fontSize: '14px' }}>
-                  Select tables and columns from the sidebar
+                  {query?.tables.length ? 'Now select columns to include' : 'Select tables and columns from the sidebar'}
                 </span>
               </div>
             )}
 
-            {query && isLoading && (
+            {canExecute && isLoading && (
               <div style={loadingStyle}>
                 <span>Executing query...</span>
               </div>

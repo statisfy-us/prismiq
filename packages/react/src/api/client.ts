@@ -102,9 +102,16 @@ export class PrismiqClient {
       let errorMessage = `API request failed: ${response.status} ${response.statusText}`;
 
       try {
-        const errorBody = (await response.json()) as { detail?: string };
+        const errorBody = (await response.json()) as { detail?: string | Array<{ msg: string; loc?: string[] }> };
         if (errorBody.detail) {
-          errorMessage = errorBody.detail;
+          if (typeof errorBody.detail === 'string') {
+            errorMessage = errorBody.detail;
+          } else if (Array.isArray(errorBody.detail)) {
+            // Pydantic validation errors are arrays of objects
+            errorMessage = errorBody.detail
+              .map((e) => e.msg + (e.loc ? ` (${e.loc.join('.')})` : ''))
+              .join('; ');
+          }
         }
       } catch {
         // Ignore JSON parse errors, use default message

@@ -194,7 +194,7 @@ export function DashboardLayout({
     backgroundColor: theme.colors.surface,
     borderRadius: theme.radius.md,
     boxShadow: theme.shadows.sm,
-    overflow: 'hidden',
+    // Don't use overflow: hidden - it clips dropdown menus
     display: 'flex',
     flexDirection: 'column',
   };

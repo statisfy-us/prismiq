@@ -41,7 +41,7 @@ class WidgetType(str, Enum):
 class WidgetPosition(BaseModel):
     """Widget position in grid layout."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     x: int = Field(ge=0)
     """X position in grid units."""
@@ -59,7 +59,7 @@ class WidgetPosition(BaseModel):
 class WidgetConfig(BaseModel):
     """Widget-specific configuration."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     # Chart-specific options
     x_axis: str | None = None
@@ -108,7 +108,7 @@ class WidgetConfig(BaseModel):
 class Widget(BaseModel):
     """A dashboard widget."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     id: str
     """Unique widget identifier."""
@@ -153,7 +153,7 @@ class DashboardFilterType(str, Enum):
 class DashboardFilter(BaseModel):
     """A global dashboard filter."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     id: str
     """Unique filter identifier."""
@@ -189,7 +189,7 @@ class DashboardFilter(BaseModel):
 class DashboardLayout(BaseModel):
     """Dashboard layout configuration."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     columns: int = 12
     """Number of grid columns."""
@@ -212,7 +212,7 @@ class DashboardLayout(BaseModel):
 class Dashboard(BaseModel):
     """A complete dashboard."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     id: str
     """Unique dashboard identifier."""
@@ -264,7 +264,7 @@ class Dashboard(BaseModel):
 class DashboardCreate(BaseModel):
     """DTO for creating a dashboard."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     name: str
     """Dashboard name."""
@@ -279,7 +279,7 @@ class DashboardCreate(BaseModel):
 class DashboardUpdate(BaseModel):
     """DTO for updating a dashboard."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     name: str | None = None
     """New dashboard name."""
@@ -303,7 +303,7 @@ class DashboardUpdate(BaseModel):
 class WidgetCreate(BaseModel):
     """DTO for creating a widget."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     type: WidgetType
     """Type of widget."""
@@ -324,7 +324,7 @@ class WidgetCreate(BaseModel):
 class WidgetUpdate(BaseModel):
     """DTO for updating a widget."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     title: str | None = None
     """New widget title."""
@@ -347,7 +347,7 @@ class WidgetUpdate(BaseModel):
 class DashboardExport(BaseModel):
     """Export format for dashboards."""
 
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict()
 
     version: str = "1.0"
     """Export format version for future compatibility."""

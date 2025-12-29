@@ -131,6 +131,14 @@ export { SortBuilder, SortRow } from './SortBuilder';
 export type { SortBuilderProps, SortRowProps } from './SortBuilder';
 
 // ============================================================================
+// Join Builder
+// ============================================================================
+
+export { JoinBuilder, JoinRow } from './JoinBuilder';
+
+export type { JoinBuilderProps, JoinRowProps } from './JoinBuilder';
+
+// ============================================================================
 // Aggregation Picker
 // ============================================================================
 

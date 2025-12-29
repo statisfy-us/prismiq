@@ -183,6 +183,9 @@ export function WidgetContent({
 }: WidgetContentProps): JSX.Element {
   const { theme } = useTheme();
 
+  // Convert result rows to chart data format - must be called unconditionally (Rules of Hooks)
+  const data = useMemo(() => (result ? resultToDataPoints(result) : []), [result]);
+
   // Container style
   const containerStyle: React.CSSProperties = {
     flex: 1,
@@ -225,9 +228,6 @@ export function WidgetContent({
       </div>
     );
   }
-
-  // Convert result rows to chart data format
-  const data = useMemo(() => resultToDataPoints(result), [result]);
 
   // Extract chart configuration from widget config
   const xAxis = widget.config.x_axis ?? result.columns[0] ?? '';

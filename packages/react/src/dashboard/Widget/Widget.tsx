@@ -68,7 +68,7 @@ export function Widget({
     height: '100%',
     backgroundColor: theme.colors.surface,
     borderRadius: theme.radius.md,
-    overflow: 'hidden',
+    // Don't use overflow: hidden here - it clips the dropdown menu
   };
 
   return (
