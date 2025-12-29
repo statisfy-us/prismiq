@@ -22,6 +22,18 @@ import type {
 export interface ClientConfig {
   /** Base URL of the Prismiq API endpoint. */
   endpoint: string;
+  /**
+   * Tenant ID for multi-tenant isolation.
+   * All API calls will include this in the X-Tenant-ID header.
+   * Required for production use.
+   */
+  tenantId: string;
+  /**
+   * User ID for ownership and permissions.
+   * Included in X-User-ID header when provided.
+   * Used for dashboard ownership and access control.
+   */
+  userId?: string;
   /** Optional function to get an authentication token. */
   getToken?: () => Promise<string> | string;
 }
@@ -65,11 +77,15 @@ export class PrismiqError extends Error {
  */
 export class PrismiqClient {
   private readonly endpoint: string;
+  private readonly tenantId: string;
+  private readonly userId?: string;
   private readonly getToken?: () => Promise<string> | string;
 
   constructor(config: ClientConfig) {
     // Normalize endpoint - remove trailing slash
     this.endpoint = config.endpoint.replace(/\/$/, '');
+    this.tenantId = config.tenantId;
+    this.userId = config.userId;
     this.getToken = config.getToken;
   }
 
@@ -84,8 +100,14 @@ export class PrismiqClient {
 
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
+      'X-Tenant-ID': this.tenantId,
       ...options.headers,
     };
+
+    // Add user ID header if provided
+    if (this.userId) {
+      (headers as Record<string, string>)['X-User-ID'] = this.userId;
+    }
 
     // Add authorization header if token provider is configured
     if (this.getToken) {

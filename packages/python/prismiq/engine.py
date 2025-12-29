@@ -168,6 +168,15 @@ class PrismiqEngine:
             raise RuntimeError("Engine not started. Call 'await engine.startup()' first.")
         return self._dashboard_store
 
+    @property
+    def dashboards(self) -> DashboardStore:
+        """Alias for dashboard_store for convenience.
+
+        Returns:
+            The dashboard store.
+        """
+        return self.dashboard_store
+
     async def startup(self) -> None:
         """
         Initialize the engine.

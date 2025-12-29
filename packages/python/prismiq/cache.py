@@ -209,7 +209,7 @@ class RedisCache(CacheBackend):
             from redis.asyncio import Redis  # type: ignore[import-not-found]
         except ImportError as e:
             raise ImportError(
-                "redis package is required for RedisCache. " "Install with: pip install redis"
+                "redis package is required for RedisCache. Install with: pip install redis"
             ) from e
 
         self._redis = Redis.from_url(self._redis_url, decode_responses=True)

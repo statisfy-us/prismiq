@@ -38,6 +38,9 @@ from prismiq.api import (
     create_router,
 )
 
+# Authentication
+from prismiq.auth import AuthContext, SimpleAuthContext, create_header_auth_dependency
+
 # Cache backends
 from prismiq.cache import (
     CacheBackend,
@@ -140,6 +143,14 @@ from prismiq.middleware import (
     create_rate_limiter,
 )
 
+# Permissions
+from prismiq.permissions import (
+    can_delete_dashboard,
+    can_edit_dashboard,
+    can_edit_widget,
+    can_view_dashboard,
+)
+
 # Database persistence
 from prismiq.persistence import PostgresDashboardStore, drop_tables, ensure_tables
 from prismiq.query import QueryBuilder, ValidationError, ValidationResult
@@ -223,6 +234,8 @@ __all__ = [
     "DEFAULT_BUCKETS",
     # Query types
     "AggregationType",
+    # Authentication
+    "AuthContext",
     # Cache backends
     "CacheBackend",
     "CacheConfig",
@@ -313,6 +326,8 @@ __all__ = [
     "SchemaConfig",
     "SchemaConfigManager",
     "SchemaIntrospector",
+    # Authentication
+    "SimpleAuthContext",
     # Sliding window counter
     "SlidingWindowCounter",
     "SortDefinition",
@@ -356,8 +371,15 @@ __all__ = [
     # Trend functions
     "calculate_trend",
     "calculate_year_over_year",
+    # Permission functions
+    "can_delete_dashboard",
+    "can_edit_dashboard",
+    "can_edit_widget",
+    "can_view_dashboard",
     # Logging configuration function
     "configure_logging",
+    # Auth dependency factory
+    "create_header_auth_dependency",
     # Metrics router factory
     "create_metrics_router",
     # Rate limiter factory

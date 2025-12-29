@@ -1,9 +1,17 @@
 import { AnalyticsProvider, useSchema, useQuery } from '@prismiq/react';
 import { useState } from 'react';
 
+// Demo uses a fixed tenant for simplicity
+const DEMO_TENANT_ID = 'demo-tenant';
+const DEMO_USER_ID = 'demo-user';
+
 function App() {
   return (
-    <AnalyticsProvider baseUrl="http://localhost:8000">
+    <AnalyticsProvider
+      config={{ endpoint: 'http://localhost:8000' }}
+      tenantId={DEMO_TENANT_ID}
+      userId={DEMO_USER_ID}
+    >
       <div style={{ padding: '2rem', fontFamily: 'system-ui' }}>
         <h1>Prismiq Basic Dashboard</h1>
         <SchemaExplorer />
@@ -43,7 +51,7 @@ function SchemaExplorer() {
 
 function QueryDemo() {
   const [tableName, setTableName] = useState('');
-  
+
   const { data, loading, error, execute } = useQuery({
     tables: tableName ? [{ schema: 'public', table: tableName }] : [],
     columns: [{ table: tableName, column: '*' }],

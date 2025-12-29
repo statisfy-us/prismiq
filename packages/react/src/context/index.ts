@@ -6,6 +6,7 @@ export {
   AnalyticsProvider,
   useAnalytics,
   useAnalyticsCallbacks,
+  useTenant,
 } from './AnalyticsProvider';
 
 export type {

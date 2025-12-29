@@ -35,6 +35,10 @@ export interface AnalyticsContextValue {
   error: Error | null;
   /** Function to manually refresh the schema. */
   refetchSchema: () => Promise<void>;
+  /** Current tenant ID for multi-tenant isolation. */
+  tenantId: string;
+  /** Current user ID for ownership and permissions. */
+  userId?: string;
 }
 
 /**
@@ -43,6 +47,18 @@ export interface AnalyticsContextValue {
 export interface AnalyticsProviderProps {
   /** Configuration for the Prismiq client. */
   config: ClientConfig;
+  /**
+   * Tenant ID for multi-tenant isolation.
+   * All API calls will include this in the X-Tenant-ID header.
+   * Required for production use.
+   */
+  tenantId: string;
+  /**
+   * User ID for ownership and permissions.
+   * Included in X-User-ID header when provided.
+   * Used for dashboard ownership and access control.
+   */
+  userId?: string;
   /** Callback when a query is executed successfully. */
   onQueryExecute?: (query: QueryDefinition, result: QueryResult) => void;
   /** Callback when a query execution fails. */
@@ -93,6 +109,8 @@ export function useAnalyticsCallbacks(): AnalyticsCallbacks {
  *   return (
  *     <AnalyticsProvider
  *       config={{ endpoint: 'https://api.example.com' }}
+ *       tenantId="my-org-123"
+ *       userId="user-456"
  *       onQueryExecute={(query, result) => console.log('Query executed', result)}
  *       onSchemaLoad={(schema) => console.log('Schema loaded', schema.tables.length)}
  *     >
@@ -104,6 +122,8 @@ export function useAnalyticsCallbacks(): AnalyticsCallbacks {
  */
 export function AnalyticsProvider({
   config,
+  tenantId,
+  userId,
   onQueryExecute,
   onQueryError,
   onSchemaLoad,
@@ -111,7 +131,16 @@ export function AnalyticsProvider({
   children,
 }: AnalyticsProviderProps): JSX.Element {
   // Create client instance - memoize to prevent recreation on re-renders
-  const client = useMemo(() => new PrismiqClient(config), [config]);
+  // Include tenantId and userId in the client config
+  const client = useMemo(
+    () =>
+      new PrismiqClient({
+        ...config,
+        tenantId,
+        userId,
+      }),
+    [config, tenantId, userId]
+  );
 
   // Schema state
   const [schema, setSchema] = useState<DatabaseSchema | null>(null);
@@ -154,8 +183,10 @@ export function AnalyticsProvider({
       isLoading,
       error,
       refetchSchema,
+      tenantId,
+      userId,
     }),
-    [client, schema, isLoading, error, refetchSchema]
+    [client, schema, isLoading, error, refetchSchema, tenantId, userId]
   );
 
   // Memoize callbacks
@@ -210,4 +241,22 @@ export function useAnalytics(): AnalyticsContextValue {
   }
 
   return context;
+}
+
+/**
+ * Hook to access tenant and user information.
+ *
+ * Convenience hook for components that only need tenant/user context.
+ *
+ * @example
+ * ```tsx
+ * function UserInfo() {
+ *   const { tenantId, userId } = useTenant();
+ *   return <span>Tenant: {tenantId}, User: {userId ?? 'anonymous'}</span>;
+ * }
+ * ```
+ */
+export function useTenant(): { tenantId: string; userId?: string } {
+  const { tenantId, userId } = useAnalytics();
+  return { tenantId, userId };
 }

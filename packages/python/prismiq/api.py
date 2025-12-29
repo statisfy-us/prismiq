@@ -5,17 +5,20 @@ This module provides a factory function to create an API router
 that exposes schema, validation, and query execution endpoints.
 """
 
+# ruff: noqa: B008  # FastAPI's Depends() in function defaults is standard pattern
+
 from __future__ import annotations
 
 import time
+from collections.abc import Awaitable, Callable
 from datetime import date
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 
 from prismiq import __version__
-from prismiq.dashboard_store import DashboardStore
+from prismiq.auth import AuthContext, create_header_auth_dependency
 from prismiq.dashboards import (
     Dashboard,
     DashboardCreate,
@@ -26,6 +29,12 @@ from prismiq.dashboards import (
     WidgetUpdate,
 )
 from prismiq.filter_merge import FilterValue, merge_filters
+from prismiq.permissions import (
+    can_delete_dashboard,
+    can_edit_dashboard,
+    can_edit_widget,
+    can_view_dashboard,
+)
 from prismiq.query import ValidationResult
 from prismiq.schema_config import (
     ColumnConfig,
@@ -51,10 +60,6 @@ if TYPE_CHECKING:
 
 # Track startup time for uptime calculation
 _startup_time: float | None = None
-
-# Default tenant ID for Phase 1 (before proper auth is implemented)
-# Phase 2 will replace this with auth context from request headers
-DEFAULT_TENANT_ID = "default"
 
 
 def _get_uptime() -> float:
@@ -314,32 +319,44 @@ class DashboardImportRequest(BaseModel):
 
 def create_router(
     engine: PrismiqEngine,
-    dashboard_store: DashboardStore | None = None,
+    get_auth_context: Callable[..., Awaitable[AuthContext]] | None = None,
 ) -> APIRouter:
     """
     Create a FastAPI router for the Prismiq analytics engine.
 
     Args:
         engine: Initialized PrismiqEngine instance.
-        dashboard_store: Optional dashboard storage backend.
-            If not provided, uses the engine's dashboard store.
+        get_auth_context: FastAPI dependency that returns an AuthContext.
+            Called ONCE per request - no duplicate auth processing.
+            If None, uses a default that requires X-Tenant-ID header.
 
     Returns:
         APIRouter with analytics endpoints.
 
     Example:
-        >>> engine = PrismiqEngine(database_url, persist_dashboards=True)
-        >>> await engine.startup()
-        >>> router = create_router(engine)
-        >>> app.include_router(router, prefix="/api/analytics")
+        # Simple header-based auth
+        from prismiq.auth import create_header_auth_dependency
+        router = create_router(engine, get_auth_context=create_header_auth_dependency())
+
+        # Custom auth with your provider
+        async def get_auth(request: Request) -> MyAuthContext:
+            token = request.headers.get("Authorization", "").replace("Bearer ", "")
+            user = await my_auth_provider.verify(token)
+            return MyAuthContext(tenant_id=user.org_id, user_id=user.id)
+
+        router = create_router(engine, get_auth_context=get_auth)
     """
     global _startup_time
     _startup_time = time.time()
 
     router = APIRouter(tags=["analytics"])
 
-    # Use provided store or engine's store
-    store = dashboard_store or engine.dashboard_store
+    # Default auth dependency if none provided
+    if get_auth_context is None:
+        get_auth_context = create_header_auth_dependency()
+
+    # Use engine's dashboard store
+    store = engine.dashboard_store
 
     # ========================================================================
     # Health Check Endpoints
@@ -920,21 +937,26 @@ def create_router(
     # ========================================================================
 
     @router.get("/dashboards", response_model=DashboardListResponse)
-    async def list_dashboards(owner_id: str | None = None) -> DashboardListResponse:
+    async def list_dashboards(
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> DashboardListResponse:
         """
-        List all dashboards.
-
-        Args:
-            owner_id: Optional filter by owner ID.
+        List all dashboards for the current tenant.
 
         Returns:
-            List of dashboards.
+            List of dashboards the user can access.
         """
-        dashboards = await store.list_dashboards(tenant_id=DEFAULT_TENANT_ID, owner_id=owner_id)
+        dashboards = await store.list_dashboards(
+            tenant_id=auth.tenant_id,
+            owner_id=auth.user_id,
+        )
         return DashboardListResponse(dashboards=dashboards)
 
     @router.get("/dashboards/{dashboard_id}", response_model=Dashboard)
-    async def get_dashboard(dashboard_id: str) -> Dashboard:
+    async def get_dashboard(
+        dashboard_id: str,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> Dashboard:
         """
         Get a dashboard by ID.
 
@@ -946,56 +968,74 @@ def create_router(
 
         Raises:
             404: If dashboard not found.
+            403: If user lacks permission to view.
         """
-        dashboard = await store.get_dashboard(dashboard_id, tenant_id=DEFAULT_TENANT_ID)
+        dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if dashboard is None:
             raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+
+        if not can_view_dashboard(dashboard, auth.user_id):
+            raise HTTPException(status_code=403, detail="Permission denied")
+
         return dashboard
 
     @router.post("/dashboards", response_model=Dashboard, status_code=201)
     async def create_dashboard(
-        dashboard: DashboardCreate,
-        owner_id: str | None = None,
+        data: DashboardCreate,
+        auth: AuthContext = Depends(get_auth_context),
     ) -> Dashboard:
         """
         Create a new dashboard.
 
         Args:
-            dashboard: Dashboard creation data.
-            owner_id: Optional owner ID.
+            data: Dashboard creation data.
 
         Returns:
             Created dashboard.
         """
         return await store.create_dashboard(
-            dashboard, tenant_id=DEFAULT_TENANT_ID, owner_id=owner_id
+            data,
+            tenant_id=auth.tenant_id,
+            owner_id=auth.user_id,
         )
 
     @router.patch("/dashboards/{dashboard_id}", response_model=Dashboard)
     async def update_dashboard(
         dashboard_id: str,
-        update: DashboardUpdate,
+        data: DashboardUpdate,
+        auth: AuthContext = Depends(get_auth_context),
     ) -> Dashboard:
         """
         Update a dashboard.
 
         Args:
             dashboard_id: Dashboard ID.
-            update: Fields to update.
+            data: Fields to update.
 
         Returns:
             Updated dashboard.
 
         Raises:
             404: If dashboard not found.
+            403: If user lacks permission to edit.
         """
-        updated = await store.update_dashboard(dashboard_id, update, tenant_id=DEFAULT_TENANT_ID)
+        dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
+        if dashboard is None:
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+
+        if not can_edit_dashboard(dashboard, auth.user_id):
+            raise HTTPException(status_code=403, detail="Permission denied")
+
+        updated = await store.update_dashboard(dashboard_id, data, tenant_id=auth.tenant_id)
         if updated is None:
             raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
         return updated
 
     @router.delete("/dashboards/{dashboard_id}", response_model=SuccessResponse)
-    async def delete_dashboard(dashboard_id: str) -> SuccessResponse:
+    async def delete_dashboard(
+        dashboard_id: str,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> SuccessResponse:
         """
         Delete a dashboard.
 
@@ -1007,8 +1047,16 @@ def create_router(
 
         Raises:
             404: If dashboard not found.
+            403: If user lacks permission to delete.
         """
-        deleted = await store.delete_dashboard(dashboard_id, tenant_id=DEFAULT_TENANT_ID)
+        dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
+        if dashboard is None:
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+
+        if not can_delete_dashboard(dashboard, auth.user_id):
+            raise HTTPException(status_code=403, detail="Permission denied")
+
+        deleted = await store.delete_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if not deleted:
             raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
         return SuccessResponse(message=f"Dashboard '{dashboard_id}' deleted")
@@ -1022,79 +1070,135 @@ def create_router(
         response_model=Widget,
         status_code=201,
     )
-    async def add_widget(dashboard_id: str, widget: WidgetCreate) -> Widget:
+    async def add_widget(
+        dashboard_id: str,
+        data: WidgetCreate,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> Widget:
         """
         Add a widget to a dashboard.
 
         Args:
             dashboard_id: Dashboard ID.
-            widget: Widget creation data.
+            data: Widget creation data.
 
         Returns:
             Created widget.
 
         Raises:
             404: If dashboard not found.
+            403: If user lacks permission to edit widgets.
         """
-        created = await store.add_widget(dashboard_id, widget, tenant_id=DEFAULT_TENANT_ID)
+        dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
+        if dashboard is None:
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+
+        if not can_edit_widget(dashboard, auth.user_id):
+            raise HTTPException(status_code=403, detail="Permission denied")
+
+        created = await store.add_widget(dashboard_id, data, tenant_id=auth.tenant_id)
         if created is None:
             raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
         return created
 
-    @router.patch("/widgets/{widget_id}", response_model=Widget)
-    async def update_widget(widget_id: str, update: WidgetUpdate) -> Widget:
+    @router.patch("/dashboards/{dashboard_id}/widgets/{widget_id}", response_model=Widget)
+    async def update_widget(
+        dashboard_id: str,
+        widget_id: str,
+        data: WidgetUpdate,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> Widget:
         """
         Update a widget.
 
         Args:
+            dashboard_id: Dashboard ID.
             widget_id: Widget ID.
-            update: Fields to update.
+            data: Fields to update.
 
         Returns:
             Updated widget.
 
         Raises:
-            404: If widget not found.
+            404: If dashboard or widget not found.
+            403: If user lacks permission to edit widgets.
         """
-        updated = await store.update_widget(widget_id, update, tenant_id=DEFAULT_TENANT_ID)
+        dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
+        if dashboard is None:
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+
+        if not can_edit_widget(dashboard, auth.user_id):
+            raise HTTPException(status_code=403, detail="Permission denied")
+
+        updated = await store.update_widget(widget_id, data, tenant_id=auth.tenant_id)
         if updated is None:
             raise HTTPException(status_code=404, detail=f"Widget '{widget_id}' not found")
         return updated
 
-    @router.delete("/widgets/{widget_id}", response_model=SuccessResponse)
-    async def delete_widget(widget_id: str) -> SuccessResponse:
+    @router.delete("/dashboards/{dashboard_id}/widgets/{widget_id}", response_model=SuccessResponse)
+    async def delete_widget(
+        dashboard_id: str,
+        widget_id: str,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> SuccessResponse:
         """
         Delete a widget.
 
         Args:
+            dashboard_id: Dashboard ID.
             widget_id: Widget ID.
 
         Returns:
             Success response.
 
         Raises:
-            404: If widget not found.
+            404: If dashboard or widget not found.
+            403: If user lacks permission to edit widgets.
         """
-        deleted = await store.delete_widget(widget_id, tenant_id=DEFAULT_TENANT_ID)
+        dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
+        if dashboard is None:
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+
+        if not can_edit_widget(dashboard, auth.user_id):
+            raise HTTPException(status_code=403, detail="Permission denied")
+
+        deleted = await store.delete_widget(widget_id, tenant_id=auth.tenant_id)
         if not deleted:
             raise HTTPException(status_code=404, detail=f"Widget '{widget_id}' not found")
         return SuccessResponse(message=f"Widget '{widget_id}' deleted")
 
-    @router.post("/widgets/{widget_id}/duplicate", response_model=Widget, status_code=201)
-    async def duplicate_widget(widget_id: str) -> Widget:
+    @router.post(
+        "/dashboards/{dashboard_id}/widgets/{widget_id}/duplicate",
+        response_model=Widget,
+        status_code=201,
+    )
+    async def duplicate_widget(
+        dashboard_id: str,
+        widget_id: str,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> Widget:
         """
         Duplicate a widget.
 
         Args:
+            dashboard_id: Dashboard ID.
             widget_id: Widget ID to duplicate.
 
         Returns:
             New duplicated widget.
 
         Raises:
-            404: If widget not found.
+            404: If dashboard or widget not found.
+            403: If user lacks permission to edit widgets.
         """
-        duplicated = await store.duplicate_widget(widget_id, tenant_id=DEFAULT_TENANT_ID)
+        dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
+        if dashboard is None:
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+
+        if not can_edit_widget(dashboard, auth.user_id):
+            raise HTTPException(status_code=403, detail="Permission denied")
+
+        duplicated = await store.duplicate_widget(widget_id, tenant_id=auth.tenant_id)
         if duplicated is None:
             raise HTTPException(status_code=404, detail=f"Widget '{widget_id}' not found")
         return duplicated
@@ -1106,6 +1210,7 @@ def create_router(
     async def execute_widget_query(
         dashboard_id: str,
         widget_id: str,
+        auth: AuthContext = Depends(get_auth_context),
         filter_values: list[FilterValue] | None = None,
     ) -> QueryResult:
         """
@@ -1121,11 +1226,15 @@ def create_router(
 
         Raises:
             404: If dashboard or widget not found.
+            403: If user lacks permission to view.
             400: If widget has no query or query fails validation.
         """
-        dashboard = await store.get_dashboard(dashboard_id, tenant_id=DEFAULT_TENANT_ID)
+        dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if dashboard is None:
             raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+
+        if not can_view_dashboard(dashboard, auth.user_id):
+            raise HTTPException(status_code=403, detail="Permission denied")
 
         # Find the widget
         widget = None
@@ -1163,7 +1272,10 @@ def create_router(
     # ========================================================================
 
     @router.get("/dashboards/{dashboard_id}/export", response_model=DashboardExport)
-    async def export_dashboard(dashboard_id: str) -> DashboardExport:
+    async def export_dashboard(
+        dashboard_id: str,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> DashboardExport:
         """
         Export a dashboard to a portable format.
 
@@ -1175,10 +1287,14 @@ def create_router(
 
         Raises:
             404: If dashboard not found.
+            403: If user lacks permission to view.
         """
-        dashboard = await store.get_dashboard(dashboard_id, tenant_id=DEFAULT_TENANT_ID)
+        dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if dashboard is None:
             raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+
+        if not can_view_dashboard(dashboard, auth.user_id):
+            raise HTTPException(status_code=403, detail="Permission denied")
 
         # Convert widgets to dict format without IDs
         widget_dicts: list[dict[str, Any]] = []
@@ -1202,14 +1318,13 @@ def create_router(
     @router.post("/dashboards/import", response_model=Dashboard, status_code=201)
     async def import_dashboard(
         request: DashboardImportRequest,
-        owner_id: str | None = None,
+        auth: AuthContext = Depends(get_auth_context),
     ) -> Dashboard:
         """
         Import a dashboard from exported data.
 
         Args:
             request: Import request with export data.
-            owner_id: Optional owner ID for the imported dashboard.
 
         Returns:
             Imported dashboard.
@@ -1223,8 +1338,8 @@ def create_router(
                 description=export_data.description,
                 layout=export_data.layout,
             ),
-            tenant_id=DEFAULT_TENANT_ID,
-            owner_id=owner_id,
+            tenant_id=auth.tenant_id,
+            owner_id=auth.user_id,
         )
 
         # Update with filters
@@ -1232,7 +1347,7 @@ def create_router(
             await store.update_dashboard(
                 dashboard.id,
                 DashboardUpdate(filters=export_data.filters),
-                tenant_id=DEFAULT_TENANT_ID,
+                tenant_id=auth.tenant_id,
             )
 
         # Add widgets
@@ -1246,11 +1361,11 @@ def create_router(
                     position=widget_dict["position"],
                     config=widget_dict.get("config"),
                 ),
-                tenant_id=DEFAULT_TENANT_ID,
+                tenant_id=auth.tenant_id,
             )
 
         # Return the complete dashboard
-        result = await store.get_dashboard(dashboard.id, tenant_id=DEFAULT_TENANT_ID)
+        result = await store.get_dashboard(dashboard.id, tenant_id=auth.tenant_id)
         if result is None:
             raise HTTPException(status_code=500, detail="Failed to retrieve imported dashboard")
         return result

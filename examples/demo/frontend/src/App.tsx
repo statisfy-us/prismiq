@@ -5,10 +5,19 @@ import { DashboardPage } from './pages/DashboardPage'
 import { ExplorePage } from './pages/ExplorePage'
 import { SchemaPage } from './pages/SchemaPage'
 
+// Demo uses a fixed tenant for simplicity
+// In production, this would come from your auth system
+const DEMO_TENANT_ID = 'demo-tenant'
+const DEMO_USER_ID = 'demo-user'
+
 export function App() {
   return (
     <ThemeProvider defaultMode="system">
-      <AnalyticsProvider config={{ endpoint: '/api' }}>
+      <AnalyticsProvider
+        config={{ endpoint: '/api' }}
+        tenantId={DEMO_TENANT_ID}
+        userId={DEMO_USER_ID}
+      >
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Routes>
             <Route path="/" element={<Layout />}>
