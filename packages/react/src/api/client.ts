@@ -11,6 +11,9 @@ import type {
   DatabaseSchema,
   QueryDefinition,
   QueryResult,
+  SavedQuery,
+  SavedQueryCreate,
+  SavedQueryUpdate,
   TableSchema,
   ValidationResult,
   Widget,
@@ -433,6 +436,81 @@ export class PrismiqClient {
       {
         method: 'PUT',
         body: JSON.stringify(positions),
+      }
+    );
+  }
+
+  // ============================================================================
+  // Saved Query Methods
+  // ============================================================================
+
+  /**
+   * List all saved queries accessible to the current user.
+   *
+   * @returns Array of saved queries.
+   */
+  async listSavedQueries(): Promise<SavedQuery[]> {
+    const response = await this.request<{ queries: SavedQuery[] }>(
+      '/saved-queries'
+    );
+    return response.queries;
+  }
+
+  /**
+   * Get a specific saved query by ID.
+   *
+   * @param id - The saved query ID.
+   * @returns The saved query.
+   */
+  async getSavedQuery(id: string): Promise<SavedQuery> {
+    return this.request<SavedQuery>(
+      `/saved-queries/${encodeURIComponent(id)}`
+    );
+  }
+
+  /**
+   * Create a new saved query.
+   *
+   * @param data - Saved query creation data.
+   * @returns The created saved query.
+   */
+  async createSavedQuery(data: SavedQueryCreate): Promise<SavedQuery> {
+    return this.request<SavedQuery>('/saved-queries', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  /**
+   * Update an existing saved query.
+   *
+   * @param id - The saved query ID.
+   * @param data - Saved query update data.
+   * @returns The updated saved query.
+   */
+  async updateSavedQuery(
+    id: string,
+    data: SavedQueryUpdate
+  ): Promise<SavedQuery> {
+    return this.request<SavedQuery>(
+      `/saved-queries/${encodeURIComponent(id)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }
+    );
+  }
+
+  /**
+   * Delete a saved query.
+   *
+   * @param id - The saved query ID.
+   */
+  async deleteSavedQuery(id: string): Promise<void> {
+    await this.request<void>(
+      `/saved-queries/${encodeURIComponent(id)}`,
+      {
+        method: 'DELETE',
       }
     );
   }

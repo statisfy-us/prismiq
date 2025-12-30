@@ -17,7 +17,7 @@ from prismiq.cache import CacheBackend, CacheConfig, QueryCache
 from prismiq.dashboard_store import DashboardStore, InMemoryDashboardStore
 from prismiq.executor import QueryExecutor
 from prismiq.metrics import record_cache_hit, record_query_execution, set_active_connections
-from prismiq.persistence import PostgresDashboardStore, ensure_tables
+from prismiq.persistence import PostgresDashboardStore, SavedQueryStore, ensure_tables
 from prismiq.query import QueryBuilder, ValidationResult
 from prismiq.schema import SchemaIntrospector
 from prismiq.schema_config import (
@@ -148,6 +148,7 @@ class PrismiqEngine:
         self._builder: QueryBuilder | None = None
         self._schema: DatabaseSchema | None = None
         self._dashboard_store: DashboardStore | None = None
+        self._saved_query_store: SavedQueryStore | None = None
 
     @property
     def cache(self) -> CacheBackend | None:
@@ -176,6 +177,20 @@ class PrismiqEngine:
             The dashboard store.
         """
         return self.dashboard_store
+
+    @property
+    def saved_query_store(self) -> SavedQueryStore:
+        """Get the saved query store.
+
+        Returns:
+            The saved query store (PostgreSQL-backed).
+
+        Raises:
+            RuntimeError: If engine has not been started.
+        """
+        if self._saved_query_store is None:
+            raise RuntimeError("Engine not started. Call 'await engine.startup()' first.")
+        return self._saved_query_store
 
     async def startup(self) -> None:
         """
@@ -217,8 +232,11 @@ class PrismiqEngine:
             # Create tables if they don't exist
             await ensure_tables(self._pool)
             self._dashboard_store = PostgresDashboardStore(self._pool)
+            self._saved_query_store = SavedQueryStore(self._pool)
         else:
             self._dashboard_store = InMemoryDashboardStore()
+            # SavedQueryStore requires PostgreSQL - no in-memory fallback
+            self._saved_query_store = None  # type: ignore[assignment]
 
         # Update metrics
         if self._enable_metrics:
@@ -239,6 +257,7 @@ class PrismiqEngine:
         self._builder = None
         self._schema = None
         self._dashboard_store = None
+        self._saved_query_store = None
 
         # Update metrics
         if self._enable_metrics:

@@ -79,6 +79,7 @@ saved_queries_table = Table(
     Column("description", Text, nullable=True),
     Column("query", JSONB, nullable=False),
     Column("owner_id", String(255), nullable=True),
+    Column("is_shared", Boolean, nullable=False, default=False),
     Column("created_at", TIMESTAMP(timezone=True), nullable=False),
     Column("updated_at", TIMESTAMP(timezone=True), nullable=False),
     UniqueConstraint("tenant_id", "name", name="unique_query_name_per_tenant"),

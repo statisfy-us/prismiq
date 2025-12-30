@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS prismiq_saved_queries (
     description TEXT,
     query JSONB NOT NULL,
     owner_id VARCHAR(255),
+    is_shared BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 

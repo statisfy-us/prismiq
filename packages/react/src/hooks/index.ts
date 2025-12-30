@@ -31,3 +31,9 @@ export type {
   UseDebouncedLayoutSaveOptions,
   UseDebouncedLayoutSaveResult,
 } from './useDebouncedLayoutSave';
+
+export { useSavedQueries } from './useSavedQueries';
+export type {
+  UseSavedQueriesOptions,
+  UseSavedQueriesResult,
+} from './useSavedQueries';

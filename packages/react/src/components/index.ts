@@ -192,3 +192,11 @@ export type {
 export { AutoSaveIndicator } from './AutoSaveIndicator';
 
 export type { AutoSaveIndicatorProps } from './AutoSaveIndicator';
+
+// ============================================================================
+// Saved Query Picker
+// ============================================================================
+
+export { SavedQueryPicker } from './SavedQueryPicker';
+
+export type { SavedQueryPickerProps } from './SavedQueryPicker';

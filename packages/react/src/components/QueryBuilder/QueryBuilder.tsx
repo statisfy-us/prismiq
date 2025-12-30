@@ -18,6 +18,7 @@ import type {
   JoinDefinition,
   QueryDefinition,
   QueryResult,
+  SavedQuery,
   SortDefinition,
   TableSchema,
 } from '../../types';
@@ -25,6 +26,7 @@ import { ColumnSelector } from '../ColumnSelector';
 import { FilterBuilder } from '../FilterBuilder';
 import { JoinBuilder } from '../JoinBuilder';
 import { ResultsTable } from '../ResultsTable';
+import { SavedQueryPicker } from '../SavedQueryPicker';
 import { SchemaExplorer } from '../SchemaExplorer';
 import { SortBuilder } from '../SortBuilder';
 import { QueryBuilderToolbar } from './QueryBuilderToolbar';
@@ -51,6 +53,12 @@ export interface QueryBuilderProps {
   showSqlPreview?: boolean;
   /** Whether to show results table. */
   showResultsTable?: boolean;
+  /** Whether to show saved queries picker. */
+  showSavedQueries?: boolean;
+  /** Callback when a saved query is loaded. */
+  onSavedQueryLoad?: (savedQuery: SavedQuery) => void;
+  /** Callback when the current query is saved. */
+  onSavedQuerySave?: (savedQuery: SavedQuery) => void;
   /** Layout direction. */
   layout?: 'horizontal' | 'vertical';
   /** Additional class name. */
@@ -150,6 +158,9 @@ export function QueryBuilder({
   autoExecuteDelay = 500,
   showSqlPreview = true,
   showResultsTable = true,
+  showSavedQueries = false,
+  onSavedQueryLoad,
+  onSavedQuerySave,
   layout = 'horizontal',
   className,
   style,
@@ -367,6 +378,25 @@ export function QueryBuilder({
     setExecuteQuery(null);
   }, []);
 
+  // Handle saved query selection
+  const handleSavedQuerySelect = useCallback(
+    (savedQuery: SavedQuery) => {
+      setQuery(savedQuery.query);
+      setSelectedTable(savedQuery.query.tables[0]?.name);
+      setExecuteQuery(null);
+      onSavedQueryLoad?.(savedQuery);
+    },
+    [onSavedQueryLoad]
+  );
+
+  // Handle saved query save
+  const handleSavedQuerySave = useCallback(
+    (savedQuery: SavedQuery) => {
+      onSavedQuerySave?.(savedQuery);
+    },
+    [onSavedQuerySave]
+  );
+
   if (schemaLoading || !schema) {
     return (
       <div className={className} style={{ ...containerStyles, ...style }}>
@@ -431,13 +461,23 @@ export function QueryBuilder({
             />
           </div>
 
-          <QueryBuilderToolbar
-            isExecuting={isExecuting}
-            canExecute={canExecute}
-            onExecute={handleExecute}
-            onPreview={handlePreview}
-            onClear={handleClear}
-          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--prismiq-spacing-sm)' }}>
+            <QueryBuilderToolbar
+              isExecuting={isExecuting}
+              canExecute={canExecute}
+              onExecute={handleExecute}
+              onPreview={handlePreview}
+              onClear={handleClear}
+              style={{ flex: 1 }}
+            />
+            {showSavedQueries && (
+              <SavedQueryPicker
+                currentQuery={canExecute ? query : null}
+                onSelect={handleSavedQuerySelect}
+                onSave={handleSavedQuerySave}
+              />
+            )}
+          </div>
 
           {showSqlPreview && (
             <QueryPreview

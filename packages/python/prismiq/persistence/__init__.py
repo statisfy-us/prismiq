@@ -1,6 +1,7 @@
 """Database persistence layer for Prismiq."""
 
 from prismiq.persistence.postgres_store import PostgresDashboardStore
+from prismiq.persistence.saved_query_store import SavedQueryStore
 from prismiq.persistence.setup import drop_tables, ensure_tables, table_exists
 from prismiq.persistence.tables import (
     dashboards_table,
@@ -12,6 +13,7 @@ from prismiq.persistence.tables import (
 
 __all__ = [
     "PostgresDashboardStore",
+    "SavedQueryStore",
     "dashboards_table",
     "drop_tables",
     "ensure_tables",

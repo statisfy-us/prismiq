@@ -467,6 +467,80 @@ class QueryResult(BaseModel):
 
 
 # ============================================================================
+# Saved Query Types
+# ============================================================================
+
+
+class SavedQuery(BaseModel):
+    """A saved query for reuse across dashboards."""
+
+    model_config = ConfigDict()
+
+    id: str
+    """Unique identifier for the saved query."""
+
+    name: str
+    """Display name for the saved query."""
+
+    description: str | None = None
+    """Optional description of what the query does."""
+
+    query: QueryDefinition
+    """The query definition."""
+
+    tenant_id: str
+    """Tenant that owns this saved query."""
+
+    owner_id: str | None = None
+    """User who created this query (None for shared queries)."""
+
+    is_shared: bool = False
+    """Whether the query is shared with all users in the tenant."""
+
+    created_at: str | None = None
+    """ISO timestamp when the query was created."""
+
+    updated_at: str | None = None
+    """ISO timestamp when the query was last updated."""
+
+
+class SavedQueryCreate(BaseModel):
+    """Data for creating a saved query."""
+
+    model_config = ConfigDict()
+
+    name: str
+    """Display name for the saved query."""
+
+    description: str | None = None
+    """Optional description of what the query does."""
+
+    query: QueryDefinition
+    """The query definition to save."""
+
+    is_shared: bool = False
+    """Whether to share the query with all users in the tenant."""
+
+
+class SavedQueryUpdate(BaseModel):
+    """Data for updating a saved query."""
+
+    model_config = ConfigDict()
+
+    name: str | None = None
+    """New display name."""
+
+    description: str | None = None
+    """New description."""
+
+    query: QueryDefinition | None = None
+    """Updated query definition."""
+
+    is_shared: bool | None = None
+    """Whether to share the query."""
+
+
+# ============================================================================
 # Exception Types
 # ============================================================================
 

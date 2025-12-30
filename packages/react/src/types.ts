@@ -473,3 +473,59 @@ export interface WidgetPositionUpdate {
   /** New position. */
   position: WidgetPosition;
 }
+
+// ============================================================================
+// Saved Query Types
+// ============================================================================
+
+/**
+ * A saved query for reuse across dashboards.
+ */
+export interface SavedQuery {
+  /** Unique saved query ID. */
+  id: string;
+  /** Query name. */
+  name: string;
+  /** Query description. */
+  description: string | null;
+  /** The query definition. */
+  query: QueryDefinition;
+  /** Tenant ID for multi-tenancy. */
+  tenant_id: string;
+  /** Owner user ID. */
+  owner_id: string | null;
+  /** Whether the query is shared with all users. */
+  is_shared: boolean;
+  /** Creation timestamp. */
+  created_at: string | null;
+  /** Last update timestamp. */
+  updated_at: string | null;
+}
+
+/**
+ * Data for creating a saved query.
+ */
+export interface SavedQueryCreate {
+  /** Query name. */
+  name: string;
+  /** Query description. */
+  description?: string | null;
+  /** The query definition. */
+  query: QueryDefinition;
+  /** Whether to share with all users. */
+  is_shared?: boolean;
+}
+
+/**
+ * Data for updating a saved query.
+ */
+export interface SavedQueryUpdate {
+  /** Query name. */
+  name?: string;
+  /** Query description. */
+  description?: string | null;
+  /** The query definition. */
+  query?: QueryDefinition;
+  /** Whether to share with all users. */
+  is_shared?: boolean;
+}

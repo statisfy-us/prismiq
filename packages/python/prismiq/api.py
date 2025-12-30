@@ -51,6 +51,9 @@ from prismiq.types import (
     QueryDefinition,
     QueryResult,
     QueryValidationError,
+    SavedQuery,
+    SavedQueryCreate,
+    SavedQueryUpdate,
     TableNotFoundError,
     TableSchema,
 )
@@ -310,6 +313,18 @@ class DashboardImportRequest(BaseModel):
 
     name_override: str | None = None
     """Optional name to use instead of the export's name."""
+
+
+# ============================================================================
+# Saved Query Request/Response Models
+# ============================================================================
+
+
+class SavedQueryListResponse(BaseModel):
+    """Response model for saved query list endpoint."""
+
+    queries: list[SavedQuery]
+    """List of saved queries."""
 
 
 # ============================================================================
@@ -1415,5 +1430,139 @@ def create_router(
         if result is None:
             raise HTTPException(status_code=500, detail="Failed to retrieve imported dashboard")
         return result
+
+    # ========================================================================
+    # Saved Query Endpoints
+    # ========================================================================
+
+    @router.get("/saved-queries", response_model=SavedQueryListResponse)
+    async def list_saved_queries(
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> SavedQueryListResponse:
+        """
+        List saved queries for the current tenant.
+
+        Returns queries owned by the user or shared with all users.
+
+        Returns:
+            List of saved queries.
+        """
+        saved_query_store = engine.saved_query_store
+        queries = await saved_query_store.list(
+            tenant_id=auth.tenant_id,
+            user_id=auth.user_id,
+        )
+        return SavedQueryListResponse(queries=queries)
+
+    @router.get("/saved-queries/{query_id}", response_model=SavedQuery)
+    async def get_saved_query(
+        query_id: str,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> SavedQuery:
+        """
+        Get a saved query by ID.
+
+        Args:
+            query_id: Saved query ID.
+
+        Returns:
+            Saved query.
+
+        Raises:
+            404: If saved query not found.
+        """
+        saved_query_store = engine.saved_query_store
+        query = await saved_query_store.get(query_id, tenant_id=auth.tenant_id)
+        if query is None:
+            raise HTTPException(status_code=404, detail=f"Saved query '{query_id}' not found")
+        return query
+
+    @router.post("/saved-queries", response_model=SavedQuery, status_code=201)
+    async def create_saved_query(
+        data: SavedQueryCreate,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> SavedQuery:
+        """
+        Create a new saved query.
+
+        Args:
+            data: Saved query creation data.
+
+        Returns:
+            Created saved query.
+        """
+        saved_query_store = engine.saved_query_store
+        return await saved_query_store.create(
+            data,
+            tenant_id=auth.tenant_id,
+            owner_id=auth.user_id,
+        )
+
+    @router.patch("/saved-queries/{query_id}", response_model=SavedQuery)
+    async def update_saved_query(
+        query_id: str,
+        data: SavedQueryUpdate,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> SavedQuery:
+        """
+        Update a saved query.
+
+        Only the owner can update a query.
+
+        Args:
+            query_id: Saved query ID.
+            data: Fields to update.
+
+        Returns:
+            Updated saved query.
+
+        Raises:
+            404: If saved query not found or user is not owner.
+        """
+        saved_query_store = engine.saved_query_store
+        updated = await saved_query_store.update(
+            query_id,
+            data,
+            tenant_id=auth.tenant_id,
+            user_id=auth.user_id,
+        )
+        if updated is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Saved query '{query_id}' not found or permission denied",
+            )
+        return updated
+
+    @router.delete("/saved-queries/{query_id}", response_model=SuccessResponse)
+    async def delete_saved_query(
+        query_id: str,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> SuccessResponse:
+        """
+        Delete a saved query.
+
+        Only the owner can delete a query.
+
+        Args:
+            query_id: Saved query ID.
+
+        Returns:
+            Success response.
+
+        Raises:
+            404: If saved query not found or user is not owner.
+        """
+        saved_query_store = engine.saved_query_store
+        deleted = await saved_query_store.delete(
+            query_id,
+            tenant_id=auth.tenant_id,
+            user_id=auth.user_id,
+        )
+        if not deleted:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Saved query '{query_id}' not found or permission denied",
+            )
+        return SuccessResponse(message=f"Saved query '{query_id}' deleted")
 
     return router
