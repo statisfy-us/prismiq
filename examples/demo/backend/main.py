@@ -22,14 +22,13 @@ from fastapi.middleware.cors import CORSMiddleware
 # Add the packages/python directory to path for development
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../packages/python"))
 
-from prismiq import InMemoryDashboardStore, PrismiqEngine, create_router
+from prismiq import PrismiqEngine, create_router
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-# Global engine and dashboard store
+# Global engine
 engine: PrismiqEngine | None = None
-dashboard_store = InMemoryDashboardStore()
 
 
 @asynccontextmanager
@@ -51,23 +50,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         database_url=database_url,
         query_timeout=30.0,
         max_rows=10000,
+        persist_dashboards=True,  # Use PostgreSQL for dashboard persistence
     )
     await engine.startup()
     print("Database connected!")
 
     # Create and include the Prismiq router
-    router = create_router(engine, dashboard_store)
+    router = create_router(engine)
     app.include_router(router, prefix="/api")
-
-    # Seed dashboards
-    print("Seeding dashboards...")
-    try:
-        from seed_dashboards import seed_dashboards
-
-        await seed_dashboards(dashboard_store)
-        print("Dashboards seeded!")
-    except Exception as e:
-        print(f"Warning: Could not seed dashboards: {e}")
 
     yield
 

@@ -3,7 +3,7 @@ import {
   useTheme,
   useDashboards,
   useDashboardMutations,
-  Dashboard,
+  DashboardEditor,
   DashboardList,
   DashboardDialog,
 } from '@prismiq/react'
@@ -174,7 +174,10 @@ export function DashboardPage() {
           )}
         </div>
         <div style={contentStyle}>
-          <Dashboard id={selectedId} showTitle />
+          <DashboardEditor
+            dashboardId={selectedId}
+            onSave={() => refetch()}
+          />
         </div>
       </div>
     )

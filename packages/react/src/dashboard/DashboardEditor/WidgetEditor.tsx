@@ -9,8 +9,9 @@ import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { Checkbox } from '../../components/ui/Checkbox';
 import { Icon } from '../../components/ui/Icon';
+import { SavedQueryPicker } from '../../components/SavedQueryPicker';
 import type { Widget, WidgetConfig, WidgetEditorProps } from '../types';
-import type { QueryDefinition, TableSchema, ColumnSchema } from '../../types';
+import type { QueryDefinition, TableSchema, ColumnSchema, SavedQuery } from '../../types';
 
 /**
  * Default widget configurations by type.
@@ -53,7 +54,8 @@ export function WidgetEditor({
   const [config, setConfig] = useState<WidgetConfig>(
     widget.config || getDefaultConfig(widget.type)
   );
-  const [query] = useState<QueryDefinition | null>(widget.query);
+  const [query, setQuery] = useState<QueryDefinition | null>(widget.query);
+  const [queryName, setQueryName] = useState<string | null>(null);
 
   // Update config field
   const updateConfig = useCallback(
@@ -62,6 +64,18 @@ export function WidgetEditor({
     },
     []
   );
+
+  // Handle saved query selection
+  const handleSelectSavedQuery = useCallback((savedQuery: SavedQuery) => {
+    setQuery(savedQuery.query);
+    setQueryName(savedQuery.name);
+  }, []);
+
+  // Handle clear query
+  const handleClearQuery = useCallback(() => {
+    setQuery(null);
+    setQueryName(null);
+  }, []);
 
   // Handle save
   const handleSave = useCallback(() => {
@@ -380,25 +394,65 @@ export function WidgetEditor({
             {renderConfigFields()}
           </div>
 
-          {/* Query section placeholder */}
+          {/* Query section */}
           <div style={sectionStyle}>
             <h3 style={sectionTitleStyle}>Data Source</h3>
-            <div
-              style={{
-                padding: theme.spacing.md,
-                backgroundColor: theme.colors.background,
-                borderRadius: theme.radius.md,
-                border: `1px dashed ${theme.colors.border}`,
-                textAlign: 'center',
-                color: theme.colors.textMuted,
-              }}
-            >
-              {query ? (
-                <span>Query configured - {query.tables?.length || 0} table(s)</span>
-              ) : (
-                <span>No query configured. Use QueryBuilder to define the data source.</span>
-              )}
-            </div>
+            {query ? (
+              <div
+                style={{
+                  padding: theme.spacing.md,
+                  backgroundColor: theme.colors.background,
+                  borderRadius: theme.radius.md,
+                  border: `1px solid ${theme.colors.border}`,
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginBottom: theme.spacing.sm,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm }}>
+                    <Icon name="table" size={16} />
+                    <span style={{ fontWeight: 500, color: theme.colors.text }}>
+                      {queryName || 'Custom Query'}
+                    </span>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={handleClearQuery}>
+                    <Icon name="x" size={16} />
+                  </Button>
+                </div>
+                <div style={{ fontSize: theme.fontSizes.sm, color: theme.colors.textMuted }}>
+                  {query.tables?.length || 0} table(s), {query.columns?.length || 0} column(s)
+                  {query.filters && query.filters.length > 0 && `, ${query.filters.length} filter(s)`}
+                </div>
+              </div>
+            ) : (
+              <div
+                style={{
+                  padding: theme.spacing.md,
+                  backgroundColor: theme.colors.background,
+                  borderRadius: theme.radius.md,
+                  border: `1px dashed ${theme.colors.border}`,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: theme.spacing.md,
+                }}
+              >
+                <div style={{ textAlign: 'center', color: theme.colors.textMuted }}>
+                  <Icon name="table" size={24} style={{ marginBottom: theme.spacing.xs }} />
+                  <div>Select a saved query to power this widget</div>
+                </div>
+                <SavedQueryPicker
+                  currentQuery={null}
+                  onSelect={handleSelectSavedQuery}
+                  showSave={false}
+                />
+              </div>
+            )}
           </div>
         </div>
 

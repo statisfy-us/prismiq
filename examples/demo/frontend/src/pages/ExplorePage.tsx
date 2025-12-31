@@ -1,6 +1,6 @@
 import { useState, CSSProperties } from 'react'
-import { useTheme, QueryBuilder, ResultsTable, useQuery } from '@prismiq/react'
-import type { QueryDefinition } from '@prismiq/react'
+import { useTheme, QueryBuilder, ResultsTable, useQuery, SavedQueryPicker } from '@prismiq/react'
+import type { QueryDefinition, SavedQuery } from '@prismiq/react'
 
 export function ExplorePage() {
   const { resolvedMode } = useTheme()
@@ -35,8 +35,22 @@ export function ExplorePage() {
   const titleStyle: CSSProperties = {
     fontSize: '18px',
     fontWeight: 600,
-    marginBottom: '16px',
     color: resolvedMode === 'dark' ? '#f4f4f5' : '#111827',
+  }
+
+  const headerStyle: CSSProperties = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '16px',
+  }
+
+  const handleSelectSavedQuery = (savedQuery: SavedQuery) => {
+    setQuery(savedQuery.query)
+  }
+
+  const handleSaveQuery = (savedQuery: SavedQuery) => {
+    console.log('Query saved:', savedQuery.name)
   }
 
   const resultContainerStyle: CSSProperties = {
@@ -101,8 +115,17 @@ export function ExplorePage() {
   return (
     <div style={containerStyle}>
       <div style={sidebarStyle}>
-        <h2 style={titleStyle}>Query Builder</h2>
+        <div style={headerStyle}>
+          <h2 style={titleStyle}>Query Builder</h2>
+          <SavedQueryPicker
+            currentQuery={query}
+            onSelect={handleSelectSavedQuery}
+            onSave={handleSaveQuery}
+            showSave={true}
+          />
+        </div>
         <QueryBuilder
+          initialQuery={query ?? undefined}
           onQueryChange={setQuery}
           showResultsTable={false}
           showSqlPreview={false}

@@ -458,6 +458,35 @@ class PrismiqEngine:
         assert self._builder is not None
         return self._builder.validate_detailed(query)
 
+    def generate_sql(self, query: QueryDefinition) -> str:
+        """
+        Generate SQL from a query definition without executing.
+
+        Useful for previewing the SQL that will be executed.
+
+        Args:
+            query: Query definition to generate SQL for.
+
+        Returns:
+            The generated SQL string.
+
+        Raises:
+            RuntimeError: If the engine has not been started.
+            QueryValidationError: If the query is invalid.
+        """
+        self._ensure_started()
+        assert self._builder is not None
+
+        # Validate first
+        errors = self._builder.validate(query)
+        if errors:
+            from .types import QueryValidationError
+
+            raise QueryValidationError("; ".join(errors), errors)
+
+        sql, _ = self._builder.build(query)
+        return sql
+
     # ========================================================================
     # Cache Methods
     # ========================================================================

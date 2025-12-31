@@ -311,7 +311,8 @@ export class PrismiqClient {
    * @returns Array of dashboards.
    */
   async listDashboards(): Promise<Dashboard[]> {
-    return this.request<Dashboard[]>('/dashboards');
+    const response = await this.request<{ dashboards: Dashboard[] }>('/dashboards');
+    return response.dashboards;
   }
 
   /**

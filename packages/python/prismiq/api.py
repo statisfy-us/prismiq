@@ -596,6 +596,30 @@ def create_router(
         result = engine.validate_query_detailed(query)
         return DetailedValidationResponse(result=result)
 
+    @router.post("/query/sql")
+    async def generate_sql(query: QueryDefinition) -> dict[str, str]:
+        """
+        Generate SQL from a query definition without executing.
+
+        Useful for previewing the SQL that will be generated.
+
+        Args:
+            query: Query definition to generate SQL for.
+
+        Returns:
+            Object with the generated SQL string.
+
+        Raises:
+            400: If the query fails validation.
+        """
+        try:
+            sql = engine.generate_sql(query)
+            return {"sql": sql}
+        except QueryValidationError as e:
+            raise HTTPException(
+                status_code=400, detail={"message": e.message, "errors": e.errors}
+            ) from e
+
     @router.post("/query/execute", response_model=QueryResult)
     async def execute_query(query: QueryDefinition) -> QueryResult:
         """

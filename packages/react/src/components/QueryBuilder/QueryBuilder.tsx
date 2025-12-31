@@ -177,6 +177,18 @@ export function QueryBuilder({
   const [sqlPreview, setSqlPreview] = useState<string | null>(null);
   const [sqlError, setSqlError] = useState<string | null>(null);
 
+  // Sync internal state when initialQuery prop changes (e.g., loading saved query)
+  useEffect(() => {
+    if (initialQuery) {
+      setQuery(initialQuery);
+      // Auto-select the first table for filter/sort context
+      const firstTable = initialQuery.tables[0];
+      if (firstTable) {
+        setSelectedTable(firstTable.name);
+      }
+    }
+  }, [initialQuery]);
+
   // Use the query hook for execution
   const [executeQuery, setExecuteQuery] = useState<QueryDefinition | null>(null);
   const { data: result, isLoading: isExecuting, error } = useQueryHook(

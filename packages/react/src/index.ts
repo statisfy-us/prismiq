@@ -58,6 +58,10 @@ export type {
   // Result types
   QueryResult,
   ValidationResult,
+  // Saved query types
+  SavedQuery,
+  SavedQueryCreate,
+  SavedQueryUpdate,
 } from './types';
 
 // ============================================================================
@@ -102,6 +106,7 @@ export {
   useDashboards,
   useDashboard as useDashboardData,
   useDashboardMutations,
+  useSavedQueries,
 } from './hooks';
 export type {
   UseSchemaResult,
@@ -113,6 +118,8 @@ export type {
   UseDashboardResult,
   MutationState,
   UseDashboardMutationsResult,
+  UseSavedQueriesOptions,
+  UseSavedQueriesResult,
 } from './hooks';
 
 // ============================================================================
@@ -237,6 +244,8 @@ export {
   QueryBuilder,
   QueryBuilderToolbar,
   QueryPreview,
+  // Saved Queries
+  SavedQueryPicker,
 } from './components';
 
 export type {
@@ -298,6 +307,8 @@ export type {
   QueryBuilderState,
   QueryBuilderToolbarProps,
   QueryPreviewProps,
+  // Saved Queries
+  SavedQueryPickerProps,
 } from './components';
 
 // ============================================================================
