@@ -200,3 +200,11 @@ export type { AutoSaveIndicatorProps } from './AutoSaveIndicator';
 export { SavedQueryPicker } from './SavedQueryPicker';
 
 export type { SavedQueryPickerProps } from './SavedQueryPicker';
+
+// ============================================================================
+// Custom SQL Editor
+// ============================================================================
+
+export { CustomSQLEditor } from './CustomSQLEditor';
+
+export type { CustomSQLEditorProps } from './CustomSQLEditor';

@@ -529,3 +529,29 @@ export interface SavedQueryUpdate {
   /** Whether to share with all users. */
   is_shared?: boolean;
 }
+
+// ============================================================================
+// Custom SQL Types
+// ============================================================================
+
+/**
+ * Request for executing raw SQL.
+ */
+export interface ExecuteSQLRequest {
+  /** Raw SQL query (SELECT only). */
+  sql: string;
+  /** Optional named parameters for the query. */
+  params?: Record<string, unknown>;
+}
+
+/**
+ * Result of SQL validation.
+ */
+export interface SQLValidationResult {
+  /** Whether the SQL is valid. */
+  valid: boolean;
+  /** List of validation errors (empty if valid). */
+  errors: string[];
+  /** List of tables referenced in the query. */
+  tables: string[];
+}

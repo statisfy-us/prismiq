@@ -29,6 +29,7 @@ dependencies = [
     "pydantic>=2.0.0",
     "fastapi>=0.109.0",
     "sqlalchemy>=2.0.0",  # Core only, not ORM
+    "sqlglot>=26.0.0",  # SQL parsing for custom SQL validation
     "uvicorn>=0.27.0",
 ]
 
@@ -133,6 +134,8 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101", "S105", "S106"]  # Allow asserts, hardcoded passwords in tests
 "prismiq/query.py" = ["S608"]  # SQL construction is intentional in query builder
+"prismiq/sql_validator.py" = ["S608"]  # SQL validation module handles raw SQL
+"prismiq/executor.py" = ["S608"]  # SQL execution with validated/sanitized SQL
 
 [tool.ruff.lint.isort]
 known-first-party = ["prismiq"]

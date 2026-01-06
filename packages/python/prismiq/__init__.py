@@ -167,6 +167,9 @@ from prismiq.schema_config import (
     TableConfig,
 )
 
+# SQL validation
+from prismiq.sql_validator import SQLValidationError, SQLValidationResult, SQLValidator
+
 # Time series utilities
 from prismiq.timeseries import (
     TimeBucket,
@@ -321,6 +324,10 @@ __all__ = [
     "Relationship",
     # Request logging middleware
     "RequestLoggingMiddleware",
+    # SQL validation
+    "SQLValidationError",
+    "SQLValidationResult",
+    "SQLValidator",
     # Schema cache
     "SchemaCache",
     "SchemaConfig",

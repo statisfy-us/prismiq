@@ -43,6 +43,7 @@ from prismiq.schema_config import (
     SchemaConfig,
     TableConfig,
 )
+from prismiq.sql_validator import SQLValidationError
 from prismiq.timeseries import TimeInterval
 from prismiq.transforms import pivot_data
 from prismiq.trends import ComparisonPeriod, TrendResult, add_trend_column
@@ -109,6 +110,29 @@ class PreviewRequest(BaseModel):
 
     limit: int = 100
     """Maximum number of rows to return."""
+
+
+class ExecuteSQLRequest(BaseModel):
+    """Request model for raw SQL execution endpoint."""
+
+    sql: str
+    """Raw SQL query (SELECT only)."""
+
+    params: dict[str, Any] | None = None
+    """Optional named parameters for the query."""
+
+
+class SQLValidationResponse(BaseModel):
+    """Response model for SQL validation endpoint."""
+
+    valid: bool
+    """Whether the SQL is valid."""
+
+    errors: list[str]
+    """List of validation errors (empty if valid)."""
+
+    tables: list[str]
+    """List of tables referenced in the query."""
 
 
 class TableConfigUpdate(BaseModel):
@@ -664,6 +688,61 @@ def create_router(
         try:
             return await engine.preview_query(request.query, limit=request.limit)
         except QueryValidationError as e:
+            raise HTTPException(
+                status_code=400, detail={"message": e.message, "errors": e.errors}
+            ) from e
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    # ========================================================================
+    # Custom SQL Endpoints
+    # ========================================================================
+
+    @router.post("/query/validate-sql", response_model=SQLValidationResponse)
+    async def validate_sql(request: ExecuteSQLRequest) -> SQLValidationResponse:
+        """
+        Validate a raw SQL query without executing it.
+
+        Checks that the SQL is a valid SELECT statement and only
+        references tables visible in the schema.
+
+        Args:
+            request: SQL validation request.
+
+        Returns:
+            SQLValidationResponse with validation status and details.
+        """
+        result = await engine.validate_sql(request.sql)
+        return SQLValidationResponse(
+            valid=result.valid,
+            errors=result.errors,
+            tables=result.tables,
+        )
+
+    @router.post("/query/execute-sql", response_model=QueryResult)
+    async def execute_sql(request: ExecuteSQLRequest) -> QueryResult:
+        """
+        Execute a raw SQL query.
+
+        Only SELECT statements are allowed. Queries are restricted
+        to tables visible in the schema.
+
+        Args:
+            request: SQL execution request with query and optional params.
+
+        Returns:
+            QueryResult with columns, rows, and execution metadata.
+
+        Raises:
+            400: If the SQL fails validation.
+            500: If the query execution fails.
+        """
+        try:
+            return await engine.execute_raw_sql(
+                sql=request.sql,
+                params=request.params,
+            )
+        except SQLValidationError as e:
             raise HTTPException(
                 status_code=400, detail={"message": e.message, "errors": e.errors}
             ) from e

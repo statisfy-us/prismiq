@@ -9,11 +9,13 @@ import type {
   DashboardCreate,
   DashboardUpdate,
   DatabaseSchema,
+  ExecuteSQLRequest,
   QueryDefinition,
   QueryResult,
   SavedQuery,
   SavedQueryCreate,
   SavedQueryUpdate,
+  SQLValidationResult,
   TableSchema,
   ValidationResult,
   Widget,
@@ -298,6 +300,50 @@ export class PrismiqClient {
     return this.request<QueryResult>(url, {
       method: 'POST',
       body: JSON.stringify(query),
+    });
+  }
+
+  // ============================================================================
+  // Custom SQL Methods
+  // ============================================================================
+
+  /**
+   * Validate a raw SQL query without executing it.
+   *
+   * Checks that the SQL is a valid SELECT statement and only
+   * references tables visible in the schema.
+   *
+   * @param sql - Raw SQL query to validate.
+   * @returns Validation result with any errors and referenced tables.
+   */
+  async validateSQL(sql: string): Promise<SQLValidationResult> {
+    return this.request<SQLValidationResult>('/query/validate-sql', {
+      method: 'POST',
+      body: JSON.stringify({ sql }),
+    });
+  }
+
+  /**
+   * Execute a raw SQL query.
+   *
+   * Only SELECT statements are allowed. Queries are restricted
+   * to tables visible in the schema.
+   *
+   * @param sql - Raw SQL query (SELECT only).
+   * @param params - Optional named parameters for the query.
+   * @returns The query result with all rows.
+   */
+  async executeSQL(
+    sql: string,
+    params?: Record<string, unknown>
+  ): Promise<QueryResult> {
+    const body: ExecuteSQLRequest = { sql };
+    if (params) {
+      body.params = params;
+    }
+    return this.request<QueryResult>('/query/execute-sql', {
+      method: 'POST',
+      body: JSON.stringify(body),
     });
   }
 

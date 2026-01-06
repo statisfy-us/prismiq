@@ -37,3 +37,9 @@ export type {
   UseSavedQueriesOptions,
   UseSavedQueriesResult,
 } from './useSavedQueries';
+
+export { useCustomSQL } from './useCustomSQL';
+export type {
+  UseCustomSQLOptions,
+  UseCustomSQLResult,
+} from './useCustomSQL';

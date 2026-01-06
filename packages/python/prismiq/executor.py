@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from prismiq.query import QueryBuilder
+from prismiq.sql_validator import SQLValidationError, SQLValidator
 from prismiq.types import (
     DatabaseSchema,
     QueryDefinition,
@@ -88,6 +89,7 @@ class QueryExecutor:
         self._query_timeout = query_timeout
         self._max_rows = max_rows
         self._builder = QueryBuilder(schema)
+        self._sql_validator = SQLValidator(schema)
 
     async def execute(self, query: QueryDefinition) -> QueryResult:
         """
@@ -194,6 +196,97 @@ class QueryExecutor:
                 return {"plan": result}
         except Exception as e:
             raise QueryExecutionError(str(e), sql=explain_sql) from e
+
+    async def execute_raw_sql(
+        self,
+        sql: str,
+        params: dict[str, Any] | None = None,
+        tenant_id: str | None = None,
+        tenant_column: str = "tenant_id",
+    ) -> QueryResult:
+        """
+        Execute a raw SQL query with validation.
+
+        Args:
+            sql: Raw SQL query (must be SELECT only).
+            params: Optional named parameters for the query.
+            tenant_id: Optional tenant ID for row-level filtering.
+            tenant_column: Column name for tenant filtering (default: 'tenant_id').
+
+        Returns:
+            QueryResult with columns, rows, and execution metadata.
+
+        Raises:
+            SQLValidationError: If the SQL fails validation.
+            QueryTimeoutError: If the query exceeds the timeout.
+            QueryExecutionError: If the query execution fails.
+        """
+        # Validate the SQL
+        validation = self._sql_validator.validate(sql)
+        if not validation.valid:
+            raise SQLValidationError(
+                "SQL validation failed: " + "; ".join(validation.errors),
+                errors=validation.errors,
+            )
+
+        # Use the sanitized SQL from validation
+        safe_sql = validation.sanitized_sql
+        assert safe_sql is not None  # Guaranteed by valid=True
+
+        # Apply row limit using a CTE wrapper
+        limited_sql = f"WITH _cte AS ({safe_sql}) SELECT * FROM _cte LIMIT {self._max_rows + 1}"
+
+        # Convert named params to positional for asyncpg
+        # asyncpg uses $1, $2, etc. for positional params
+        param_list: list[Any] = []
+        if params:
+            # Replace :name with $n
+            import re
+
+            param_index = 1
+            param_mapping: dict[str, int] = {}
+
+            def replace_param(match: re.Match[str]) -> str:
+                nonlocal param_index
+                name = match.group(1)
+                if name not in param_mapping:
+                    param_mapping[name] = param_index
+                    param_index += 1
+                return f"${param_mapping[name]}"
+
+            limited_sql = re.sub(r":([a-zA-Z_][a-zA-Z0-9_]*)", replace_param, limited_sql)
+
+            # Build param list in order
+            param_list = [None] * len(param_mapping)
+            for name, idx in param_mapping.items():
+                if name in params:
+                    param_list[idx - 1] = params[name]
+                else:
+                    raise SQLValidationError(
+                        f"Missing parameter: {name}",
+                        errors=[f"Parameter '{name}' referenced in SQL but not provided"],
+                    )
+
+        # Execute with timeout
+        start_time = time.perf_counter()
+        try:
+            rows = await self._execute_with_timeout(limited_sql, param_list)
+        except asyncio.TimeoutError as e:
+            raise QueryTimeoutError(
+                f"Query exceeded timeout of {self._query_timeout} seconds",
+                timeout_seconds=self._query_timeout,
+            ) from e
+        except Exception as e:
+            raise QueryExecutionError(str(e), sql=sql) from e
+
+        execution_time_ms = (time.perf_counter() - start_time) * 1000
+
+        # Check if result was truncated
+        truncated = len(rows) > self._max_rows
+        if truncated:
+            rows = rows[: self._max_rows]
+
+        return self._format_result(rows, execution_time_ms, truncated)
 
     async def _execute_with_timeout(self, sql: str, params: list[Any]) -> list[Any]:
         """Execute SQL with timeout."""

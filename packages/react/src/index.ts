@@ -62,6 +62,9 @@ export type {
   SavedQuery,
   SavedQueryCreate,
   SavedQueryUpdate,
+  // Custom SQL types
+  ExecuteSQLRequest,
+  SQLValidationResult,
 } from './types';
 
 // ============================================================================
@@ -107,6 +110,7 @@ export {
   useDashboard as useDashboardData,
   useDashboardMutations,
   useSavedQueries,
+  useCustomSQL,
 } from './hooks';
 export type {
   UseSchemaResult,
@@ -120,6 +124,8 @@ export type {
   UseDashboardMutationsResult,
   UseSavedQueriesOptions,
   UseSavedQueriesResult,
+  UseCustomSQLOptions,
+  UseCustomSQLResult,
 } from './hooks';
 
 // ============================================================================
@@ -246,6 +252,8 @@ export {
   QueryPreview,
   // Saved Queries
   SavedQueryPicker,
+  // Custom SQL
+  CustomSQLEditor,
 } from './components';
 
 export type {
@@ -309,6 +317,8 @@ export type {
   QueryPreviewProps,
   // Saved Queries
   SavedQueryPickerProps,
+  // Custom SQL
+  CustomSQLEditorProps,
 } from './components';
 
 // ============================================================================

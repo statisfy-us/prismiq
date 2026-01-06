@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 from datetime import date, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import asyncpg
 
@@ -27,6 +27,7 @@ from prismiq.schema_config import (
     SchemaConfigManager,
     TableConfig,
 )
+from prismiq.sql_validator import SQLValidationResult, SQLValidator
 from prismiq.timeseries import TimeInterval
 from prismiq.transforms import pivot_data
 from prismiq.trends import ComparisonPeriod, TrendResult, calculate_trend
@@ -146,6 +147,7 @@ class PrismiqEngine:
         self._introspector: SchemaIntrospector | None = None
         self._executor: QueryExecutor | None = None
         self._builder: QueryBuilder | None = None
+        self._sql_validator: SQLValidator | None = None
         self._schema: DatabaseSchema | None = None
         self._dashboard_store: DashboardStore | None = None
         self._saved_query_store: SavedQueryStore | None = None
@@ -218,8 +220,9 @@ class PrismiqEngine:
         # Introspect schema
         self._schema = await self._introspector.get_schema()
 
-        # Create query builder and executor
+        # Create query builder, executor, and SQL validator
         self._builder = QueryBuilder(self._schema)
+        self._sql_validator = SQLValidator(self._schema)
         self._executor = QueryExecutor(
             self._pool,
             self._schema,
@@ -255,6 +258,7 @@ class PrismiqEngine:
         self._introspector = None
         self._executor = None
         self._builder = None
+        self._sql_validator = None
         self._schema = None
         self._dashboard_store = None
         self._saved_query_store = None
@@ -486,6 +490,75 @@ class PrismiqEngine:
 
         sql, _ = self._builder.build(query)
         return sql
+
+    # ========================================================================
+    # Custom SQL Methods
+    # ========================================================================
+
+    async def validate_sql(self, sql: str) -> SQLValidationResult:
+        """
+        Validate a raw SQL query without executing.
+
+        Checks that the SQL is a valid SELECT statement and only
+        references tables visible in the schema.
+
+        Args:
+            sql: Raw SQL query to validate.
+
+        Returns:
+            SQLValidationResult with validation status and details.
+
+        Raises:
+            RuntimeError: If the engine has not been started.
+        """
+        self._ensure_started()
+        assert self._sql_validator is not None
+        return self._sql_validator.validate(sql)
+
+    async def execute_raw_sql(
+        self,
+        sql: str,
+        params: dict[str, Any] | None = None,
+    ) -> QueryResult:
+        """
+        Execute a raw SQL query.
+
+        Only SELECT statements are allowed. Queries are restricted
+        to tables visible in the schema.
+
+        Args:
+            sql: Raw SQL query (SELECT only).
+            params: Optional named parameters for the query.
+
+        Returns:
+            QueryResult with columns, rows, and execution metadata.
+
+        Raises:
+            RuntimeError: If the engine has not been started.
+            SQLValidationError: If the SQL fails validation.
+            QueryTimeoutError: If the query exceeds the timeout.
+            QueryExecutionError: If the query execution fails.
+        """
+        self._ensure_started()
+        assert self._executor is not None
+
+        start = time.perf_counter()
+
+        try:
+            result = await self._executor.execute_raw_sql(sql, params)
+
+            # Record metrics
+            if self._enable_metrics:
+                duration = (time.perf_counter() - start) * 1000
+                record_query_execution(duration, "success")
+
+            return result
+
+        except Exception:
+            if self._enable_metrics:
+                duration = (time.perf_counter() - start) * 1000
+                record_query_execution(duration, "error")
+            raise
 
     # ========================================================================
     # Cache Methods
