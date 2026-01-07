@@ -106,7 +106,7 @@ const mainStyles: React.CSSProperties = {
   flexDirection: 'column',
   gap: 'var(--prismiq-spacing-md)',
   minWidth: 0,
-  overflow: 'hidden',
+  overflow: 'auto',
 };
 
 const builderSectionStyles: React.CSSProperties = {

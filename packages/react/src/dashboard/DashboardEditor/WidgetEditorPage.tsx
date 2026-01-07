@@ -311,6 +311,7 @@ export function WidgetEditorPage({
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
+    minHeight: 0, // Important for flex children to overflow properly
   };
 
   const dataSourceHeaderStyle: React.CSSProperties = {
@@ -337,6 +338,7 @@ export function WidgetEditorPage({
     flex: 1,
     overflow: 'auto',
     padding: theme.spacing.md,
+    minHeight: 0, // Important for flex children to overflow properly
   };
 
   const sectionStyle: React.CSSProperties = {
@@ -709,7 +711,6 @@ export function WidgetEditorPage({
                     showResultsTable={false}
                     showSavedQueries={false}
                     layout="horizontal"
-                    style={{ height: '100%' }}
                   />
                 )}
 
