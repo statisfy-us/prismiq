@@ -21,6 +21,7 @@ import { SavedQueryPicker } from '../../components/SavedQueryPicker';
 import { QueryBuilder } from '../../components/QueryBuilder';
 import { WidgetTypeSelector } from './WidgetTypeSelector';
 import { WidgetPreview } from './WidgetPreview';
+import { GuidedDataConfig } from './GuidedDataConfig';
 import type { Widget, WidgetConfig, WidgetType } from '../types';
 import type {
   DatabaseSchema,
@@ -46,7 +47,7 @@ export interface WidgetEditorPageProps {
   onCancel: () => void;
 }
 
-type DataSourceMode = 'saved' | 'build';
+type DataSourceMode = 'guided' | 'advanced' | 'saved';
 
 // ============================================================================
 // Helpers
@@ -121,9 +122,9 @@ export function WidgetEditorPage({
   );
   const [query, setQuery] = useState<QueryDefinition | null>(widget?.query ?? null);
 
-  // Data source mode
+  // Data source mode - default to guided for new widgets
   const [dataSourceMode, setDataSourceMode] = useState<DataSourceMode>(
-    widget?.query ? 'saved' : 'build'
+    widget?.query ? 'saved' : 'guided'
   );
 
   // Preview state
@@ -659,7 +660,7 @@ export function WidgetEditorPage({
           </div>
 
           {/* Data Source */}
-          {type !== 'text' && (
+          {type !== 'text' && schema && (
             <div style={dataSourcePanelStyle}>
               <div style={dataSourceHeaderStyle}>
                 <span style={{ fontSize: theme.fontSizes.sm, fontWeight: 500, marginRight: 'auto' }}>
@@ -667,32 +668,40 @@ export function WidgetEditorPage({
                 </span>
                 <button
                   type="button"
+                  style={tabStyle(dataSourceMode === 'guided')}
+                  onClick={() => setDataSourceMode('guided')}
+                >
+                  Guided
+                </button>
+                <button
+                  type="button"
+                  style={tabStyle(dataSourceMode === 'advanced')}
+                  onClick={() => setDataSourceMode('advanced')}
+                >
+                  Advanced
+                </button>
+                <button
+                  type="button"
                   style={tabStyle(dataSourceMode === 'saved')}
                   onClick={() => setDataSourceMode('saved')}
                 >
                   Saved Query
                 </button>
-                <button
-                  type="button"
-                  style={tabStyle(dataSourceMode === 'build')}
-                  onClick={() => setDataSourceMode('build')}
-                >
-                  Build Query
-                </button>
               </div>
 
               <div style={dataSourceContentStyle}>
-                {renderQuerySummary()}
+                {dataSourceMode === 'saved' && renderQuerySummary()}
 
-                {dataSourceMode === 'saved' ? (
-                  <div>
-                    <SavedQueryPicker
-                      currentQuery={query}
-                      onSelect={handleSavedQuerySelect}
-                      showSave={false}
-                    />
-                  </div>
-                ) : (
+                {dataSourceMode === 'guided' && (
+                  <GuidedDataConfig
+                    widgetType={type}
+                    schema={schema}
+                    query={query}
+                    onChange={handleQueryChange}
+                  />
+                )}
+
+                {dataSourceMode === 'advanced' && (
                   <QueryBuilder
                     initialQuery={query ?? undefined}
                     onQueryChange={handleQueryChange}
@@ -701,6 +710,14 @@ export function WidgetEditorPage({
                     showSavedQueries={false}
                     layout="horizontal"
                     style={{ height: '100%' }}
+                  />
+                )}
+
+                {dataSourceMode === 'saved' && (
+                  <SavedQueryPicker
+                    currentQuery={query}
+                    onSelect={handleSavedQuerySelect}
+                    showSave={false}
                   />
                 )}
               </div>

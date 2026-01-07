@@ -13,3 +13,14 @@ export { WidgetTypeSelector } from './WidgetTypeSelector';
 export type { WidgetTypeSelectorProps } from './WidgetTypeSelector';
 export { WidgetPreview } from './WidgetPreview';
 export type { WidgetPreviewProps } from './WidgetPreview';
+export { GuidedDataConfig } from './GuidedDataConfig';
+export type { GuidedDataConfigProps } from './GuidedDataConfig';
+
+// Config components
+export { MetricConfig, ChartConfig, PieConfig, TableConfig } from './configs';
+export type {
+  MetricConfigProps,
+  ChartConfigProps,
+  PieConfigProps,
+  TableConfigProps,
+} from './configs';
