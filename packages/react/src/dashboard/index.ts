@@ -76,8 +76,16 @@ export {
   EditorToolbar,
   WidgetPalette,
   WidgetEditor,
+  WidgetEditorPage,
+  WidgetTypeSelector,
+  WidgetPreview,
 } from './DashboardEditor';
-export type { EditorToolbarProps } from './DashboardEditor';
+export type {
+  EditorToolbarProps,
+  WidgetEditorPageProps,
+  WidgetTypeSelectorProps,
+  WidgetPreviewProps,
+} from './DashboardEditor';
 
 // Dashboard List components
 export { DashboardList, DashboardCard, DashboardDialog } from './DashboardList';

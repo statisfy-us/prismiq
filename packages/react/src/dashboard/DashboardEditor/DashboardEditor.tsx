@@ -9,8 +9,7 @@ import { useSchema } from '../../hooks';
 import { DashboardLayout } from '../DashboardLayout';
 import { Widget } from '../Widget';
 import { EditorToolbar } from './EditorToolbar';
-import { WidgetPalette } from './WidgetPalette';
-import { WidgetEditor } from './WidgetEditor';
+import { WidgetEditorPage } from './WidgetEditorPage';
 import type {
   Dashboard,
   Widget as WidgetType,
@@ -118,9 +117,8 @@ export function DashboardEditor({
   );
   const [widgetErrors, setWidgetErrors] = useState<Record<string, Error>>({});
 
-  // UI state
-  const [showPalette, setShowPalette] = useState(false);
-  const [editingWidget, setEditingWidget] = useState<WidgetType | null>(null);
+  // UI state - editingWidget can be 'new' for new widget, a Widget for editing, or null
+  const [editingWidget, setEditingWidget] = useState<WidgetType | 'new' | null>(null);
 
   // Track changes
   const hasChanges = useMemo(() => {
@@ -176,25 +174,10 @@ export function DashboardEditor({
     [dashboard.widgets, client]
   );
 
-  // Add new widget
-  const addWidget = useCallback((type: WidgetTypeEnum) => {
-    const newWidget: WidgetType = {
-      id: generateId(),
-      type,
-      title: `New ${type.replace('_', ' ')}`,
-      query: null,
-      position: getDefaultPosition(dashboard.widgets, type),
-      config: {},
-    };
-
-    setDashboard((prev) => ({
-      ...prev,
-      widgets: [...prev.widgets, newWidget],
-    }));
-
-    setShowPalette(false);
-    setEditingWidget(newWidget);
-  }, [dashboard.widgets]);
+  // Add new widget - opens the full-page editor
+  const handleAddWidget = useCallback(() => {
+    setEditingWidget('new');
+  }, []);
 
   // Update widget
   const updateWidget = useCallback((widgetId: string, updates: Partial<WidgetType>) => {
@@ -280,16 +263,31 @@ export function DashboardEditor({
     onCancel?.();
   }, [hasChanges, onCancel]);
 
-  // Handle widget save from editor
+  // Handle widget save from editor (new or existing)
   const handleWidgetSave = useCallback((widget: WidgetType) => {
-    updateWidget(widget.id, widget);
+    // Check if this is a new widget or editing existing
+    const existingWidget = dashboard.widgets.find((w) => w.id === widget.id);
+
+    if (existingWidget) {
+      // Update existing widget
+      updateWidget(widget.id, widget);
+    } else {
+      // Add new widget with proper position
+      const position = getDefaultPosition(dashboard.widgets, widget.type);
+      const newWidget = { ...widget, position };
+      setDashboard((prev) => ({
+        ...prev,
+        widgets: [...prev.widgets, newWidget],
+      }));
+    }
+
     setEditingWidget(null);
 
     // Refresh widget data if it has a query
     if (widget.query) {
       refreshWidget(widget.id);
     }
-  }, [updateWidget, refreshWidget]);
+  }, [dashboard.widgets, updateWidget, refreshWidget]);
 
   // Render widget for layout
   const renderWidget = useCallback(
@@ -342,24 +340,23 @@ export function DashboardEditor({
     textAlign: 'center',
   };
 
-  const paletteOverlayStyle: React.CSSProperties = {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 100,
-  };
-
   if (isLoading) {
     return (
       <div className={`prismiq-dashboard-editor ${className}`} style={containerStyle}>
         <div style={loadingStyle}>Loading dashboard...</div>
       </div>
+    );
+  }
+
+  // If editing a widget, show the full-page editor instead
+  if (editingWidget !== null) {
+    return (
+      <WidgetEditorPage
+        widget={editingWidget === 'new' ? null : editingWidget}
+        schema={schema}
+        onSave={handleWidgetSave}
+        onCancel={() => setEditingWidget(null)}
+      />
     );
   }
 
@@ -369,7 +366,7 @@ export function DashboardEditor({
         dashboardName={dashboard.name}
         hasChanges={hasChanges}
         isSaving={isSaving}
-        onAddWidget={() => setShowPalette(true)}
+        onAddWidget={handleAddWidget}
         onSave={handleSave}
         onCancel={handleCancel}
       />
@@ -415,25 +412,6 @@ export function DashboardEditor({
           />
         )}
       </div>
-
-      {/* Widget palette overlay */}
-      {showPalette && (
-        <div style={paletteOverlayStyle} onClick={() => setShowPalette(false)}>
-          <div onClick={(e) => e.stopPropagation()}>
-            <WidgetPalette onAddWidget={addWidget} />
-          </div>
-        </div>
-      )}
-
-      {/* Widget editor modal */}
-      {editingWidget && schema && (
-        <WidgetEditor
-          widget={editingWidget}
-          schema={schema}
-          onSave={handleWidgetSave}
-          onCancel={() => setEditingWidget(null)}
-        />
-      )}
     </div>
   );
 }
