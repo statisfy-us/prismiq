@@ -1,14 +1,17 @@
 /**
- * Multi-select filter component.
+ * Multi-select filter component with dynamic option loading.
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTheme } from '../../theme';
 import { Icon } from '../../components/ui';
+import { useDynamicFilterOptions } from './useDynamicFilterOptions';
 import type { MultiSelectFilterProps } from '../types';
 
 /**
  * Multi-select dropdown filter.
+ *
+ * Supports dynamic option loading when filter.dynamic is true.
  */
 export function MultiSelectFilter({
   filter,
@@ -18,6 +21,9 @@ export function MultiSelectFilter({
   const { theme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Load dynamic options if filter.dynamic is true
+  const { isLoading, options } = useDynamicFilterOptions(filter);
 
   // Close when clicking outside
   useEffect(() => {
@@ -104,28 +110,35 @@ export function MultiSelectFilter({
     backgroundColor: theme.colors.background,
   };
 
-  const displayText = value.length === 0
-    ? 'All'
-    : value.length === 1
-      ? filter.options?.find((o) => o.value === value[0])?.label ?? value[0]
-      : `${value.length} selected`;
+  const displayText = isLoading
+    ? 'Loading...'
+    : value.length === 0
+      ? 'All'
+      : value.length === 1
+        ? options.find((o) => o.value === value[0])?.label ?? value[0]
+        : `${value.length} selected`;
 
   return (
     <div ref={containerRef} style={containerStyle}>
       <button
         type="button"
         onClick={handleToggle}
-        style={buttonStyle}
+        style={{
+          ...buttonStyle,
+          cursor: isLoading ? 'wait' : 'pointer',
+          opacity: isLoading ? 0.7 : 1,
+        }}
         aria-label={filter.label}
         aria-expanded={isOpen}
+        disabled={isLoading}
       >
         <span>{displayText}</span>
         <Icon name={isOpen ? 'chevron-up' : 'chevron-down'} size={14} />
       </button>
 
-      {isOpen && (
+      {isOpen && !isLoading && (
         <div style={dropdownStyle}>
-          {filter.options?.map((option) => {
+          {options.map((option) => {
             const isSelected = value.includes(option.value);
             return (
               <div

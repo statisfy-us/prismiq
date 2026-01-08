@@ -162,6 +162,12 @@ export interface DashboardFilter {
   options?: FilterOption[];
   /** Date preset for date_range filters (e.g., 'last_7_days'). */
   date_preset?: string;
+  /**
+   * Whether to dynamically load options from the database.
+   * When true, options are fetched from the table's column using getColumnSample.
+   * Requires `table` and `field` to be set.
+   */
+  dynamic?: boolean;
 }
 
 /**
