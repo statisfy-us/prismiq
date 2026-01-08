@@ -2,7 +2,7 @@
  * ResultsTable component for displaying query results.
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { QueryResult } from '../../types';
 import { Button, Icon } from '../ui';
@@ -281,7 +281,7 @@ export function ResultsTable({
   }, [result, currentPage, pageSize]);
 
   // Reset to first page when results change
-  useMemo(() => {
+  useEffect(() => {
     setCurrentPage(1);
   }, [result?.row_count]);
 
