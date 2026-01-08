@@ -240,6 +240,7 @@ class SchemaIntrospector:
         """Get schema for a single table."""
         columns = await self._get_columns(table_name)
         primary_keys = await self._get_primary_keys(table_name)
+        row_count = await self._get_row_count(table_name)
         primary_key_set = set(primary_keys)
 
         # Mark primary key columns
@@ -255,6 +256,7 @@ class SchemaIntrospector:
             name=table_name,
             schema_name=self._schema_name,
             columns=columns,
+            row_count=row_count,
         )
 
     async def _get_columns(self, table_name: str) -> list[ColumnSchema]:
@@ -300,3 +302,28 @@ class SchemaIntrospector:
             rows: list[Record] = await conn.fetch(query, self._schema_name, table_name)
 
         return [row["column_name"] for row in rows]
+
+    async def _get_row_count(self, table_name: str) -> int | None:
+        """
+        Get approximate row count for a table using pg_class.reltuples.
+
+        This is fast but may be slightly out of date. For exact counts,
+        VACUUM ANALYZE should be run periodically.
+        """
+        async with self._pool.acquire() as conn:
+            query = """
+                SELECT reltuples::bigint AS row_count
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE n.nspname = $1
+                    AND c.relname = $2
+                    AND c.relkind = 'r'
+            """
+            row = await conn.fetchrow(query, self._schema_name, table_name)
+
+        if row is None:
+            return None
+
+        # reltuples can be -1 if never analyzed, treat as 0
+        count = row["row_count"]
+        return max(0, count) if count is not None else None

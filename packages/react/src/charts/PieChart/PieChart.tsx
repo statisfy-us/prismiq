@@ -148,6 +148,7 @@ export function PieChart({
           orient: 'vertical' as const,
           right: 10,
           top: 'center',
+          selectedMode: 'multiple' as const,
           data: pieData.map((item) => item.name),
           formatter: (name: string) => {
             const item = pieData.find((d) => d.name === name);

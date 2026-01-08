@@ -5,10 +5,61 @@
 import { useCallback, useMemo, useState } from 'react';
 
 import type { QueryResult } from '../../types';
-import { Icon } from '../ui';
+import { Button, Icon } from '../ui';
 import { Pagination } from './Pagination';
 import { TableHeader } from './TableHeader';
 import { TableRow } from './TableRow';
+
+// ============================================================================
+// CSV Export Utility
+// ============================================================================
+
+/**
+ * Escape a value for CSV format.
+ */
+function escapeCSVValue(value: unknown): string {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  const str = String(value);
+  // Escape quotes and wrap in quotes if contains comma, quote, or newline
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+/**
+ * Convert QueryResult to CSV string.
+ */
+function convertToCSV(result: QueryResult): string {
+  const lines: string[] = [];
+
+  // Header row
+  lines.push(result.columns.map(escapeCSVValue).join(','));
+
+  // Data rows
+  for (const row of result.rows) {
+    lines.push(row.map(escapeCSVValue).join(','));
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Download a string as a file.
+ */
+function downloadFile(content: string, filename: string, mimeType: string): void {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
 
 // ============================================================================
 // Types
@@ -103,6 +154,29 @@ const truncatedWarningStyles: React.CSSProperties = {
   color: '#000000',
   fontSize: 'var(--prismiq-font-size-xs)',
   textAlign: 'center',
+};
+
+const toolbarStyles: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: 'var(--prismiq-spacing-sm) var(--prismiq-spacing-md)',
+  borderBottom: '1px solid var(--prismiq-color-border)',
+  backgroundColor: 'var(--prismiq-color-surface)',
+};
+
+const toolbarLeftStyles: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 'var(--prismiq-spacing-sm)',
+  fontSize: 'var(--prismiq-font-size-sm)',
+  color: 'var(--prismiq-color-text-muted)',
+};
+
+const toolbarRightStyles: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 'var(--prismiq-spacing-xs)',
 };
 
 // ============================================================================
@@ -217,6 +291,30 @@ export function ResultsTable({
     setCurrentPage(1);
   }, []);
 
+  // Handle CSV export
+  const handleExportCSV = useCallback(() => {
+    if (!result) return;
+    const csv = convertToCSV(result);
+    const timestamp = new Date().toISOString().slice(0, 10);
+    downloadFile(csv, `export-${timestamp}.csv`, 'text/csv;charset=utf-8;');
+  }, [result]);
+
+  // Handle JSON export
+  const handleExportJSON = useCallback(() => {
+    if (!result) return;
+    // Convert to array of objects for easier consumption
+    const data = result.rows.map((row) => {
+      const obj: Record<string, unknown> = {};
+      result.columns.forEach((col, i) => {
+        obj[col] = row[i];
+      });
+      return obj;
+    });
+    const json = JSON.stringify(data, null, 2);
+    const timestamp = new Date().toISOString().slice(0, 10);
+    downloadFile(json, `export-${timestamp}.json`, 'application/json');
+  }, [result]);
+
   // Render states
   if (loading) {
     return (
@@ -277,6 +375,34 @@ export function ResultsTable({
           Results truncated. Showing {result.row_count.toLocaleString()} rows.
         </div>
       )}
+
+      {/* Toolbar with row count and export buttons */}
+      <div style={toolbarStyles}>
+        <div style={toolbarLeftStyles}>
+          <Icon name="table" size={14} />
+          <span>
+            {result.row_count.toLocaleString()} row{result.row_count !== 1 ? 's' : ''}
+            {result.columns.length > 0 && ` × ${result.columns.length} column${result.columns.length !== 1 ? 's' : ''}`}
+          </span>
+          {result.execution_time_ms !== undefined && (
+            <span style={{ borderLeft: '1px solid var(--prismiq-color-border)', paddingLeft: 'var(--prismiq-spacing-sm)' }}>
+              {result.execution_time_ms < 1000
+                ? `${Math.round(result.execution_time_ms)}ms`
+                : `${(result.execution_time_ms / 1000).toFixed(2)}s`}
+            </span>
+          )}
+        </div>
+        <div style={toolbarRightStyles}>
+          <Button variant="ghost" size="sm" onClick={handleExportCSV} title="Export as CSV">
+            <Icon name="download" size={14} />
+            <span>CSV</span>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={handleExportJSON} title="Export as JSON">
+            <Icon name="download" size={14} />
+            <span>JSON</span>
+          </Button>
+        </div>
+      </div>
 
       <div style={tableContainerStyles}>
         <table style={tableStyles}>

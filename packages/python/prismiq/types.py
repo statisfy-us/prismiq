@@ -55,6 +55,9 @@ class TableSchema(BaseModel):
     columns: list[ColumnSchema]
     """List of columns in the table."""
 
+    row_count: int | None = None
+    """Approximate row count (from pg_class.reltuples). None if not fetched."""
+
     def get_column(self, column_name: str) -> ColumnSchema | None:
         """Get a column by name, or None if not found."""
         for col in self.columns:

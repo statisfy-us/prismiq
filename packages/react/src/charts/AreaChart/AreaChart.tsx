@@ -169,6 +169,7 @@ export function AreaChart({
       ? {
           show: yColumns.length > 1,
           data: processedData.series.map((s) => s.name),
+          selectedMode: 'multiple' as const,
           top: 10,
         }
       : undefined;

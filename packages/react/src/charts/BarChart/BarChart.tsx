@@ -174,6 +174,7 @@ export function BarChart({
       ? {
           show: yColumns.length > 1,
           data: chartData.series.map((s) => s.name),
+          selectedMode: 'multiple' as const,
           [legendPosition === 'left' || legendPosition === 'right'
             ? 'orient'
             : 'orient']: legendPosition === 'left' || legendPosition === 'right' ? 'vertical' : 'horizontal',

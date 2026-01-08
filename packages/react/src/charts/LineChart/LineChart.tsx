@@ -165,6 +165,7 @@ export function LineChart({
       ? {
           show: yColumns.length > 1,
           data: chartData.series.map((s) => s.name),
+          selectedMode: 'multiple' as const,
           top: 10,
         }
       : undefined;

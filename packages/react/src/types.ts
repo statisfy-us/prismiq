@@ -35,6 +35,8 @@ export interface TableSchema {
   schema_name: string;
   /** List of columns in the table. */
   columns: ColumnSchema[];
+  /** Approximate row count (from pg_class.reltuples). Undefined if not fetched. */
+  row_count?: number;
 }
 
 /**
