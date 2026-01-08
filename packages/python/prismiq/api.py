@@ -583,6 +583,34 @@ def create_router(
             raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
         return table
 
+    @router.get("/tables/{table_name}/columns/{column_name}/sample")
+    async def get_column_sample(
+        table_name: str,
+        column_name: str,
+        limit: int = 5,
+    ) -> dict[str, list[Any]]:
+        """
+        Get sample values from a column for data preview.
+
+        Args:
+            table_name: Name of the table.
+            column_name: Name of the column.
+            limit: Maximum number of distinct values to return (default 5).
+
+        Returns:
+            Object with sample values array.
+
+        Raises:
+            404: If the table or column is not found.
+        """
+        try:
+            values = await engine.sample_column_values(table_name, column_name, limit)
+            return {"values": values}
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
     # ========================================================================
     # Query Endpoints
     # ========================================================================

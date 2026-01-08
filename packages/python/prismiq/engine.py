@@ -428,6 +428,60 @@ class PrismiqEngine:
         assert self._executor is not None
         return await self._executor.preview(query, limit=limit)
 
+    async def sample_column_values(
+        self,
+        table_name: str,
+        column_name: str,
+        limit: int = 5,
+    ) -> list[Any]:
+        """
+        Get sample values from a column for data preview.
+
+        Args:
+            table_name: Name of the table.
+            column_name: Name of the column.
+            limit: Maximum number of distinct values to return.
+
+        Returns:
+            List of sample values from the column.
+
+        Raises:
+            RuntimeError: If the engine has not been started.
+            ValueError: If the table or column doesn't exist.
+        """
+        self._ensure_started()
+        assert self._pool is not None
+        assert self._schema is not None
+
+        # Validate table exists
+        table = self._schema.get_table(table_name)
+        if table is None:
+            raise ValueError(f"Table '{table_name}' not found")
+
+        # Validate column exists
+        column_exists = any(col.name == column_name for col in table.columns)
+        if not column_exists:
+            raise ValueError(f"Column '{column_name}' not found in table '{table_name}'")
+
+        # Query distinct values with limit
+        # Note: table_name and column_name are validated against the schema above,
+        # so this is safe from SQL injection despite string interpolation
+        sql = f"""
+            SELECT DISTINCT "{column_name}"
+            FROM "{table_name}"
+            WHERE "{column_name}" IS NOT NULL
+            ORDER BY "{column_name}"
+            LIMIT {limit}
+        """  # noqa: S608
+
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(sql)
+
+        # Extract values and serialize
+        from prismiq.executor import serialize_value
+
+        return [serialize_value(row[0]) for row in rows]
+
     def validate_query(self, query: QueryDefinition) -> list[str]:
         """
         Validate a query without executing it.

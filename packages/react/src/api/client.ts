@@ -241,6 +241,24 @@ export class PrismiqClient {
     return this.request<TableSchema>(`/tables/${encodeURIComponent(tableName)}`);
   }
 
+  /**
+   * Get sample values from a column for data preview.
+   *
+   * @param tableName - The name of the table.
+   * @param columnName - The name of the column.
+   * @param limit - Maximum number of distinct values to return (default: 5).
+   * @returns Array of sample values.
+   */
+  async getColumnSample(
+    tableName: string,
+    columnName: string,
+    limit: number = 5
+  ): Promise<unknown[]> {
+    const path = `/tables/${encodeURIComponent(tableName)}/columns/${encodeURIComponent(columnName)}/sample?limit=${limit}`;
+    const result = await this.request<{ values: unknown[] }>(path);
+    return result.values;
+  }
+
   // ============================================================================
   // Query Methods
   // ============================================================================

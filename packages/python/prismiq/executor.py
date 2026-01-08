@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from asyncpg import Pool
 
 
-def _serialize_value(value: Any) -> Any:
+def serialize_value(value: Any) -> Any:
     """Convert database values to JSON-serializable Python types."""
     if value is None:
         return None
@@ -48,9 +48,9 @@ def _serialize_value(value: Any) -> Any:
     if isinstance(value, bytes):
         return value.hex()
     if isinstance(value, list | tuple):
-        return [_serialize_value(v) for v in value]
+        return [serialize_value(v) for v in value]
     if isinstance(value, dict):
-        return {k: _serialize_value(v) for k, v in value.items()}
+        return {k: serialize_value(v) for k, v in value.items()}
     return value
 
 
@@ -333,7 +333,7 @@ class QueryExecutor:
                 column_types.append(type(value).__name__)
 
         # Convert rows to lists with JSON-serializable values
-        result_rows = [[_serialize_value(v) for v in row.values()] for row in rows]
+        result_rows = [[serialize_value(v) for v in row.values()] for row in rows]
 
         return QueryResult(
             columns=columns,
