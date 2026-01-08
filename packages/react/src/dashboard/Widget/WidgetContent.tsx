@@ -191,7 +191,10 @@ export function WidgetContent({
   const data = useMemo(() => (result ? resultToDataPoints(result) : []), [result]);
 
   // Determine if cross-filtering is enabled for this widget
-  const crossFilterEnabled = widget.config.cross_filter?.enabled ?? false;
+  // By default, enable cross-filtering for chart types that support click interaction
+  const chartTypesWithCrossFilter = ['bar_chart', 'pie_chart', 'line_chart', 'area_chart'];
+  const defaultCrossFilterEnabled = chartTypesWithCrossFilter.includes(widget.type);
+  const crossFilterEnabled = widget.config.cross_filter?.enabled ?? defaultCrossFilterEnabled;
   const crossFilterColumn = widget.config.cross_filter?.column ?? widget.config.x_axis;
 
   // Build cross-filter config for chart components

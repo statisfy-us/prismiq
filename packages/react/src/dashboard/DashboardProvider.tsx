@@ -10,7 +10,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useAnalytics } from '../context';
+import { useAnalytics, useCrossFilterOptional, type CrossFilter } from '../context';
 import type {
   Dashboard,
   DashboardContextValue,
@@ -140,6 +140,67 @@ function applyFiltersToQuery(
 }
 
 /**
+ * Apply cross-filters from other widgets to a widget query.
+ *
+ * Cross-filters are applied only if the widget is not the source of the filter,
+ * and if the filter column exists in the widget's query.
+ */
+function applyCrossFiltersToQuery(
+  query: QueryDefinition,
+  crossFilters: CrossFilter[],
+  widgetId: string
+): QueryDefinition {
+  // Skip if no cross-filters
+  if (crossFilters.length === 0) return query;
+
+  const additionalFilters: FilterDefinition[] = [];
+
+  for (const filter of crossFilters) {
+    // Don't apply a widget's own filter to itself
+    if (filter.sourceWidgetId === widgetId) continue;
+
+    // Find the table that contains this column
+    // First check if filter specifies a table
+    let tableId = query.tables[0]?.id || 't1';
+    if (filter.table) {
+      const matchingTable = query.tables.find((t) => t.name === filter.table);
+      if (matchingTable) {
+        tableId = matchingTable.id;
+      }
+    } else if (filter.tableId) {
+      // Use provided table ID if available
+      tableId = filter.tableId;
+    }
+
+    // Build the filter based on value type
+    const value = filter.value;
+    if (Array.isArray(value) && value.length > 0) {
+      additionalFilters.push({
+        table_id: tableId,
+        column: filter.column,
+        operator: 'in_',
+        value,
+      });
+    } else if (value !== null && value !== undefined && value !== '') {
+      additionalFilters.push({
+        table_id: tableId,
+        column: filter.column,
+        operator: 'eq',
+        value,
+      });
+    }
+  }
+
+  // Merge with existing query filters
+  if (additionalFilters.length === 0) return query;
+
+  return {
+    ...query,
+    filters: [...(query.filters || []), ...additionalFilters],
+  };
+}
+
+/**
  * Provider component for dashboard state management.
  */
 export function DashboardProvider({
@@ -148,6 +209,7 @@ export function DashboardProvider({
   children,
 }: DashboardProviderProps): JSX.Element {
   const { client } = useAnalytics();
+  const crossFilterContext = useCrossFilterOptional();
 
   // Dashboard state
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
@@ -196,7 +258,12 @@ export function DashboardProvider({
    * Execute a single widget query.
    */
   const executeWidgetQuery = useCallback(
-    async (widget: Widget, currentDashboard: Dashboard, currentFilters: FilterValue[]) => {
+    async (
+      widget: Widget,
+      currentDashboard: Dashboard,
+      currentFilters: FilterValue[],
+      currentCrossFilters: CrossFilter[]
+    ) => {
       if (!widget.query) {
         // Text widgets don't have queries
         return;
@@ -211,13 +278,16 @@ export function DashboardProvider({
 
       try {
         // Apply dashboard filters to widget query
-        const filteredQuery = applyFiltersToQuery(
+        let query = applyFiltersToQuery(
           widget.query,
           currentDashboard,
           currentFilters
         );
 
-        const result = await client.executeQuery(filteredQuery);
+        // Apply cross-filters from other widgets
+        query = applyCrossFiltersToQuery(query, currentCrossFilters, widget.id);
+
+        const result = await client.executeQuery(query);
         setWidgetResults((prev) => ({ ...prev, [widget.id]: result }));
       } catch (err) {
         setWidgetErrors((prev) => ({
@@ -235,14 +305,18 @@ export function DashboardProvider({
    * Execute all widget queries.
    */
   const executeAllWidgets = useCallback(
-    async (currentDashboard: Dashboard, currentFilters: FilterValue[]) => {
+    async (
+      currentDashboard: Dashboard,
+      currentFilters: FilterValue[],
+      currentCrossFilters: CrossFilter[]
+    ) => {
       const requestId = generateId();
       requestIdRef.current = requestId;
 
       // Execute all queries in parallel
       await Promise.all(
         currentDashboard.widgets.map((widget) =>
-          executeWidgetQuery(widget, currentDashboard, currentFilters)
+          executeWidgetQuery(widget, currentDashboard, currentFilters, currentCrossFilters)
         )
       );
     },
@@ -254,8 +328,9 @@ export function DashboardProvider({
    */
   const refreshDashboard = useCallback(async () => {
     if (!dashboard) return;
-    await executeAllWidgets(dashboard, filterValues);
-  }, [dashboard, filterValues, executeAllWidgets]);
+    const crossFilters = crossFilterContext?.filters ?? [];
+    await executeAllWidgets(dashboard, filterValues, crossFilters);
+  }, [dashboard, filterValues, executeAllWidgets, crossFilterContext?.filters]);
 
   /**
    * Refresh a single widget.
@@ -267,9 +342,10 @@ export function DashboardProvider({
       const widget = dashboard.widgets.find((w) => w.id === widgetId);
       if (!widget) return;
 
-      await executeWidgetQuery(widget, dashboard, filterValues);
+      const crossFilters = crossFilterContext?.filters ?? [];
+      await executeWidgetQuery(widget, dashboard, filterValues, crossFilters);
     },
-    [dashboard, filterValues, executeWidgetQuery]
+    [dashboard, filterValues, executeWidgetQuery, crossFilterContext?.filters]
   );
 
   /**
@@ -293,11 +369,14 @@ export function DashboardProvider({
   }, [loadDashboard]);
 
   // Execute widget queries when dashboard loads or filters change
+  // Also re-execute when cross-filters change
+  const crossFilters = crossFilterContext?.filters ?? [];
   useEffect(() => {
     if (dashboard && !isLoading) {
-      executeAllWidgets(dashboard, filterValues);
+      executeAllWidgets(dashboard, filterValues, crossFilters);
     }
-  }, [dashboard, filterValues, isLoading, executeAllWidgets]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dashboard, filterValues, isLoading, executeAllWidgets, JSON.stringify(crossFilters)]);
 
   // Auto-refresh interval
   useEffect(() => {

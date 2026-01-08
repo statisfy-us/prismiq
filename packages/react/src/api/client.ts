@@ -411,7 +411,7 @@ export class PrismiqClient {
    */
   async updateDashboard(id: string, data: DashboardUpdate): Promise<Dashboard> {
     return this.request<Dashboard>(`/dashboards/${encodeURIComponent(id)}`, {
-      method: 'PUT',
+      method: 'PATCH',
       body: JSON.stringify(data),
     });
   }
