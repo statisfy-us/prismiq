@@ -76,6 +76,14 @@ export interface WidgetConfig {
   show_data_labels?: boolean;
   /** Custom color palette for the chart. */
   colors?: string[];
+  /** Value format for chart axes (e.g., 'currency', 'percent'). */
+  valueFormat?: 'number' | 'currency' | 'percent' | 'compact';
+  /** Currency symbol when valueFormat is 'currency'. */
+  currencySymbol?: string;
+  /** Compact notation mode (K for thousands, M for millions, etc.). Null means no compacting. */
+  compactNotation?: 'K' | 'M' | 'B' | 'T' | null;
+  /** Number of decimal digits to show. */
+  decimalDigits?: number;
 
   // Cross-filter options
   /** Cross-filter configuration for this widget. */

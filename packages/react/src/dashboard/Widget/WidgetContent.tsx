@@ -329,6 +329,10 @@ export function WidgetContent({
             showLegend={showLegend}
             showDataLabels={showDataLabels}
             colors={colors}
+            yAxisFormat={widget.config.valueFormat ?? 'number'}
+            currencySymbol={widget.config.currencySymbol}
+            compactNotation={widget.config.compactNotation}
+            decimalDigits={widget.config.decimalDigits}
             height="100%"
             crossFilter={crossFilterConfig}
             selectedValue={selectedValue}

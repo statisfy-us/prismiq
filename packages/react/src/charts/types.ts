@@ -173,6 +173,12 @@ export interface BarChartProps extends BaseChartProps {
   yAxisLabel?: string;
   /** Y axis value format. */
   yAxisFormat?: AxisFormat;
+  /** Currency symbol for currency format. */
+  currencySymbol?: string;
+  /** Compact notation mode (K, M, B, T) or null for no compacting. */
+  compactNotation?: 'K' | 'M' | 'B' | 'T' | null;
+  /** Number of decimal digits. */
+  decimalDigits?: number;
 }
 
 /**

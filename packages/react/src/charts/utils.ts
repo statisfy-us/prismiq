@@ -291,13 +291,25 @@ function mergeAxisConfig(
 export function formatAxisLabel(
   value: number,
   format: AxisFormat,
-  options?: { currencySymbol?: string; decimals?: number }
+  options?: {
+    currencySymbol?: string;
+    decimals?: number;
+    compactNotation?: 'K' | 'M' | 'B' | 'T' | null;
+  }
 ): string {
-  const { currencySymbol = '$', decimals = 0 } = options || {};
+  const { currencySymbol = '$', decimals = 0, compactNotation } = options || {};
 
   switch (format) {
     case 'currency':
-      return `${currencySymbol}${formatCompact(value, decimals)}`;
+      // Only use compact notation if explicitly specified
+      if (compactNotation) {
+        return `${currencySymbol}${formatCompactAtThreshold(value, compactNotation, decimals)}`;
+      }
+      // Otherwise show full number with proper formatting
+      return `${currencySymbol}${value.toLocaleString(undefined, {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+      })}`;
 
     case 'percent':
       return `${(value * 100).toFixed(decimals)}%`;
@@ -331,6 +343,51 @@ export function formatCompact(value: number, decimals: number = 1): string {
     return `${sign}${(absValue / 1_000).toFixed(decimals)}K`;
   }
   return `${sign}${absValue.toFixed(decimals)}`;
+}
+
+/**
+ * Formats a number with compact notation at a specific threshold.
+ * Only applies notation if value meets the threshold.
+ *
+ * @param value - The number to format
+ * @param notation - The notation threshold (K, M, B, T)
+ * @param decimals - Number of decimal places
+ * @returns Formatted string
+ *
+ * @example
+ * formatCompactAtThreshold(8693, 'K', 3) => "8.693K"
+ * formatCompactAtThreshold(8693, 'M', 3) => "8,693" (below threshold)
+ * formatCompactAtThreshold(8693000, 'M', 3) => "8.693M"
+ */
+export function formatCompactAtThreshold(
+  value: number,
+  notation: 'K' | 'M' | 'B' | 'T',
+  decimals: number = 0
+): string {
+  const absValue = Math.abs(value);
+  const sign = value < 0 ? '-' : '';
+
+  // Define thresholds and divisors
+  const thresholds: Record<'K' | 'M' | 'B' | 'T', { threshold: number; divisor: number }> = {
+    K: { threshold: 1_000, divisor: 1_000 },
+    M: { threshold: 1_000_000, divisor: 1_000_000 },
+    B: { threshold: 1_000_000_000, divisor: 1_000_000_000 },
+    T: { threshold: 1_000_000_000_000, divisor: 1_000_000_000_000 },
+  };
+
+  const config = thresholds[notation];
+
+  // Only apply notation if value meets the threshold
+  if (absValue >= config.threshold) {
+    const formatted = (absValue / config.divisor).toFixed(decimals);
+    return `${sign}${formatted}${notation}`;
+  }
+
+  // Below threshold: show full number with locale formatting
+  return `${sign}${absValue.toLocaleString(undefined, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })}`;
 }
 
 /**
