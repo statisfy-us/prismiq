@@ -2,7 +2,7 @@
  * MetricCard component for displaying KPIs.
  */
 
-import React from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useTheme } from '../../theme';
 import { formatMetricValue } from '../utils';
 import type { MetricCardProps } from '../types';
@@ -35,10 +35,60 @@ export function MetricCard({
   sparklineColor,
   size = 'md',
   loading = false,
+  centered = false,
   className,
   onClick,
 }: MetricCardProps): JSX.Element {
   const { theme } = useTheme();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerSize, setContainerSize] = useState({ width: 300, height: 200 });
+
+  // Measure container size on mount and resize
+  useEffect(() => {
+    const measureSize = () => {
+      if (containerRef.current) {
+        setContainerSize({
+          width: containerRef.current.offsetWidth,
+          height: containerRef.current.offsetHeight,
+        });
+      }
+    };
+
+    measureSize();
+    window.addEventListener('resize', measureSize);
+    // Also use ResizeObserver for more accurate measurements
+    const resizeObserver = new ResizeObserver(measureSize);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
+    return () => {
+      window.removeEventListener('resize', measureSize);
+      resizeObserver.disconnect();
+    };
+  }, []);
+
+  // Calculate responsive font size for centered metrics
+  // Scale font size based on container dimensions
+  const calculateResponsiveFontSize = () => {
+    if (!centered) {
+      // Use default sizes for non-centered metrics
+      const sizeMap = {
+        sm: theme.fontSizes.xl,
+        md: theme.fontSizes['2xl'],
+        lg: '28px',
+      };
+      return sizeMap[size];
+    }
+
+    // For centered metrics, scale based on container size
+    // Use the smaller dimension to ensure it fits
+    const minDimension = Math.min(containerSize.width, containerSize.height);
+
+    // Scale: 20% of container height, but clamp between 24px and 96px
+    const scaledSize = Math.max(24, Math.min(96, minDimension * 0.25));
+    return `${scaledSize}px`;
+  };
 
   // Size-based styles
   const sizeConfig = {
@@ -63,17 +113,24 @@ export function MetricCard({
   };
 
   const config = sizeConfig[size];
+  const responsiveValueSize = calculateResponsiveFontSize();
 
   // Container styles
   const containerStyle: React.CSSProperties = {
     backgroundColor: theme.colors.surface,
     border: `1px solid ${theme.colors.border}`,
     borderRadius: theme.radius.lg,
-    padding: config.padding,
+    padding: centered ? theme.spacing.md : config.padding,
     cursor: onClick ? 'pointer' : 'default',
     transition: 'box-shadow 0.2s ease, border-color 0.2s ease',
     position: 'relative',
     overflow: 'hidden',
+    ...(centered && {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      height: '100%',
+    }),
   };
 
   // Header row styles
@@ -94,11 +151,14 @@ export function MetricCard({
 
   // Value styles
   const valueStyle: React.CSSProperties = {
-    fontSize: config.valueSize,
+    fontSize: responsiveValueSize,
     fontWeight: 600,
     color: theme.colors.text,
     margin: 0,
     lineHeight: 1.2,
+    ...(centered && {
+      textAlign: 'center',
+    }),
   };
 
   // Sparkline container
@@ -121,6 +181,7 @@ export function MetricCard({
 
   return (
     <div
+      ref={containerRef}
       style={containerStyle}
       className={className}
       onClick={onClick}
@@ -145,58 +206,75 @@ export function MetricCard({
         }
       `}</style>
 
-      {/* Header with title and trend */}
-      <div style={headerStyle}>
-        {loading ? (
-          <div style={{ ...skeletonStyle, width: '80px', height: '14px' }} />
+      {/* Centered layout - just show the value */}
+      {centered ? (
+        loading ? (
+          <div
+            style={{
+              ...skeletonStyle,
+              width: '120px',
+              height: '32px',
+            }}
+          />
         ) : (
-          <h3 style={titleStyle}>{title}</h3>
-        )}
-
-        {trend && !loading && (
-          <TrendIndicator
-            trend={trend}
-            trendPositive={trendPositive}
-            size={size}
-          />
-        )}
-      </div>
-
-      {/* Value */}
-      {loading ? (
-        <div
-          style={{
-            ...skeletonStyle,
-            width: '120px',
-            height: size === 'sm' ? '20px' : size === 'lg' ? '32px' : '24px',
-            marginTop: theme.spacing.xs,
-          }}
-        />
+          <p style={valueStyle}>{formattedValue}</p>
+        )
       ) : (
-        <p style={valueStyle}>{formattedValue}</p>
-      )}
+        <>
+          {/* Header with title and trend */}
+          <div style={headerStyle}>
+            {loading ? (
+              <div style={{ ...skeletonStyle, width: '80px', height: '14px' }} />
+            ) : (
+              <h3 style={titleStyle}>{title}</h3>
+            )}
 
-      {/* Sparkline */}
-      {sparklineData && sparklineData.length > 0 && !loading && (
-        <div style={sparklineContainerStyle}>
-          <Sparkline
-            data={sparklineData}
-            color={sparklineColor}
-            height={config.sparklineHeight}
-          />
-        </div>
-      )}
+            {trend && !loading && (
+              <TrendIndicator
+                trend={trend}
+                trendPositive={trendPositive}
+                size={size}
+              />
+            )}
+          </div>
 
-      {/* Loading sparkline skeleton */}
-      {sparklineData && loading && (
-        <div
-          style={{
-            ...skeletonStyle,
-            width: '100%',
-            height: `${config.sparklineHeight}px`,
-            marginTop: theme.spacing.md,
-          }}
-        />
+          {/* Value */}
+          {loading ? (
+            <div
+              style={{
+                ...skeletonStyle,
+                width: '120px',
+                height: size === 'sm' ? '20px' : size === 'lg' ? '32px' : '24px',
+                marginTop: theme.spacing.xs,
+              }}
+            />
+          ) : (
+            <p style={valueStyle}>{formattedValue}</p>
+          )}
+
+          {/* Sparkline */}
+          {sparklineData && sparklineData.length > 0 && !loading && (
+            <div style={sparklineContainerStyle}>
+              <Sparkline
+                data={sparklineData}
+                color={sparklineColor}
+                height={config.sparklineHeight}
+              />
+            </div>
+          )}
+
+          {/* Loading sparkline skeleton */}
+          {sparklineData && loading && (
+            <div
+              style={{
+                ...skeletonStyle,
+                width: '100%',
+                height: `${config.sparklineHeight}px`,
+                marginTop: theme.spacing.md,
+              }}
+            />
+          )}
+        </>
       )}
     </div>
   );

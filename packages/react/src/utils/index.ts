@@ -21,3 +21,6 @@ export type {
   UseArrowNavigationResult,
   SkipLinkProps,
 } from './accessibility';
+
+// Date formatting
+export { createDateFormatter, createDateFormatters } from './dateFormat';

@@ -192,6 +192,28 @@ export interface GroupByDefinition {
 }
 
 /**
+ * A calculated field definition with an expression.
+ *
+ * Calculated fields allow defining computed columns using expressions
+ * that can reference other columns and calculated fields.
+ */
+export interface CalculatedField {
+  /** Name of the calculated field. */
+  name: string;
+  /**
+   * Expression defining the calculation.
+   * Uses a SQL-like expression language with functions like:
+   * - if(condition, true_val, false_val)
+   * - sum(expr), avg(expr), count(expr)
+   * - year(date), month(date), today()
+   * - Field references: [field_name]
+   */
+  expression: string;
+  /** Data type of the result: 'number', 'string', 'date', 'boolean'. */
+  data_type?: string;
+}
+
+/**
  * Complete query definition.
  */
 export interface QueryDefinition {
@@ -211,6 +233,8 @@ export interface QueryDefinition {
   limit?: number;
   /** Number of rows to skip. */
   offset?: number;
+  /** Calculated field definitions. These fields can be referenced in columns, filters, etc. */
+  calculated_fields?: CalculatedField[];
 }
 
 // ============================================================================

@@ -297,7 +297,7 @@ export function formatAxisLabel(
     compactNotation?: 'K' | 'M' | 'B' | 'T' | null;
   }
 ): string {
-  const { currencySymbol = '$', decimals = 0, compactNotation } = options || {};
+  const { currencySymbol = '$', decimals = 2, compactNotation } = options || {};
 
   switch (format) {
     case 'currency':

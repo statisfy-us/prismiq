@@ -271,6 +271,32 @@ class GroupByDefinition(BaseModel):
     """Column name to group by."""
 
 
+class CalculatedField(BaseModel):
+    """A calculated field definition with an expression.
+
+    Calculated fields allow defining computed columns using expressions
+    that can reference other columns and calculated fields.
+    """
+
+    model_config = ConfigDict()
+
+    name: str
+    """Name of the calculated field."""
+
+    expression: str
+    """
+    Expression defining the calculation.
+    Uses a SQL-like expression language with functions like:
+    - if(condition, true_val, false_val)
+    - sum(expr), avg(expr), count(expr)
+    - year(date), month(date), today()
+    - Field references: [field_name]
+    """
+
+    data_type: str = "number"
+    """Data type of the result: 'number', 'string', 'date', 'boolean'."""
+
+
 class TimeSeriesConfig(BaseModel):
     """Configuration for time series queries.
 
@@ -346,6 +372,12 @@ class QueryDefinition(BaseModel):
     """
     Optional time series configuration.
     When present, the query will bucket dates automatically.
+    """
+
+    calculated_fields: list[CalculatedField] = []
+    """
+    Calculated field definitions.
+    These fields can be referenced in columns, filters, etc.
     """
 
     @field_validator("tables")

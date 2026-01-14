@@ -14,6 +14,7 @@ import {
 } from '../../charts';
 import { ResultsTable } from '../../components';
 import { useCrossFilterOptional } from '../../context';
+import { createDateFormatters } from '../../utils';
 import type { Widget, WidgetConfig } from '../types';
 import type { QueryResult } from '../../types';
 import type { ChartDataPoint, ChartClickParams, CrossFilterConfig } from '../../charts/types';
@@ -234,6 +235,14 @@ export function WidgetContent({
     [crossFilterContext, crossFilterEnabled, widget.id, crossFilterColumn]
   );
 
+  // Create date formatters for table widgets (must be called unconditionally per Rules of Hooks)
+  const dateFormatters = useMemo(() => {
+    if (widget.type === 'table' && widget.config.dateFormats) {
+      return createDateFormatters(widget.config.dateFormats);
+    }
+    return undefined;
+  }, [widget.type, widget.config.dateFormats]);
+
   // Container style
   const containerStyle: React.CSSProperties = {
     flex: 1,
@@ -299,6 +308,7 @@ export function WidgetContent({
             title=""
             value={typeof value === 'number' ? value : Number(value) || 0}
             format={widget.config.format ?? 'number'}
+            centered={true}
             trend={
               comparisonValue !== undefined
                 ? {
@@ -414,6 +424,7 @@ export function WidgetContent({
             result={result}
             pageSize={widget.config.page_size ?? 10}
             sortable={widget.config.sortable ?? true}
+            formatters={dateFormatters}
           />
         </div>
       );

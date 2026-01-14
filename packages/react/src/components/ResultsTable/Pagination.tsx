@@ -37,6 +37,8 @@ const containerStyles: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
+  flexWrap: 'wrap',
+  gap: 'var(--prismiq-spacing-sm)',
   padding: 'var(--prismiq-spacing-sm) var(--prismiq-spacing-md)',
   borderTop: '1px solid var(--prismiq-color-border)',
   backgroundColor: 'var(--prismiq-color-surface)',
@@ -48,18 +50,19 @@ const leftStyles: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: 'var(--prismiq-spacing-sm)',
+  flexWrap: 'wrap',
 };
 
 const rightStyles: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
-  gap: 'var(--prismiq-spacing-sm)',
+  gap: 'var(--prismiq-spacing-xs)',
+  flexShrink: 0,
 };
 
 const pageInfoStyles: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 'var(--prismiq-spacing-xs)',
+  whiteSpace: 'nowrap',
+  marginRight: 'var(--prismiq-spacing-xs)',
 };
 
 // ============================================================================
@@ -115,7 +118,7 @@ export function Pagination({
   return (
     <div className={className} style={{ ...containerStyles, ...style }}>
       <div style={leftStyles}>
-        <span>
+        <span style={{ whiteSpace: 'nowrap' }}>
           Showing {startItem} - {endItem} of {totalItems.toLocaleString()} rows
         </span>
         {onPageSizeChange && (
@@ -129,12 +132,9 @@ export function Pagination({
       </div>
 
       <div style={rightStyles}>
-        <div style={pageInfoStyles}>
-          <span>Page</span>
-          <strong>
-            {currentPage} of {totalPages}
-          </strong>
-        </div>
+        <span style={pageInfoStyles}>
+          Page {currentPage} of {totalPages}
+        </span>
 
         <Button
           variant="ghost"

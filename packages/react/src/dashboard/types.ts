@@ -100,6 +100,8 @@ export interface WidgetConfig {
   page_size?: number;
   /** Whether table columns are sortable. */
   sortable?: boolean;
+  /** Date format strings for datetime columns (column name -> .NET format string). */
+  dateFormats?: Record<string, string>;
 
   // Text options
   /** Text content for text widgets. */

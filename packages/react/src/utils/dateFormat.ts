@@ -1,0 +1,127 @@
+/**
+ * Date formatting utilities for converting .NET format strings to JavaScript date formatters.
+ *
+ * Supports common .NET date format patterns used by RevealBI.
+ */
+
+/**
+ * Convert .NET date format string to JavaScript date formatter.
+ *
+ * Common patterns:
+ * - dd-MMM-yyyy HH:mm -> 20-Mar-2025 17:00
+ * - yyyy-MM-dd -> 2025-03-20
+ * - MM/dd/yyyy -> 03/20/2025
+ * - yyyy-MM-dd HH:mm:ss -> 2025-03-20 17:00:00
+ *
+ * @param formatString .NET date format string
+ * @returns Formatter function
+ */
+export function createDateFormatter(formatString: string): (value: unknown) => string {
+  return (value: unknown): string => {
+    if (value === null || value === undefined) {
+      return '';
+    }
+
+    // Parse date from various formats
+    let date: Date;
+    if (value instanceof Date) {
+      date = value;
+    } else if (typeof value === 'string') {
+      date = new Date(value);
+    } else if (typeof value === 'number') {
+      date = new Date(value);
+    } else {
+      return String(value);
+    }
+
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return String(value);
+    }
+
+    // Convert .NET format to formatted string
+    return formatDateWithPattern(date, formatString);
+  };
+}
+
+/**
+ * Format date according to .NET format pattern.
+ */
+function formatDateWithPattern(date: Date, pattern: string): string {
+  // Get date components
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  const seconds = date.getSeconds();
+
+  // Month names
+  const monthNamesShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const monthNamesFull = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+  // Day names
+  const dayNamesShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const dayNamesFull = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+  // Replace tokens
+  let result = pattern;
+
+  // Year
+  result = result.replace(/yyyy/g, String(year).padStart(4, '0'));
+  result = result.replace(/yy/g, String(year % 100).padStart(2, '0'));
+
+  // Month
+  result = result.replace(/MMMM/g, monthNamesFull[month - 1] || '');
+  result = result.replace(/MMM/g, monthNamesShort[month - 1] || '');
+  result = result.replace(/MM/g, String(month).padStart(2, '0'));
+  result = result.replace(/M/g, String(month));
+
+  // Day
+  result = result.replace(/dddd/g, dayNamesFull[date.getDay()] || '');
+  result = result.replace(/ddd/g, dayNamesShort[date.getDay()] || '');
+  result = result.replace(/dd/g, String(day).padStart(2, '0'));
+  result = result.replace(/d/g, String(day));
+
+  // Hours (24-hour)
+  result = result.replace(/HH/g, String(hours).padStart(2, '0'));
+  result = result.replace(/H/g, String(hours));
+
+  // Hours (12-hour)
+  const hours12 = hours % 12 || 12;
+  result = result.replace(/hh/g, String(hours12).padStart(2, '0'));
+  result = result.replace(/h/g, String(hours12));
+
+  // AM/PM
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  result = result.replace(/tt/g, ampm);
+  result = result.replace(/t/g, ampm.charAt(0));
+
+  // Minutes
+  result = result.replace(/mm/g, String(minutes).padStart(2, '0'));
+  result = result.replace(/m/g, String(minutes));
+
+  // Seconds
+  result = result.replace(/ss/g, String(seconds).padStart(2, '0'));
+  result = result.replace(/s/g, String(seconds));
+
+  return result;
+}
+
+/**
+ * Create date formatters from config map.
+ *
+ * @param dateFormats Map of column name to .NET format string
+ * @returns Map of column name to formatter function
+ */
+export function createDateFormatters(
+  dateFormats: Record<string, string>
+): Record<string, (value: unknown) => string> {
+  const formatters: Record<string, (value: unknown) => string> = {};
+
+  for (const [column, format] of Object.entries(dateFormats)) {
+    formatters[column] = createDateFormatter(format);
+  }
+
+  return formatters;
+}

@@ -335,6 +335,8 @@ export interface MetricCardProps {
   size?: 'sm' | 'md' | 'lg';
   /** Whether the card is loading. */
   loading?: boolean;
+  /** Whether to center the value (for single-number displays). */
+  centered?: boolean;
   /** Additional CSS class name. */
   className?: string;
   /** Click handler. */
