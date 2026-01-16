@@ -13,6 +13,7 @@ import {
   getChartColors,
   createMarkLines,
 } from '../utils';
+import { createDateFormatter } from '../../utils';
 import type { BarChartProps, ChartClickParams } from '../types';
 
 /**
@@ -45,6 +46,7 @@ export function BarChart({
   colors,
   xAxisLabel,
   yAxisLabel,
+  xAxisFormat,
   yAxisFormat = 'number',
   currencySymbol = '$',
   compactNotation,
@@ -72,6 +74,18 @@ export function BarChart({
     [data, xAxis, yColumns]
   );
 
+  // Create date formatter if xAxisFormat is provided
+  const dateFormatter = useMemo(
+    () => (xAxisFormat ? createDateFormatter(xAxisFormat) : null),
+    [xAxisFormat]
+  );
+
+  // Format categories if date formatter is available
+  const formattedCategories = useMemo(() => {
+    if (!dateFormatter) return chartData.categories;
+    return chartData.categories.map((cat) => dateFormatter(cat));
+  }, [chartData.categories, dateFormatter]);
+
   // Get colors
   const seriesColors = useMemo(
     () => colors || getChartColors(theme, yColumns.length),
@@ -94,12 +108,12 @@ export function BarChart({
     // Category axis config
     const categoryAxis = {
       type: 'category',
-      data: chartData.categories,
+      data: formattedCategories,
       name: isHorizontal ? yAxisLabel : xAxisLabel,
       nameLocation: 'middle',
       nameGap: 35,
       axisLabel: {
-        rotate: isHorizontal ? 0 : chartData.categories.length > 10 ? 45 : 0,
+        rotate: isHorizontal ? 0 : formattedCategories.length > 10 ? 45 : 0,
         interval: 0,
         hideOverlap: true,
       },
@@ -252,6 +266,7 @@ export function BarChart({
     isEmpty,
     orientation,
     chartData,
+    formattedCategories,
     xAxisLabel,
     yAxisLabel,
     yAxisFormat,

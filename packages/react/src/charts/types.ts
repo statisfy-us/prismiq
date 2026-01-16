@@ -171,6 +171,8 @@ export interface BarChartProps extends BaseChartProps {
   xAxisLabel?: string;
   /** Y axis label. */
   yAxisLabel?: string;
+  /** X axis date format (.NET format string like "MMM-yyyy" for date axes). */
+  xAxisFormat?: string;
   /** Y axis value format. */
   yAxisFormat?: AxisFormat;
   /** Currency symbol for currency format. */
@@ -189,6 +191,8 @@ export interface LineChartProps extends BaseChartProps {
   xAxis: string;
   /** Column name(s) for Y axis values. */
   yAxis: string | string[];
+  /** Column name that defines series (for multi-series charts with long-format data). */
+  seriesColumn?: string;
   /** Whether to use smooth/curved lines. */
   smooth?: boolean;
   /** Whether to show area fill under lines. */
@@ -207,6 +211,8 @@ export interface LineChartProps extends BaseChartProps {
   xAxisLabel?: string;
   /** Y axis label. */
   yAxisLabel?: string;
+  /** X axis date format (.NET format string like "MMM-yyyy" for date axes). */
+  xAxisFormat?: string;
   /** Y axis value format. */
   yAxisFormat?: AxisFormat;
 }
@@ -235,6 +241,8 @@ export interface AreaChartProps extends BaseChartProps {
   xAxisLabel?: string;
   /** Y axis label. */
   yAxisLabel?: string;
+  /** X axis date format (.NET format string like "MMM-yyyy" for date axes). */
+  xAxisFormat?: string;
 }
 
 /**
@@ -263,6 +271,8 @@ export interface PieChartProps extends BaseChartProps {
   startAngle?: number;
   /** How to sort slices. */
   sortSlices?: 'asc' | 'desc' | 'none';
+  /** Label format (.NET format string like "MMM-yyyy" for date labels). */
+  labelFormat?: string;
 }
 
 /**

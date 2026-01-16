@@ -66,6 +66,8 @@ export interface WidgetConfig {
   x_axis?: string;
   /** Columns to use for Y axis (supports multiple for multi-series). */
   y_axis?: string[];
+  /** Column that defines series for multi-series charts (e.g., category column in long-format data). */
+  series_column?: string;
   /** Chart orientation for bar charts. */
   orientation?: 'vertical' | 'horizontal';
   /** Whether to stack series. */
@@ -100,7 +102,13 @@ export interface WidgetConfig {
   page_size?: number;
   /** Whether table columns are sortable. */
   sortable?: boolean;
-  /** Date format strings for datetime columns (column name -> .NET format string). */
+  /** Column to pivot (for pivot tables). Unique values become columns. */
+  pivot_column?: string;
+  /** Column containing values to distribute across pivoted columns. */
+  value_column?: string;
+
+  // Date formatting (used by both tables and charts)
+  /** Date format strings for datetime columns (column name -> .NET format string). Used by tables and chart axes. */
   dateFormats?: Record<string, string>;
 
   // Text options

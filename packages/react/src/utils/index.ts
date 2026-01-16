@@ -24,3 +24,7 @@ export type {
 
 // Date formatting
 export { createDateFormatter, createDateFormatters } from './dateFormat';
+
+// Pivot transformations
+export { pivotQueryResult } from './pivot';
+export type { PivotConfig } from './pivot';

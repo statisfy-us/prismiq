@@ -14,7 +14,7 @@ import {
 } from '../../charts';
 import { ResultsTable } from '../../components';
 import { useCrossFilterOptional } from '../../context';
-import { createDateFormatters } from '../../utils';
+import { createDateFormatters, pivotQueryResult } from '../../utils';
 import type { Widget, WidgetConfig } from '../types';
 import type { QueryResult } from '../../types';
 import type { ChartDataPoint, ChartClickParams, CrossFilterConfig } from '../../charts/types';
@@ -237,9 +237,14 @@ export function WidgetContent({
 
   // Create date formatters for table widgets (must be called unconditionally per Rules of Hooks)
   const dateFormatters = useMemo(() => {
+    console.log('[WidgetContent DEBUG] widget.type:', widget.type);
+    console.log('[WidgetContent DEBUG] widget.config.dateFormats:', widget.config.dateFormats);
     if (widget.type === 'table' && widget.config.dateFormats) {
-      return createDateFormatters(widget.config.dateFormats);
+      const formatters = createDateFormatters(widget.config.dateFormats);
+      console.log('[WidgetContent DEBUG] Created dateFormatters:', Object.keys(formatters));
+      return formatters;
     }
+    console.log('[WidgetContent DEBUG] No dateFormatters created');
     return undefined;
   }, [widget.type, widget.config.dateFormats]);
 
@@ -339,6 +344,7 @@ export function WidgetContent({
             showLegend={showLegend}
             showDataLabels={showDataLabels}
             colors={colors}
+            xAxisFormat={widget.config.dateFormats?.[xAxis]}
             yAxisFormat={widget.config.valueFormat ?? 'number'}
             currencySymbol={widget.config.currencySymbol}
             compactNotation={widget.config.compactNotation}
@@ -358,9 +364,11 @@ export function WidgetContent({
             data={data}
             xAxis={xAxis}
             yAxis={yAxis}
+            seriesColumn={widget.config.series_column}
             showLegend={showLegend}
             showDataLabels={showDataLabels}
             colors={colors}
+            xAxisFormat={widget.config.dateFormats?.[xAxis]}
             height="100%"
             crossFilter={crossFilterConfig}
             selectedValue={selectedValue}
@@ -379,6 +387,7 @@ export function WidgetContent({
             stacked={widget.config.stacked}
             showLegend={showLegend}
             colors={colors}
+            xAxisFormat={widget.config.dateFormats?.[xAxis]}
             height="100%"
             crossFilter={crossFilterConfig}
             selectedValue={selectedValue}
@@ -397,6 +406,7 @@ export function WidgetContent({
             showLegend={showLegend}
             showLabels={showDataLabels}
             colors={colors}
+            labelFormat={widget.config.dateFormats?.[xAxis]}
             height="100%"
             crossFilter={crossFilterConfig}
             selectedValue={selectedValue}
@@ -417,17 +427,48 @@ export function WidgetContent({
         </div>
       );
 
-    case 'table':
+    case 'table': {
+      // Check if this is a pivot table
+      let tableResult = result;
+
+      if (widget.config.pivot_column && widget.config.value_column) {
+        // Get dimension columns (all columns except pivot and value)
+        const dimensionColumns = result.columns.filter(
+          (col) => col !== widget.config.pivot_column && col !== widget.config.value_column
+        );
+
+        console.log('[PIVOT DEBUG] Pivoting table:', {
+          pivot_column: widget.config.pivot_column,
+          value_column: widget.config.value_column,
+          dimensions: dimensionColumns,
+          original_columns: result.columns,
+        });
+
+        // Pivot the data
+        tableResult = pivotQueryResult(result, {
+          pivotColumn: widget.config.pivot_column,
+          valueColumn: widget.config.value_column,
+          dimensionColumns,
+        });
+
+        console.log('[PIVOT DEBUG] Pivoted result:', {
+          columns: tableResult.columns,
+          row_count: tableResult.row_count,
+          sample_rows: tableResult.rows.slice(0, 3),
+        });
+      }
+
       return (
         <div style={containerStyle}>
           <ResultsTable
-            result={result}
+            result={tableResult}
             pageSize={widget.config.page_size ?? 10}
             sortable={widget.config.sortable ?? true}
             formatters={dateFormatters}
           />
         </div>
       );
+    }
 
     default:
       return (

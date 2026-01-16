@@ -12,6 +12,7 @@ import {
   formatAxisLabel,
   getChartColors,
 } from '../utils';
+import { createDateFormatter } from '../../utils';
 import type { PieChartProps, ChartClickParams } from '../types';
 
 /**
@@ -50,6 +51,7 @@ export function PieChart({
   onDataPointClick,
   crossFilter,
   selectedValue,
+  labelFormat,
 }: PieChartProps): JSX.Element {
   const { theme } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -81,6 +83,18 @@ export function PieChart({
     [data, labelColumn, valueColumn]
   );
 
+  // Create date formatter if labelFormat is provided
+  const dateFormatter = useMemo(
+    () => (labelFormat ? createDateFormatter(labelFormat) : null),
+    [labelFormat]
+  );
+
+  // Format categories if date formatter is available
+  const formattedCategories = useMemo(() => {
+    if (!dateFormatter) return chartData.categories;
+    return chartData.categories.map((cat) => dateFormatter(cat));
+  }, [chartData.categories, dateFormatter]);
+
   // Get pie data from transformed data
   const pieData = useMemo(() => {
     if (chartData.series.length === 0) {
@@ -92,7 +106,7 @@ export function PieChart({
       return [];
     }
 
-    const items = chartData.categories.map((name, index) => ({
+    const items = formattedCategories.map((name, index) => ({
       name,
       value: series.data[index] ?? 0,
     }));
@@ -105,7 +119,7 @@ export function PieChart({
     }
 
     return items;
-  }, [chartData, sortSlices]);
+  }, [formattedCategories, chartData.series, sortSlices]);
 
   // Get colors
   const seriesColors = useMemo(

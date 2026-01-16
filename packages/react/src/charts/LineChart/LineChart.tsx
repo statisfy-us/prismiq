@@ -14,6 +14,7 @@ import {
   createMarkLines,
   createGradientColor,
 } from '../utils';
+import { createDateFormatter } from '../../utils';
 import type { LineChartProps, ChartClickParams } from '../types';
 
 /**
@@ -36,6 +37,7 @@ export function LineChart({
   data,
   xAxis,
   yAxis,
+  seriesColumn,
   smooth = false,
   showArea = false,
   showPoints = false,
@@ -45,6 +47,7 @@ export function LineChart({
   colors,
   xAxisLabel,
   yAxisLabel,
+  xAxisFormat,
   yAxisFormat = 'number',
   loading = false,
   error,
@@ -65,9 +68,32 @@ export function LineChart({
 
   // Transform data
   const chartData = useMemo(
-    () => toChartData(data, xAxis, yColumns),
-    [data, xAxis, yColumns]
+    () => toChartData(data, xAxis, yColumns, seriesColumn),
+    [data, xAxis, yColumns, seriesColumn]
   );
+
+  // Create date formatter if xAxisFormat is provided
+  const dateFormatter = useMemo(
+    () => {
+      console.log('[LineChart DEBUG] xAxisFormat:', xAxisFormat);
+      const formatter = xAxisFormat ? createDateFormatter(xAxisFormat) : null;
+      console.log('[LineChart DEBUG] dateFormatter created:', !!formatter);
+      return formatter;
+    },
+    [xAxisFormat]
+  );
+
+  // Format categories if date formatter is available
+  const formattedCategories = useMemo(() => {
+    console.log('[LineChart DEBUG] chartData.categories:', chartData.categories.slice(0, 3));
+    if (!dateFormatter) {
+      console.log('[LineChart DEBUG] No dateFormatter, returning raw categories');
+      return chartData.categories;
+    }
+    const formatted = chartData.categories.map((cat) => dateFormatter(cat));
+    console.log('[LineChart DEBUG] Formatted categories:', formatted.slice(0, 3));
+    return formatted;
+  }, [chartData.categories, dateFormatter]);
 
   // Get colors
   const seriesColors = useMemo(
@@ -202,12 +228,12 @@ export function LineChart({
       },
       xAxis: {
         type: 'category',
-        data: chartData.categories,
+        data: formattedCategories,
         name: xAxisLabel,
         nameLocation: 'middle',
         nameGap: 35,
         axisLabel: {
-          rotate: chartData.categories.length > 10 ? 45 : 0,
+          rotate: formattedCategories.length > 10 ? 45 : 0,
           interval: 0,
           hideOverlap: true,
         },
@@ -227,6 +253,7 @@ export function LineChart({
   }, [
     isEmpty,
     chartData,
+    formattedCategories,
     smooth,
     showPoints,
     showArea,

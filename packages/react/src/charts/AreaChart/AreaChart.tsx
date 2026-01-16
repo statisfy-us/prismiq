@@ -14,6 +14,7 @@ import {
   createGradientColor,
   adjustColorOpacity,
 } from '../utils';
+import { createDateFormatter } from '../../utils';
 import type { AreaChartProps, ChartClickParams } from '../types';
 
 /**
@@ -43,6 +44,7 @@ export function AreaChart({
   colors,
   xAxisLabel,
   yAxisLabel,
+  xAxisFormat,
   loading = false,
   error,
   height = 300,
@@ -65,6 +67,18 @@ export function AreaChart({
     () => toChartData(data, xAxis, yColumns),
     [data, xAxis, yColumns]
   );
+
+  // Create date formatter if xAxisFormat is provided
+  const dateFormatter = useMemo(
+    () => (xAxisFormat ? createDateFormatter(xAxisFormat) : null),
+    [xAxisFormat]
+  );
+
+  // Format categories if date formatter is available
+  const formattedCategories = useMemo(() => {
+    if (!dateFormatter) return chartData.categories;
+    return chartData.categories.map((cat) => dateFormatter(cat));
+  }, [chartData.categories, dateFormatter]);
 
   // Get colors
   const seriesColors = useMemo(
@@ -215,12 +229,12 @@ export function AreaChart({
       },
       xAxis: {
         type: 'category',
-        data: processedData.categories,
+        data: formattedCategories,
         name: xAxisLabel,
         nameLocation: 'middle',
         nameGap: 35,
         axisLabel: {
-          rotate: processedData.categories.length > 10 ? 45 : 0,
+          rotate: formattedCategories.length > 10 ? 45 : 0,
           interval: 0,
           hideOverlap: true,
         },
@@ -246,6 +260,7 @@ export function AreaChart({
   }, [
     isEmpty,
     chartData,
+    formattedCategories,
     stacked,
     stackType,
     smooth,

@@ -21,14 +21,79 @@ import type { AxisFormat, ChartDataPoint, ChartSeries } from './types';
 export function queryResultToChartData(
   result: QueryResult,
   xColumn: string,
-  yColumns: string[]
+  yColumns: string[],
+  seriesColumn?: string
 ): { categories: string[]; series: ChartSeries[] } {
   const xIndex = result.columns.indexOf(xColumn);
   if (xIndex === -1) {
     return { categories: [], series: [] };
   }
 
-  // Extract unique categories from X column
+  // If seriesColumn is provided, pivot the data to create multiple series
+  if (seriesColumn) {
+    const seriesIndex = result.columns.indexOf(seriesColumn);
+    if (seriesIndex === -1) {
+      return { categories: [], series: [] };
+    }
+
+    // Get unique x-axis values (categories)
+    const xValuesSet = new Set<string>();
+    result.rows.forEach((row) => {
+      const xValue = row[xIndex];
+      xValuesSet.add(xValue === null ? '' : String(xValue));
+    });
+    const categories = Array.from(xValuesSet).sort();
+
+    // Get unique series values
+    const seriesNamesSet = new Set<string>();
+    result.rows.forEach((row) => {
+      const seriesValue = row[seriesIndex];
+      seriesNamesSet.add(seriesValue === null ? '' : String(seriesValue));
+    });
+    const seriesNames = Array.from(seriesNamesSet).sort();
+
+    // Create a series for each unique value in the series column
+    const series: ChartSeries[] = yColumns.flatMap((yColName) => {
+      const yIndex = result.columns.indexOf(yColName);
+      if (yIndex === -1) {
+        return [];
+      }
+
+      return seriesNames.map((seriesName) => {
+        // For this series, extract data for each category
+        const data = categories.map((category) => {
+          // Find the row that matches this series name and category
+          const row = result.rows.find((r) => {
+            const rowSeriesValue = r[seriesIndex];
+            const rowXValue = r[xIndex];
+            return (
+              String(rowSeriesValue) === seriesName &&
+              String(rowXValue) === category
+            );
+          });
+
+          if (!row) {
+            return null;
+          }
+
+          const value = row[yIndex];
+          if (value === null || value === undefined) {
+            return null;
+          }
+          return typeof value === 'number' ? value : Number(value);
+        });
+
+        return {
+          name: seriesName,
+          data,
+        };
+      });
+    });
+
+    return { categories, series };
+  }
+
+  // Original behavior: no series column, extract categories from X column
   const categories: string[] = result.rows.map((row) => {
     const value = row[xIndex];
     return value === null ? '' : String(value);
@@ -66,13 +131,69 @@ export function queryResultToChartData(
  * @param data - Array of data points
  * @param xColumn - Property name for X axis
  * @param yColumns - Property names for Y axis values
+ * @param seriesColumn - Optional column that defines series (for long-format data)
  * @returns Object with categories and series arrays
  */
 export function dataPointsToChartData(
   data: ChartDataPoint[],
   xColumn: string,
-  yColumns: string[]
+  yColumns: string[],
+  seriesColumn?: string
 ): { categories: string[]; series: ChartSeries[] } {
+  // If seriesColumn is provided, pivot the data to create multiple series
+  if (seriesColumn) {
+    // Get unique x-axis values (categories)
+    const xValuesSet = new Set<string>();
+    data.forEach((point) => {
+      const xValue = point[xColumn];
+      xValuesSet.add(xValue === null ? '' : String(xValue));
+    });
+    const categories = Array.from(xValuesSet).sort();
+
+    // Get unique series values
+    const seriesNamesSet = new Set<string>();
+    data.forEach((point) => {
+      const seriesValue = point[seriesColumn];
+      seriesNamesSet.add(seriesValue === null ? '' : String(seriesValue));
+    });
+    const seriesNames = Array.from(seriesNamesSet).sort();
+
+    // Create a series for each unique value in the series column
+    const series: ChartSeries[] = yColumns.flatMap((yColName) => {
+      return seriesNames.map((seriesName) => {
+        // For this series, extract data for each category
+        const seriesData = categories.map((category) => {
+          // Find the data point that matches this series name and category
+          const point = data.find((p) => {
+            const pSeriesValue = p[seriesColumn];
+            const pXValue = p[xColumn];
+            return (
+              String(pSeriesValue) === seriesName && String(pXValue) === category
+            );
+          });
+
+          if (!point) {
+            return null;
+          }
+
+          const value = point[yColName];
+          if (value === null || value === undefined) {
+            return null;
+          }
+          return typeof value === 'number' ? value : Number(value);
+        });
+
+        return {
+          name: seriesName,
+          data: seriesData,
+        };
+      });
+    });
+
+    return { categories, series };
+  }
+
+  // Original behavior: no series column
   const categories: string[] = data.map((point) => {
     const value = point[xColumn];
     return value === null ? '' : String(value);
@@ -114,12 +235,13 @@ export function isQueryResult(
 export function toChartData(
   data: QueryResult | ChartDataPoint[],
   xColumn: string,
-  yColumns: string[]
+  yColumns: string[],
+  seriesColumn?: string
 ): { categories: string[]; series: ChartSeries[] } {
   if (isQueryResult(data)) {
-    return queryResultToChartData(data, xColumn, yColumns);
+    return queryResultToChartData(data, xColumn, yColumns, seriesColumn);
   }
-  return dataPointsToChartData(data, xColumn, yColumns);
+  return dataPointsToChartData(data, xColumn, yColumns, seriesColumn);
 }
 
 // ============================================================================
