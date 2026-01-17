@@ -38,11 +38,14 @@ def validate_identifier(identifier: str, field_name: str) -> None:
                 f"Invalid {field_name} '{identifier}': contains forbidden character '{char}'"
             )
 
-    # Additional validation: only allow alphanumeric, underscore, and dot
-    # (dot is allowed for schema.table references)
-    if not all(c.isalnum() or c in ("_", ".") for c in identifier):
+    # Additional validation: only allow safe characters for PostgreSQL identifiers
+    # - alphanumeric, underscore: standard identifier chars
+    # - dot: for schema.table references
+    # - space, parentheses, forward slash, hyphen, colon: common in PostgreSQL view column names
+    allowed_special = ("_", ".", " ", "(", ")", "/", "-", ":")
+    if not all(c.isalnum() or c in allowed_special for c in identifier):
         raise ValueError(
-            f"Invalid {field_name} '{identifier}': must contain only alphanumeric, underscore, or dot"
+            f"Invalid {field_name} '{identifier}': contains invalid characters"
         )
 
 
@@ -122,7 +125,7 @@ def convert_revealbi_date_format_to_postgres(revealbi_format: str) -> str:
 
 # Constants for validation
 ALLOWED_JOIN_TYPES = frozenset({"INNER", "LEFT", "RIGHT", "FULL"})
-ALLOWED_OPERATORS = frozenset({"eq", "ne", "gt", "gte", "lt", "lte", "in", "in_subquery"})
+ALLOWED_OPERATORS = frozenset({"eq", "ne", "gt", "gte", "lt", "lte", "in", "in_subquery", "like", "not_like"})
 ALLOWED_AGGREGATIONS = frozenset({"none", "sum", "avg", "count", "count_distinct", "min", "max"})
 ALLOWED_DATE_TRUNCS = frozenset({
     "year", "quarter", "month", "week", "day", "hour", "minute", "second"

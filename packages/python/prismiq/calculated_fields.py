@@ -1,5 +1,4 @@
-"""
-Calculated field expression parser and SQL generator.
+"""Calculated field expression parser and SQL generator.
 
 Parses RevealBI expression syntax (e.g., "if([is_won]==1, [amount], 0)")
 and converts to PostgreSQL SQL expressions.
@@ -20,7 +19,6 @@ from __future__ import annotations
 import re
 from typing import Any
 
-
 # ============================================================================
 # Expression AST Nodes
 # ============================================================================
@@ -29,7 +27,9 @@ from typing import Any
 class ExprNode:
     """Base class for expression AST nodes."""
 
-    def to_sql(self, field_mapping: dict[str, str], use_window_functions: bool = False) -> str:
+    def to_sql(
+        self, field_mapping: dict[str, str], use_window_functions: bool = False
+    ) -> str:
         """Convert to PostgreSQL SQL.
 
         Args:
@@ -45,13 +45,50 @@ class ExprNode:
 class FieldRef(ExprNode):
     """Field reference: [field_name] or [Table.field]"""
 
+    # Patterns for RevealBI aggregation references like [Sum of X], [Count Distinct of Y]
+    AGG_PATTERNS = {
+        "Sum of ": "SUM",
+        "Average of ": "AVG",
+        "Count of ": "COUNT",
+        "Count Distinct of ": "COUNT_DISTINCT",
+        "Min of ": "MIN",
+        "Max of ": "MAX",
+    }
+
     def __init__(self, name: str):
         self.name = name
 
-    def to_sql(self, field_mapping: dict[str, str], use_window_functions: bool = False) -> str:
+    def to_sql(
+        self, field_mapping: dict[str, str], use_window_functions: bool = False
+    ) -> str:
         # Check if it's a calculated field that needs substitution
         if self.name in field_mapping:
             return f"({field_mapping[self.name]})"
+
+        # Handle RevealBI aggregation references like [Sum of pageview_cms]
+        # These are post-aggregation references used in calculated fields
+        for prefix, agg_func in self.AGG_PATTERNS.items():
+            if self.name.startswith(prefix):
+                inner_field = self.name[len(prefix) :]
+                # Check if the inner field is also a calculated field
+                if inner_field in field_mapping:
+                    inner_sql = f"({field_mapping[inner_field]})"
+                else:
+                    inner_sql = f'"{inner_field}"'
+                # Generate the aggregation SQL
+                if agg_func == "COUNT_DISTINCT":
+                    return f"COUNT(DISTINCT {inner_sql})"
+                else:
+                    return f"{agg_func}({inner_sql})"
+
+        # Handle alias.column syntax (e.g., "A.date" from RevealBI joined tables)
+        # This generates "A"."date" instead of "A.date"
+        if "." in self.name:
+            parts = self.name.split(".", 1)
+            if len(parts) == 2:
+                alias, column = parts
+                return f'"{alias}"."{column}"'
+
         # Regular column reference
         return f'"{self.name}"'
 
@@ -63,7 +100,9 @@ class FunctionCall(ExprNode):
         self.name = name
         self.args = args
 
-    def to_sql(self, field_mapping: dict[str, str], use_window_functions: bool = False) -> str:
+    def to_sql(
+        self, field_mapping: dict[str, str], use_window_functions: bool = False
+    ) -> str:
         if self.name == "if":
             # if(condition, true_val, false_val) -> CASE WHEN condition THEN true_val ELSE false_val END
             cond = self.args[0].to_sql(field_mapping, use_window_functions)
@@ -129,18 +168,26 @@ class FunctionCall(ExprNode):
 
         elif self.name == "date":
             # date(year, month, day, hour, min, sec) -> MAKE_TIMESTAMP
-            args_sql = [arg.to_sql(field_mapping, use_window_functions) for arg in self.args]
-            # MAKE_TIMESTAMP expects: year, month, day, hour, minute, second
-            return f"MAKE_TIMESTAMP({', '.join(args_sql)})"
+            args_sql = [
+                arg.to_sql(field_mapping, use_window_functions) for arg in self.args
+            ]
+            # MAKE_TIMESTAMP expects: year, month, day, hour, minute, second (all as INTEGER)
+            # Cast each arg to INTEGER since EXTRACT() returns NUMERIC
+            args_cast = [f"({a})::INTEGER" for a in args_sql]
+            return f"MAKE_TIMESTAMP({', '.join(args_cast)})"
 
         elif self.name == "concatenate":
             # Concatenate all arguments with ||
-            args_sql = [arg.to_sql(field_mapping, use_window_functions) for arg in self.args]
+            args_sql = [
+                arg.to_sql(field_mapping, use_window_functions) for arg in self.args
+            ]
             return " || ".join(args_sql)
 
         else:
             # Unknown function - pass through
-            args_sql = [arg.to_sql(field_mapping, use_window_functions) for arg in self.args]
+            args_sql = [
+                arg.to_sql(field_mapping, use_window_functions) for arg in self.args
+            ]
             return f"{self.name.upper()}({', '.join(args_sql)})"
 
 
@@ -152,7 +199,9 @@ class MethodCall(ExprNode):
         self.method = method
         self.args = args
 
-    def to_sql(self, field_mapping: dict[str, str], use_window_functions: bool = False) -> str:
+    def to_sql(
+        self, field_mapping: dict[str, str], use_window_functions: bool = False
+    ) -> str:
         obj_sql = self.obj.to_sql(field_mapping, use_window_functions)
 
         if self.method == "concatenate":
@@ -166,14 +215,16 @@ class MethodCall(ExprNode):
 
 
 class BinaryOp(ExprNode):
-    """Binary operation: left op right"""
+    """Binary operation: left op right."""
 
     def __init__(self, op: str, left: ExprNode, right: ExprNode):
         self.op = op
         self.left = left
         self.right = right
 
-    def to_sql(self, field_mapping: dict[str, str], use_window_functions: bool = False) -> str:
+    def to_sql(
+        self, field_mapping: dict[str, str], use_window_functions: bool = False
+    ) -> str:
         left_sql = self.left.to_sql(field_mapping, use_window_functions)
         right_sql = self.right.to_sql(field_mapping, use_window_functions)
 
@@ -196,12 +247,14 @@ class BinaryOp(ExprNode):
 
 
 class Literal(ExprNode):
-    """Literal value: number, string"""
+    """Literal value: number, string."""
 
     def __init__(self, value: Any):
         self.value = value
 
-    def to_sql(self, field_mapping: dict[str, str], use_window_functions: bool = False) -> str:
+    def to_sql(
+        self, field_mapping: dict[str, str], use_window_functions: bool = False
+    ) -> str:
         if isinstance(self.value, str):
             # Escape single quotes by doubling them
             escaped = self.value.replace("'", "''")
@@ -263,9 +316,10 @@ class ExpressionParser:
         # - Numbers (including decimals)
         # - Strings in quotes
         # - Identifiers (function names)
-        # - Operators: ==, !=, >=, <=, >, <, +, -, *, /
+        # - Operators: ==, !=, >=, <=, >, <, +, -, *, /, = (single = for RevealBI compat)
         # - Delimiters: ( ) , .
-        pattern = r'\[([^\]]+)\]|(\d+\.?\d*)|("(?:[^"\\]|\\.)*")|([a-zA-Z_]\w*)|(\(|\)|,|\.)|(<= |>=|==|!=|>|<|[\+\-*/])'
+        # Note: Order matters - must match == before = to avoid partial match
+        pattern = r'\[([^\]]+)\]|(\d+\.?\d*)|("(?:[^"\\]|\\.)*")|([a-zA-Z_]\w*)|(\(|\)|,|\.)|(<= |>=|==|!=|>|<|=|[\+\-*/])'
 
         tokens = []
         pos = 0
@@ -316,10 +370,19 @@ class ExpressionParser:
         return self._parse_comparison(tokens, pos)
 
     def _parse_comparison(self, tokens: list[str], pos: int) -> tuple[ExprNode, int]:
-        """Parse comparison operators: ==, !=, >, <, >=, <="""
+        """Parse comparison operators: ==, =, !=, >, <, >=, <="""
         left, pos = self._parse_additive(tokens, pos)
 
-        while pos < len(tokens) and tokens[pos] in ["==", "!=", ">", "<", ">=", "<="]:
+        # Note: "=" is RevealBI's equality operator, equivalent to "=="
+        while pos < len(tokens) and tokens[pos] in [
+            "==",
+            "=",
+            "!=",
+            ">",
+            "<",
+            ">=",
+            "<=",
+        ]:
             op = tokens[pos]
             pos += 1
             right, pos = self._parse_additive(tokens, pos)
@@ -339,7 +402,9 @@ class ExpressionParser:
 
         return left, pos
 
-    def _parse_multiplicative(self, tokens: list[str], pos: int) -> tuple[ExprNode, int]:
+    def _parse_multiplicative(
+        self, tokens: list[str], pos: int
+    ) -> tuple[ExprNode, int]:
         """Parse multiplicative operators: *, /"""
         left, pos = self._parse_primary(tokens, pos)
 
@@ -352,7 +417,8 @@ class ExpressionParser:
         return left, pos
 
     def _parse_primary(self, tokens: list[str], pos: int) -> tuple[ExprNode, int]:
-        """Parse primary expressions: literals, field refs, function calls, parentheses."""
+        """Parse primary expressions: literals, field refs, function calls,
+        parentheses."""
         if pos >= len(tokens):
             raise ValueError("Unexpected end of expression")
 
@@ -387,15 +453,15 @@ class ExpressionParser:
         elif token.startswith("NUMBER:"):
             num_str = token[7:]  # Remove "NUMBER:" prefix
             if "." in num_str:
-                value = float(num_str)
+                num_value: float | int = float(num_str)
             else:
-                value = int(num_str)
-            return Literal(value), pos + 1
+                num_value = int(num_str)
+            return Literal(num_value), pos + 1
 
         # String literal
         elif token.startswith("STRING:"):
-            value = token[7:]  # Remove "STRING:" prefix
-            return Literal(value), pos + 1
+            str_value = token[7:]  # Remove "STRING:" prefix
+            return Literal(str_value), pos + 1
 
         # Function call or identifier
         elif token.startswith("ID:"):
@@ -416,7 +482,9 @@ class ExpressionParser:
                         pos += 1  # Skip ','
 
                 if pos >= len(tokens):
-                    raise ValueError(f"Expected ')' after function arguments for '{func_name}'")
+                    raise ValueError(
+                        f"Expected ')' after function arguments for '{func_name}'"
+                    )
 
                 pos += 1  # Skip ')'
 
@@ -454,21 +522,41 @@ def has_aggregation(expression: str) -> bool:
     Returns:
         True if expression contains sum, avg, count, min, max, etc.
     """
+    # Standard aggregation function syntax: sum(, avg(, count(, etc.
     agg_funcs = ["sum(", "avg(", "count(", "min(", "max("]
     expr_lower = expression.lower()
-    return any(func in expr_lower for func in agg_funcs)
+    if any(func in expr_lower for func in agg_funcs):
+        return True
+
+    # RevealBI aggregation reference syntax: [Sum of X], [Count Distinct of Y], etc.
+    # These are field references that represent aggregated values
+    revealbi_agg_patterns = [
+        "[sum of ",
+        "[average of ",
+        "[count of ",
+        "[count distinct of ",
+        "[min of ",
+        "[max of ",
+    ]
+    if any(pattern in expr_lower for pattern in revealbi_agg_patterns):
+        return True
+
+    return False
 
 
 def resolve_calculated_fields(
     query_columns: list[dict[str, Any]],
     calculated_fields: list[dict[str, Any]],
+    base_table_name: str | None = None,
 ) -> dict[str, tuple[str, bool]]:
-    """
-    Resolve calculated field dependencies and generate SQL expressions.
+    """Resolve calculated field dependencies and generate SQL expressions.
 
     Args:
         query_columns: Column selections from query (may reference calculated fields)
         calculated_fields: List of {name, expression} dicts
+        base_table_name: Optional base table name to prefix unqualified column references.
+                         When there are JOINs, this prevents "ambiguous column" errors.
+                         Example: "account_custom_fields_view" -> "account_custom_fields_view"."column"
 
     Returns:
         Dict mapping field name to (sql_expression, has_aggregation) tuple
@@ -497,7 +585,9 @@ def resolve_calculated_fields(
             raise ValueError(f"Failed to parse calculated field '{name}': {e}") from e
 
     # Topological sort to resolve dependencies
-    resolved: dict[str, tuple[str, bool]] = {}  # name -> (SQL expression, has_aggregation)
+    resolved: dict[
+        str, tuple[str, bool]
+    ] = {}  # name -> (SQL expression, has_aggregation)
     visiting: set[str] = set()  # For cycle detection
 
     def resolve(name: str) -> tuple[str, bool]:
@@ -510,7 +600,9 @@ def resolve_calculated_fields(
             return (f'"{name}"', False)
 
         if name in visiting:
-            raise ValueError(f"Circular dependency detected in calculated field: {name}")
+            raise ValueError(
+                f"Circular dependency detected in calculated field: {name}"
+            )
 
         visiting.add(name)
 
@@ -527,10 +619,47 @@ def resolve_calculated_fields(
         # Check if this field will have an outer aggregation applied
         will_have_outer_agg = name in outer_agg_map
 
+        # Helper to check for and extract RevealBI aggregation reference patterns
+        # e.g., "Sum of pageview_cms" -> ("SUM", "pageview_cms")
+        def parse_agg_reference(field_name: str) -> tuple[str, str] | None:
+            """Check if field_name is an aggregation reference like 'Sum of
+            X'."""
+            agg_patterns = {
+                "Sum of ": "SUM",
+                "Average of ": "AVG",
+                "Count of ": "COUNT",
+                "Count Distinct of ": "COUNT_DISTINCT",
+                "Min of ": "MIN",
+                "Max of ": "MAX",
+            }
+            for prefix, agg_func in agg_patterns.items():
+                if field_name.startswith(prefix):
+                    return (agg_func, field_name[len(prefix) :])
+            return None
+
         # Resolve all dependencies first
         dep_sql_map = {}
         for dep in deps:
-            if dep in calc_field_map:
+            # Check if this is an aggregation reference like "Sum of pageview_cms"
+            agg_ref = parse_agg_reference(dep)
+            if agg_ref:
+                agg_func, inner_field = agg_ref
+                # Resolve the inner field
+                if inner_field in calc_field_map:
+                    inner_sql, _ = resolve(inner_field)
+                elif "." in inner_field:
+                    parts = inner_field.split(".", 1)
+                    inner_sql = f'"{parts[0]}"."{parts[1]}"'
+                elif base_table_name:
+                    inner_sql = f'"{base_table_name}"."{inner_field}"'
+                else:
+                    inner_sql = f'"{inner_field}"'
+                # Build the aggregation SQL
+                if agg_func == "COUNT_DISTINCT":
+                    dep_sql_map[dep] = f"COUNT(DISTINCT {inner_sql})"
+                else:
+                    dep_sql_map[dep] = f"{agg_func}({inner_sql})"
+            elif dep in calc_field_map:
                 dep_sql, dep_has_agg = resolve(dep)
                 # If this expression has aggregation and the dependency doesn't,
                 # wrap the dependency in SUM so it works with GROUP BY
@@ -538,7 +667,32 @@ def resolve_calculated_fields(
                     dep_sql = f"SUM({dep_sql})"
                 dep_sql_map[dep] = dep_sql
             else:
-                dep_sql_map[dep] = f'"{dep}"'
+                # Not a calculated field - format as column reference
+                # Handle alias.column syntax (e.g., "A.date" from RevealBI joined tables)
+                if "." in dep:
+                    parts = dep.split(".", 1)
+                    if len(parts) == 2:
+                        alias, column = parts
+                        dep_sql_map[dep] = f'"{alias}"."{column}"'
+                    else:
+                        dep_sql_map[dep] = f'"{dep}"'
+                elif base_table_name:
+                    # Only qualify with base table name if this looks like a real database column.
+                    # Database columns typically use snake_case without spaces.
+                    # If the dependency name contains spaces or special chars, it's likely
+                    # a reference to another calculated field that wasn't found in calc_field_map
+                    # (possibly defined in another widget). Don't apply table prefix in that case.
+                    looks_like_db_column = " " not in dep and not any(
+                        c in dep for c in ["(", ")", "+", "-", "*", "/"]
+                    )
+                    if looks_like_db_column:
+                        # Qualify with base table name to avoid ambiguity in JOINs
+                        dep_sql_map[dep] = f'"{base_table_name}"."{dep}"'
+                    else:
+                        # Likely a calculated field reference - don't qualify
+                        dep_sql_map[dep] = f'"{dep}"'
+                else:
+                    dep_sql_map[dep] = f'"{dep}"'
 
         # Convert to SQL with resolved dependencies
         # Use window functions if:

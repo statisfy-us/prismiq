@@ -1,5 +1,4 @@
-"""
-SQLAlchemy-compatible SQL query builder.
+"""SQLAlchemy-compatible SQL query builder.
 
 This module provides a query builder that generates SQL with SQLAlchemy-style
 named parameters (:param_name) instead of PostgreSQL positional parameters ($1, $2).
@@ -11,14 +10,9 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from .sql_utils import (
-    ALLOWED_AGGREGATIONS,
-    ALLOWED_DATE_TRUNCS,
-    ALLOWED_JOIN_TYPES,
-    ALLOWED_OPERATORS,
-    ALLOWED_ORDER_DIRECTIONS,
-    validate_identifier,
-)
+from .sql_utils import (ALLOWED_AGGREGATIONS, ALLOWED_DATE_TRUNCS,
+                        ALLOWED_JOIN_TYPES, ALLOWED_OPERATORS,
+                        ALLOWED_ORDER_DIRECTIONS, validate_identifier)
 
 
 def build_sql_from_dict(
@@ -239,8 +233,12 @@ def build_sql_from_dict(
         operator = filt["operator"]
         value = filt["value"]
 
-        # Validate filter column name
-        validate_identifier(column, "filter column")
+        # Check for custom SQL expression (for calculated fields in filters)
+        sql_expression = filt.get("sql_expression")
+
+        # Validate filter column name (skip if using sql_expression)
+        if not sql_expression:
+            validate_identifier(column, "filter column")
 
         # Validate operator against whitelist
         if operator not in ALLOWED_OPERATORS:
@@ -249,19 +247,27 @@ def build_sql_from_dict(
                 f"Allowed operators: {sorted(ALLOWED_OPERATORS)}"
             )
 
-        # Get table reference for this filter
-        table_ref = table_refs.get(table_id, f'"{tables[0]["name"]}"')
-        col_ref = f'{table_ref}."{column}"'
+        # Build column reference - use sql_expression if provided, otherwise build from table.column
+        if sql_expression:
+            col_ref = f"({sql_expression})"
+        else:
+            # Get table reference for this filter
+            table_ref = table_refs.get(table_id, f'"{tables[0]["name"]}"')
+            col_ref = f'{table_ref}."{column}"'
 
         if operator == "eq":
-            param_name = f"param_{param_counter}"
-            # Handle boolean columns compared with 0 or 1 (cast to int)
-            if value in (0, 1):
-                where_parts.append(f"({col_ref})::int = :{param_name}")
+            # Handle NULL equality (IS NULL)
+            if value is None:
+                where_parts.append(f"{col_ref} IS NULL")
             else:
-                where_parts.append(f"{col_ref} = :{param_name}")
-            params[param_name] = value
-            param_counter += 1
+                param_name = f"param_{param_counter}"
+                # Handle boolean columns compared with 0 or 1 (cast to int)
+                if value in (0, 1):
+                    where_parts.append(f"({col_ref})::int = :{param_name}")
+                else:
+                    where_parts.append(f"{col_ref} = :{param_name}")
+                params[param_name] = value
+                param_counter += 1
         elif operator == "ne":
             if value is None:
                 where_parts.append(f"{col_ref} IS NOT NULL")
@@ -309,6 +315,16 @@ def build_sql_from_dict(
             subquery_sql = value.get("sql", "").strip()
             if subquery_sql:
                 where_parts.append(f"{col_ref} IN ({subquery_sql})")
+        elif operator == "like":
+            param_name = f"param_{param_counter}"
+            where_parts.append(f"{col_ref} LIKE :{param_name}")
+            params[param_name] = f"%{value}%"
+            param_counter += 1
+        elif operator == "not_like":
+            param_name = f"param_{param_counter}"
+            where_parts.append(f"{col_ref} NOT LIKE :{param_name}")
+            params[param_name] = f"%{value}%"
+            param_counter += 1
 
     # Build SQL
     sql = f"SELECT {', '.join(select_parts)} FROM {from_clause}"

@@ -46,8 +46,9 @@ function TextContent({ config }: { config: WidgetConfig }): JSX.Element {
     lineHeight: 1.6,
   };
 
+  // If no text content, render nothing (title is shown in widget header)
   if (!config.content) {
-    return <div style={contentStyle}>No content</div>;
+    return <></>;
   }
 
   // For now, just render plain text. In the future, could add markdown support.

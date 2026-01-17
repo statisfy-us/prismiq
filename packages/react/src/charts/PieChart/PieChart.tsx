@@ -70,12 +70,16 @@ export function PieChart({
     return () => window.removeEventListener('resize', measureWidth);
   }, []);
 
-  // Determine if widget is narrow (< 300px) - use bottom legend for narrow widgets
+  // Determine layout based on container width
+  // < 300px: narrow - legend at bottom
+  // >= 300px: wide - legend on right
   const isNarrow = containerWidth < 300;
-  const legendOrient = isNarrow ? ('horizontal' as const) : ('vertical' as const);
+
+  // Responsive legend configuration
+  const legendOrient = isNarrow ? 'horizontal' : 'vertical';
   const legendPosition = isNarrow
-    ? { bottom: 0, left: 'center' as const, top: undefined, right: undefined }
-    : { right: 5, top: 'center' as const, bottom: undefined, left: undefined };
+    ? { bottom: 0, left: 'center' }
+    : { left: '55%', top: 'middle' };
 
   // Transform data
   const chartData = useMemo(
@@ -150,12 +154,12 @@ export function PieChart({
     if (showLegend) {
       if (isNarrow) {
         // Narrow widget with legend at bottom
-        outerRadius = '60%';
-        center = ['50%', '40%'];  // Move pie up to make room for legend below
+        outerRadius = '55%';
+        center = ['50%', '35%'];  // Move pie up to make room for legend below
       } else {
-        // Wide widget with legend on right
+        // Wide widget with legend on right - leave more space for legend text
         outerRadius = '50%';
-        center = ['28%', '50%'];  // Move pie left for right-side legend
+        center = ['25%', '50%'];  // Center pie in left portion, leave right half for legend
       }
     } else {
       // No legend - use full space
