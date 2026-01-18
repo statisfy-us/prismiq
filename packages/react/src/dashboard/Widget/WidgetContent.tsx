@@ -314,6 +314,9 @@ export function WidgetContent({
             title=""
             value={typeof value === 'number' ? value : Number(value) || 0}
             format={widget.config.format ?? 'number'}
+            currencySymbol={widget.config.currencySymbol}
+            decimals={widget.config.decimalDigits}
+            compactNotation={widget.config.compactNotation}
             centered={true}
             trend={
               comparisonValue !== undefined

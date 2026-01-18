@@ -514,20 +514,32 @@ export function formatCompactAtThreshold(
 
 /**
  * Formats a metric value for display in a MetricCard.
+ *
+ * @param value - The numeric value to format
+ * @param format - Format type: 'number', 'currency', 'percent', or 'compact'
+ * @param options - Formatting options
+ * @param options.currencySymbol - Currency symbol (default: '$')
+ * @param options.decimals - Number of decimal places (default: 0)
+ * @param options.compactNotation - Compact notation: 'K', 'M', 'B', or 'T' (applies to currency too)
  */
 export function formatMetricValue(
   value: number | string,
   format: 'number' | 'currency' | 'percent' | 'compact' = 'number',
-  options?: { currencySymbol?: string; decimals?: number }
+  options?: { currencySymbol?: string; decimals?: number; compactNotation?: 'K' | 'M' | 'B' | 'T' | null }
 ): string {
   if (typeof value === 'string') {
     return value;
   }
 
-  const { currencySymbol = '$', decimals = 0 } = options || {};
+  const { currencySymbol = '$', decimals = 0, compactNotation } = options || {};
 
   switch (format) {
     case 'currency':
+      // If compact notation is specified, use it with the currency symbol
+      if (compactNotation) {
+        const compactValue = formatCompactAtThreshold(value, compactNotation, decimals);
+        return `${currencySymbol}${compactValue}`;
+      }
       return `${currencySymbol}${value.toLocaleString(undefined, {
         minimumFractionDigits: decimals,
         maximumFractionDigits: decimals,
@@ -541,6 +553,10 @@ export function formatMetricValue(
 
     case 'number':
     default:
+      // Support compact notation for plain numbers too
+      if (compactNotation) {
+        return formatCompactAtThreshold(value, compactNotation, decimals);
+      }
       return value.toLocaleString(undefined, {
         minimumFractionDigits: decimals,
         maximumFractionDigits: decimals,

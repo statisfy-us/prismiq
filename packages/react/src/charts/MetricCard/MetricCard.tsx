@@ -29,6 +29,7 @@ export function MetricCard({
   format = 'number',
   currencySymbol = '$',
   decimals = 0,
+  compactNotation,
   trend,
   trendPositive = 'up',
   sparklineData,
@@ -68,8 +69,15 @@ export function MetricCard({
     };
   }, []);
 
+  // Format the value early so we can use its length for font sizing
+  const formattedValueForSizing = formatMetricValue(value, format, {
+    currencySymbol,
+    decimals,
+    compactNotation,
+  });
+
   // Calculate responsive font size for centered metrics
-  // Scale font size based on container dimensions
+  // Scale font size based on container dimensions and value length
   const calculateResponsiveFontSize = () => {
     if (!centered) {
       // Use default sizes for non-centered metrics
@@ -81,12 +89,22 @@ export function MetricCard({
       return sizeMap[size];
     }
 
-    // For centered metrics, scale based on container size
-    // Use the smaller dimension to ensure it fits
-    const minDimension = Math.min(containerSize.width, containerSize.height);
+    // For centered metrics, scale based on container width and value length
+    const { width: containerWidth, height: containerHeight } = containerSize;
 
-    // Scale: 20% of container height, but clamp between 24px and 96px
-    const scaledSize = Math.max(24, Math.min(96, minDimension * 0.25));
+    // Estimate character width as ~0.6 of font size for proportional fonts
+    // Calculate max font size that fits the value within container width (with padding)
+    const availableWidth = containerWidth - 32; // 16px padding on each side
+    const charCount = formattedValueForSizing.length || 1;
+
+    // Max font size based on width: availableWidth = charCount * fontSize * 0.6
+    const maxFontByWidth = availableWidth / (charCount * 0.6);
+
+    // Also consider height (scale to ~25% of container height)
+    const maxFontByHeight = containerHeight * 0.25;
+
+    // Use the smaller of the two constraints, clamped between 24px and 96px
+    const scaledSize = Math.max(24, Math.min(96, Math.min(maxFontByWidth, maxFontByHeight)));
     return `${scaledSize}px`;
   };
 
@@ -173,11 +191,8 @@ export function MetricCard({
     animation: 'prismiq-pulse 1.5s ease-in-out infinite',
   };
 
-  // Format the value
-  const formattedValue = formatMetricValue(value, format, {
-    currencySymbol,
-    decimals,
-  });
+  // Use the pre-computed formatted value
+  const formattedValue = formattedValueForSizing;
 
   return (
     <div

@@ -333,6 +333,8 @@ export interface MetricCardProps {
   currencySymbol?: string;
   /** Number of decimal places. */
   decimals?: number;
+  /** Compact notation (K, M, B, T) - works with currency format for values like $24.32M. */
+  compactNotation?: 'K' | 'M' | 'B' | 'T' | null;
   /** Trend configuration. */
   trend?: TrendConfig;
   /** Which direction is considered positive (green). */

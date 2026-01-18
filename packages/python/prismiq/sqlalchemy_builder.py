@@ -91,11 +91,12 @@ def build_sql_from_dict(
     # Validate all column names and aliases
     for col in columns:
         column_name = col.get("column", "")
-        # Allow wildcard for SELECT *
-        if column_name != "*":
+        # Skip validation if sql_expression is provided (calculated fields use expression directly)
+        # Also allow wildcard for SELECT *
+        if column_name != "*" and not col.get("sql_expression"):
             validate_identifier(column_name, "column name")
 
-        # Validate column alias if present
+        # Validate column alias if present (alias must always be valid for SELECT ... AS "alias")
         if col.get("alias"):
             validate_identifier(col["alias"], "column alias")
 
