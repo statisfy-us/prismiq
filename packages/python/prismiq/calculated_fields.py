@@ -9,7 +9,9 @@ Supported functions:
 - find(substring, text)
 - date(year, month, day, hour, min, sec)
 - year(date), month(date), day(date)
+- datediff(date1, date2, interval) - interval: 'd'/'day', 'm'/'month', 'y'/'year', 'h'/'hour', 'mi'/'minute', 's'/'second'
 - today()
+- concatenate(arg1, arg2, ...)
 - Operators: +, -, *, /, ==, !=, >, <, >=, <=
 - Field references: [field_name] or [Table.field]
 """
@@ -182,6 +184,49 @@ class FunctionCall(ExprNode):
                 arg.to_sql(field_mapping, use_window_functions) for arg in self.args
             ]
             return " || ".join(args_sql)
+
+        elif self.name == "datediff":
+            # DATEDIFF(start_date, end_date, interval) -> PostgreSQL date arithmetic
+            # RevealBI syntax: datediff(start, end, interval) returns (end - start)
+            # Example: datediff(today(), [date], 'd') = [date] - today()
+            #   If date is Jan 17 and today is Jan 18, result = -1 (yesterday is -1 day from today)
+            # PostgreSQL equivalent: (date2 - date1) to match RevealBI semantics
+            if len(self.args) >= 2:
+                date1 = self.args[0].to_sql(field_mapping, use_window_functions)
+                date2 = self.args[1].to_sql(field_mapping, use_window_functions)
+                # Get interval type if specified (3rd arg)
+                interval = "d"  # default to days
+                if len(self.args) >= 3 and isinstance(self.args[2], Literal):
+                    interval = str(self.args[2].value).lower()
+
+                # Note: RevealBI datediff returns (end - start), so we use (date2 - date1)
+                if interval in ("d", "day", "days"):
+                    # Day difference: cast to date and subtract (end - start)
+                    return f"(({date2})::date - ({date1})::date)"
+                elif interval in ("m", "month", "months"):
+                    # Month difference: use age function (end - start)
+                    return f"(EXTRACT(YEAR FROM AGE({date2}::date, {date1}::date)) * 12 + EXTRACT(MONTH FROM AGE({date2}::date, {date1}::date)))::int"
+                elif interval in ("y", "year", "years"):
+                    # Year difference: use age function (end - start)
+                    return f"EXTRACT(YEAR FROM AGE({date2}::date, {date1}::date))::int"
+                elif interval in ("h", "hour", "hours"):
+                    # Hour difference (end - start)
+                    return f"EXTRACT(EPOCH FROM ({date2}::timestamp - {date1}::timestamp)) / 3600"
+                elif interval in ("mi", "minute", "minutes"):
+                    # Minute difference (end - start)
+                    return f"EXTRACT(EPOCH FROM ({date2}::timestamp - {date1}::timestamp)) / 60"
+                elif interval in ("s", "second", "seconds"):
+                    # Second difference (end - start)
+                    return f"EXTRACT(EPOCH FROM ({date2}::timestamp - {date1}::timestamp))"
+                else:
+                    # Default to days (end - start)
+                    return f"(({date2})::date - ({date1})::date)"
+            else:
+                # Not enough arguments, return raw
+                args_sql = [
+                    arg.to_sql(field_mapping, use_window_functions) for arg in self.args
+                ]
+                return f"DATEDIFF({', '.join(args_sql)})"
 
         else:
             # Unknown function - pass through
