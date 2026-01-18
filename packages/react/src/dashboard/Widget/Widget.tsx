@@ -78,6 +78,7 @@ export function Widget({
         editable={editable}
         isLoading={isLoading}
         onMenuAction={handleMenuAction}
+        hyperlink={widget.hyperlink}
       />
       <WidgetContent
         widget={widget}

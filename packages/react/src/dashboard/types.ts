@@ -119,6 +119,18 @@ export interface WidgetConfig {
 }
 
 /**
+ * Widget hyperlink configuration for linking to external URLs.
+ */
+export interface WidgetHyperlink {
+  /** URL to navigate to. */
+  url: string;
+  /** Link title/tooltip. */
+  title?: string;
+  /** Target window (_blank for new tab, _self for same tab). */
+  target?: '_blank' | '_self';
+}
+
+/**
  * A widget in a dashboard.
  */
 export interface Widget {
@@ -134,6 +146,8 @@ export interface Widget {
   position: WidgetPosition;
   /** Widget-specific configuration. */
   config: WidgetConfig;
+  /** Optional hyperlink to external URL (displayed as link icon in header). */
+  hyperlink?: WidgetHyperlink;
 }
 
 // ============================================================================
@@ -415,6 +429,8 @@ export interface WidgetHeaderProps {
   isLoading?: boolean;
   /** Callback for menu actions. */
   onMenuAction?: (action: string) => void;
+  /** Optional hyperlink for the widget (shows link icon in header). */
+  hyperlink?: WidgetHyperlink;
 }
 
 /**

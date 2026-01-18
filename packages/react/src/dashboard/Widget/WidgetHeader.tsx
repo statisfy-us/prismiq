@@ -15,6 +15,7 @@ export function WidgetHeader({
   editable = false,
   isLoading = false,
   onMenuAction,
+  hyperlink,
 }: WidgetHeaderProps): JSX.Element {
   const { theme } = useTheme();
 
@@ -77,6 +78,22 @@ export function WidgetHeader({
     transition: 'background-color 150ms, color 150ms',
   };
 
+  const linkButtonStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '28px',
+    height: '28px',
+    padding: 0,
+    border: 'none',
+    borderRadius: theme.radius.sm,
+    backgroundColor: 'transparent',
+    color: theme.colors.textMuted,
+    cursor: 'pointer',
+    transition: 'background-color 150ms, color 150ms',
+    textDecoration: 'none',
+  };
+
   return (
     <div style={headerStyle} className="prismiq-widget-header">
       <h3 style={titleStyle}>{title}</h3>
@@ -84,6 +101,20 @@ export function WidgetHeader({
       <div style={actionsStyle}>
         {isLoading && (
           <div style={spinnerStyle} aria-label="Loading" />
+        )}
+
+        {hyperlink && (
+          <a
+            href={hyperlink.url}
+            target={hyperlink.target ?? '_blank'}
+            rel="noopener noreferrer"
+            title={hyperlink.title ?? 'Open link'}
+            style={linkButtonStyle}
+            className="prismiq-widget-link-button"
+            aria-label={hyperlink.title ?? 'Open link'}
+          >
+            <Icon name="link" size={16} />
+          </a>
         )}
 
         <Dropdown
@@ -131,7 +162,8 @@ export function WidgetHeader({
         @keyframes prismiq-spin {
           to { transform: rotate(360deg); }
         }
-        .prismiq-widget-menu-button:hover {
+        .prismiq-widget-menu-button:hover,
+        .prismiq-widget-link-button:hover {
           background-color: ${theme.colors.surfaceHover};
           color: ${theme.colors.text};
         }
