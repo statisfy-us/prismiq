@@ -2,7 +2,7 @@
  * PieChart component for Prismiq.
  */
 
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useRef, useState, useEffect } from 'react';
 import { useTheme } from '../../theme';
 import { EChartWrapper } from '../EChartWrapper';
 import {
@@ -12,6 +12,7 @@ import {
   formatAxisLabel,
   getChartColors,
 } from '../utils';
+import { createDateFormatter } from '../../utils';
 import type { PieChartProps, ChartClickParams } from '../types';
 
 /**
@@ -50,14 +51,53 @@ export function PieChart({
   onDataPointClick,
   crossFilter,
   selectedValue,
+  labelFormat,
 }: PieChartProps): JSX.Element {
   const { theme } = useTheme();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState<number>(400);
+
+  // Measure container width on mount and resize
+  useEffect(() => {
+    const measureWidth = () => {
+      if (containerRef.current) {
+        setContainerWidth(containerRef.current.offsetWidth);
+      }
+    };
+
+    measureWidth();
+    window.addEventListener('resize', measureWidth);
+    return () => window.removeEventListener('resize', measureWidth);
+  }, []);
+
+  // Determine layout based on container width
+  // < 300px: narrow - legend at bottom
+  // >= 300px: wide - legend on right
+  const isNarrow = containerWidth < 300;
+
+  // Responsive legend configuration
+  const legendOrient = isNarrow ? 'horizontal' : 'vertical';
+  const legendPosition = isNarrow
+    ? { bottom: 0, left: 'center' }
+    : { left: '55%', top: 'middle' };
 
   // Transform data
   const chartData = useMemo(
     () => toChartData(data, labelColumn, [valueColumn]),
     [data, labelColumn, valueColumn]
   );
+
+  // Create date formatter if labelFormat is provided
+  const dateFormatter = useMemo(
+    () => (labelFormat ? createDateFormatter(labelFormat) : null),
+    [labelFormat]
+  );
+
+  // Format categories if date formatter is available
+  const formattedCategories = useMemo(() => {
+    if (!dateFormatter) return chartData.categories;
+    return chartData.categories.map((cat) => dateFormatter(cat));
+  }, [chartData.categories, dateFormatter]);
 
   // Get pie data from transformed data
   const pieData = useMemo(() => {
@@ -70,7 +110,7 @@ export function PieChart({
       return [];
     }
 
-    const items = chartData.categories.map((name, index) => ({
+    const items = formattedCategories.map((name, index) => ({
       name,
       value: series.data[index] ?? 0,
     }));
@@ -83,7 +123,7 @@ export function PieChart({
     }
 
     return items;
-  }, [chartData, sortSlices]);
+  }, [formattedCategories, chartData.series, sortSlices]);
 
   // Get colors
   const seriesColors = useMemo(
@@ -105,32 +145,55 @@ export function PieChart({
     // Calculate total for percentages
     const total = pieData.reduce((sum, item) => sum + (item.value || 0), 0);
 
-    // Radius configuration
+    // Radius and center configuration based on legend and widget size
     const innerRadius = variant === 'donut' ? `${donutRatio * 50}%` : '0%';
-    const outerRadius = labelPosition === 'outside' ? '60%' : '75%';
+
+    let outerRadius: string;
+    let center: [string, string];
+
+    if (showLegend) {
+      if (isNarrow) {
+        // Narrow widget with legend at bottom
+        outerRadius = '55%';
+        center = ['50%', '35%'];  // Move pie up to make room for legend below
+      } else {
+        // Wide widget with legend on right - leave more space for legend text
+        outerRadius = '50%';
+        center = ['25%', '50%'];  // Center pie in left portion, leave right half for legend
+      }
+    } else {
+      // No legend - use full space
+      outerRadius = labelPosition === 'outside' ? '60%' : '75%';
+      center = ['50%', '50%'];
+    }
+
+    // When legend is shown, disable outside labels to prevent clutter
+    // The legend already shows names and percentages
+    const effectiveLabelPosition = showLegend && labelPosition === 'outside' ? 'inside' : labelPosition;
+    const effectiveShowLabels = showLegend && labelPosition === 'outside' ? false : showLabels;
 
     // Label configuration
-    const label = showLabels
+    const label = effectiveShowLabels
       ? {
           show: true,
-          position: labelPosition,
+          position: effectiveLabelPosition,
           formatter: (params: { name: string; value: number; percent: number }) => {
             if (showPercentage) {
-              return labelPosition === 'inside'
+              return effectiveLabelPosition === 'inside'
                 ? `${params.percent.toFixed(0)}%`
                 : `${params.name}: ${params.percent.toFixed(1)}%`;
             }
-            return labelPosition === 'inside'
+            return effectiveLabelPosition === 'inside'
               ? formatAxisLabel(params.value, 'compact')
               : `${params.name}: ${formatAxisLabel(params.value, 'compact')}`;
           },
-          color: labelPosition === 'inside' ? '#ffffff' : theme.colors.text,
-          fontSize: labelPosition === 'inside' ? 11 : 12,
+          color: effectiveLabelPosition === 'inside' ? '#ffffff' : theme.colors.text,
+          fontSize: effectiveLabelPosition === 'inside' ? 11 : 12,
         }
       : { show: false };
 
     // Label line for outside labels
-    const labelLine = showLabels && labelPosition === 'outside'
+    const labelLine = effectiveShowLabels && effectiveLabelPosition === 'outside'
       ? {
           show: true,
           length: 10,
@@ -141,13 +204,12 @@ export function PieChart({
         }
       : { show: false };
 
-    // Legend config
+    // Legend config - responsive orientation and position
     const legend = showLegend
       ? {
           show: true,
-          orient: 'vertical' as const,
-          right: 10,
-          top: 'center',
+          orient: legendOrient,
+          ...legendPosition,
           selectedMode: 'multiple' as const,
           data: pieData.map((item) => item.name),
           formatter: (name: string) => {
@@ -156,6 +218,12 @@ export function PieChart({
             const percent = ((item.value || 0) / total) * 100;
             return `${name} (${percent.toFixed(1)}%)`;
           },
+          textStyle: {
+            fontSize: isNarrow ? 11 : 12,
+          },
+          itemGap: isNarrow ? 6 : 8,
+          itemWidth: isNarrow ? 12 : 14,
+          itemHeight: isNarrow ? 12 : 14,
         }
       : undefined;
 
@@ -172,7 +240,7 @@ export function PieChart({
         {
           type: 'pie',
           radius: [innerRadius, outerRadius],
-          center: showLegend ? ['40%', '50%'] : ['50%', '50%'],
+          center,
           startAngle,
           data: pieData.map((item, index) => {
             const baseColor = seriesColors[index] ?? theme.colors.primary;
@@ -229,6 +297,9 @@ export function PieChart({
     theme,
     selectedValue,
     crossFilter?.enabled,
+    isNarrow,
+    legendOrient,
+    legendPosition,
   ]);
 
   // Handle click events (both cross-filter and custom handler)
@@ -267,6 +338,7 @@ export function PieChart({
   if (error) {
     return (
       <div
+        ref={containerRef}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -284,14 +356,16 @@ export function PieChart({
   }
 
   return (
-    <EChartWrapper
-      option={option}
-      loading={loading}
-      height={height}
-      width={width}
-      className={className}
-      onEvents={handleEvents}
-    />
+    <div ref={containerRef} style={{ height, width }}>
+      <EChartWrapper
+        option={option}
+        loading={loading}
+        height={height}
+        width={width}
+        className={className}
+        onEvents={handleEvents}
+      />
+    </div>
   );
 }
 

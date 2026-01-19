@@ -13,6 +13,7 @@ import {
   getChartColors,
   createMarkLines,
 } from '../utils';
+import { createDateFormatter } from '../../utils';
 import type { BarChartProps, ChartClickParams } from '../types';
 
 /**
@@ -45,7 +46,11 @@ export function BarChart({
   colors,
   xAxisLabel,
   yAxisLabel,
+  xAxisFormat,
   yAxisFormat = 'number',
+  currencySymbol = '$',
+  compactNotation,
+  decimalDigits = 0,
   loading = false,
   error,
   height = 300,
@@ -69,6 +74,18 @@ export function BarChart({
     [data, xAxis, yColumns]
   );
 
+  // Create date formatter if xAxisFormat is provided
+  const dateFormatter = useMemo(
+    () => (xAxisFormat ? createDateFormatter(xAxisFormat) : null),
+    [xAxisFormat]
+  );
+
+  // Format categories if date formatter is available
+  const formattedCategories = useMemo(() => {
+    if (!dateFormatter) return chartData.categories;
+    return chartData.categories.map((cat) => dateFormatter(cat));
+  }, [chartData.categories, dateFormatter]);
+
   // Get colors
   const seriesColors = useMemo(
     () => colors || getChartColors(theme, yColumns.length),
@@ -91,12 +108,12 @@ export function BarChart({
     // Category axis config
     const categoryAxis = {
       type: 'category',
-      data: chartData.categories,
+      data: formattedCategories,
       name: isHorizontal ? yAxisLabel : xAxisLabel,
       nameLocation: 'middle',
       nameGap: 35,
       axisLabel: {
-        rotate: isHorizontal ? 0 : chartData.categories.length > 10 ? 45 : 0,
+        rotate: isHorizontal ? 0 : formattedCategories.length > 10 ? 45 : 0,
         interval: 0,
         hideOverlap: true,
       },
@@ -109,7 +126,12 @@ export function BarChart({
       nameLocation: 'middle',
       nameGap: 50,
       axisLabel: {
-        formatter: (value: number) => formatAxisLabel(value, yAxisFormat),
+        formatter: (value: number) =>
+          formatAxisLabel(value, yAxisFormat, {
+            currencySymbol,
+            decimals: decimalDigits,
+            compactNotation,
+          }),
       },
     };
 
@@ -144,10 +166,20 @@ export function BarChart({
           ? {
               show: true,
               position: isHorizontal ? 'right' : 'top',
-              formatter: (params: { value: number | null }) =>
-                params.value !== null
-                  ? formatAxisLabel(params.value, yAxisFormat)
-                  : '',
+              formatter: (params: { value: number | null | { value?: number } }) => {
+                // Extract value (ECharts may wrap it in an object)
+                const rawValue = typeof params.value === 'object' && params.value !== null
+                  ? (params.value as { value?: number }).value
+                  : params.value;
+
+                return rawValue !== null && rawValue !== undefined
+                  ? formatAxisLabel(rawValue, yAxisFormat, {
+                      currencySymbol,
+                      decimals: decimalDigits,
+                      compactNotation,
+                    })
+                  : '';
+              },
               fontSize: 10,
               color: theme.colors.textMuted,
             }
@@ -164,8 +196,6 @@ export function BarChart({
           index === 0 && referenceLines
             ? createMarkLines(referenceLines, theme)
             : undefined,
-        // Enable cursor pointer when cross-filter is enabled
-        cursor: crossFilter?.enabled ? 'pointer' : 'default',
       };
     });
 
@@ -198,15 +228,29 @@ export function BarChart({
         axisPointer: {
           type: 'shadow',
         },
-        formatter: (params: Array<{ seriesName: string; value: number | null; marker: string; name: string }>) => {
+        formatter: (params: Array<{ seriesName: string; value: number | null | { value?: number }; marker: string; name: string }>) => {
           if (!Array.isArray(params) || params.length === 0) return '';
           const firstParam = params[0];
           if (!firstParam) return '';
           const header = `<div style="font-weight: 600; margin-bottom: 4px;">${firstParam.name}</div>`;
           const items = params
             .map(
-              (p) =>
-                `<div>${p.marker} ${p.seriesName}: ${p.value !== null ? formatAxisLabel(p.value, yAxisFormat) : '-'}</div>`
+              (p) => {
+                // Extract value (ECharts may wrap it in an object)
+                const rawValue = typeof p.value === 'object' && p.value !== null
+                  ? (p.value as { value?: number }).value
+                  : p.value;
+
+                return `<div>${p.marker} ${p.seriesName}: ${
+                  rawValue !== null && rawValue !== undefined
+                    ? formatAxisLabel(rawValue, yAxisFormat, {
+                        currencySymbol,
+                        decimals: decimalDigits,
+                        compactNotation,
+                      })
+                    : '-'
+                }</div>`;
+              }
             )
             .join('');
           return header + items;
@@ -222,6 +266,7 @@ export function BarChart({
     isEmpty,
     orientation,
     chartData,
+    formattedCategories,
     xAxisLabel,
     yAxisLabel,
     yAxisFormat,

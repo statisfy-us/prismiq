@@ -171,8 +171,16 @@ export interface BarChartProps extends BaseChartProps {
   xAxisLabel?: string;
   /** Y axis label. */
   yAxisLabel?: string;
+  /** X axis date format (.NET format string like "MMM-yyyy" for date axes). */
+  xAxisFormat?: string;
   /** Y axis value format. */
   yAxisFormat?: AxisFormat;
+  /** Currency symbol for currency format. */
+  currencySymbol?: string;
+  /** Compact notation mode (K, M, B, T) or null for no compacting. */
+  compactNotation?: 'K' | 'M' | 'B' | 'T' | null;
+  /** Number of decimal digits. */
+  decimalDigits?: number;
 }
 
 /**
@@ -183,6 +191,8 @@ export interface LineChartProps extends BaseChartProps {
   xAxis: string;
   /** Column name(s) for Y axis values. */
   yAxis: string | string[];
+  /** Column name that defines series (for multi-series charts with long-format data). */
+  seriesColumn?: string;
   /** Whether to use smooth/curved lines. */
   smooth?: boolean;
   /** Whether to show area fill under lines. */
@@ -201,6 +211,8 @@ export interface LineChartProps extends BaseChartProps {
   xAxisLabel?: string;
   /** Y axis label. */
   yAxisLabel?: string;
+  /** X axis date format (.NET format string like "MMM-yyyy" for date axes). */
+  xAxisFormat?: string;
   /** Y axis value format. */
   yAxisFormat?: AxisFormat;
 }
@@ -229,6 +241,8 @@ export interface AreaChartProps extends BaseChartProps {
   xAxisLabel?: string;
   /** Y axis label. */
   yAxisLabel?: string;
+  /** X axis date format (.NET format string like "MMM-yyyy" for date axes). */
+  xAxisFormat?: string;
 }
 
 /**
@@ -257,6 +271,8 @@ export interface PieChartProps extends BaseChartProps {
   startAngle?: number;
   /** How to sort slices. */
   sortSlices?: 'asc' | 'desc' | 'none';
+  /** Label format (.NET format string like "MMM-yyyy" for date labels). */
+  labelFormat?: string;
 }
 
 /**
@@ -317,6 +333,8 @@ export interface MetricCardProps {
   currencySymbol?: string;
   /** Number of decimal places. */
   decimals?: number;
+  /** Compact notation (K, M, B, T) - works with currency format for values like $24.32M. */
+  compactNotation?: 'K' | 'M' | 'B' | 'T' | null;
   /** Trend configuration. */
   trend?: TrendConfig;
   /** Which direction is considered positive (green). */
@@ -329,6 +347,8 @@ export interface MetricCardProps {
   size?: 'sm' | 'md' | 'lg';
   /** Whether the card is loading. */
   loading?: boolean;
+  /** Whether to center the value (for single-number displays). */
+  centered?: boolean;
   /** Additional CSS class name. */
   className?: string;
   /** Click handler. */

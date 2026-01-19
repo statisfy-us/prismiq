@@ -66,6 +66,8 @@ export interface WidgetConfig {
   x_axis?: string;
   /** Columns to use for Y axis (supports multiple for multi-series). */
   y_axis?: string[];
+  /** Column that defines series for multi-series charts (e.g., category column in long-format data). */
+  series_column?: string;
   /** Chart orientation for bar charts. */
   orientation?: 'vertical' | 'horizontal';
   /** Whether to stack series. */
@@ -76,6 +78,14 @@ export interface WidgetConfig {
   show_data_labels?: boolean;
   /** Custom color palette for the chart. */
   colors?: string[];
+  /** Value format for chart axes (e.g., 'currency', 'percent'). */
+  valueFormat?: 'number' | 'currency' | 'percent' | 'compact';
+  /** Currency symbol when valueFormat is 'currency'. */
+  currencySymbol?: string;
+  /** Compact notation mode (K for thousands, M for millions, etc.). Null means no compacting. */
+  compactNotation?: 'K' | 'M' | 'B' | 'T' | null;
+  /** Number of decimal digits to show. */
+  decimalDigits?: number;
 
   // Cross-filter options
   /** Cross-filter configuration for this widget. */
@@ -92,12 +102,32 @@ export interface WidgetConfig {
   page_size?: number;
   /** Whether table columns are sortable. */
   sortable?: boolean;
+  /** Column to pivot (for pivot tables). Unique values become columns. */
+  pivot_column?: string;
+  /** Column containing values to distribute across pivoted columns. */
+  value_column?: string;
+
+  // Date formatting (used by both tables and charts)
+  /** Date format strings for datetime columns (column name -> .NET format string). Used by tables and chart axes. */
+  dateFormats?: Record<string, string>;
 
   // Text options
   /** Text content for text widgets. */
   content?: string;
   /** Whether to render content as markdown. */
   markdown?: boolean;
+}
+
+/**
+ * Widget hyperlink configuration for linking to external URLs.
+ */
+export interface WidgetHyperlink {
+  /** URL to navigate to. */
+  url: string;
+  /** Link title/tooltip. */
+  title?: string;
+  /** Target window (_blank for new tab, _self for same tab). */
+  target?: '_blank' | '_self';
 }
 
 /**
@@ -116,6 +146,8 @@ export interface Widget {
   position: WidgetPosition;
   /** Widget-specific configuration. */
   config: WidgetConfig;
+  /** Optional hyperlink to external URL (displayed as link icon in header). */
+  hyperlink?: WidgetHyperlink;
 }
 
 // ============================================================================
@@ -375,18 +407,6 @@ export interface WidgetProps {
   isLoading?: boolean;
   /** Error if query failed. */
   error?: Error | null;
-  /** Whether the widget is editable. */
-  editable?: boolean;
-  /** Callback to edit widget. */
-  onEdit?: () => void;
-  /** Callback to remove widget. */
-  onRemove?: () => void;
-  /** Callback to duplicate widget. */
-  onDuplicate?: () => void;
-  /** Callback to refresh widget. */
-  onRefresh?: () => void;
-  /** Callback to enter fullscreen. */
-  onFullscreen?: () => void;
   /** Additional CSS class. */
   className?: string;
 }
@@ -397,12 +417,8 @@ export interface WidgetProps {
 export interface WidgetHeaderProps {
   /** Widget title. */
   title: string;
-  /** Whether the widget is editable. */
-  editable?: boolean;
-  /** Whether the widget is loading. */
-  isLoading?: boolean;
-  /** Callback for menu actions. */
-  onMenuAction?: (action: string) => void;
+  /** Optional hyperlink for the widget (shows link icon in header). */
+  hyperlink?: WidgetHyperlink;
 }
 
 /**

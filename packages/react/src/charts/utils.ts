@@ -21,14 +21,79 @@ import type { AxisFormat, ChartDataPoint, ChartSeries } from './types';
 export function queryResultToChartData(
   result: QueryResult,
   xColumn: string,
-  yColumns: string[]
+  yColumns: string[],
+  seriesColumn?: string
 ): { categories: string[]; series: ChartSeries[] } {
   const xIndex = result.columns.indexOf(xColumn);
   if (xIndex === -1) {
     return { categories: [], series: [] };
   }
 
-  // Extract unique categories from X column
+  // If seriesColumn is provided, pivot the data to create multiple series
+  if (seriesColumn) {
+    const seriesIndex = result.columns.indexOf(seriesColumn);
+    if (seriesIndex === -1) {
+      return { categories: [], series: [] };
+    }
+
+    // Get unique x-axis values (categories)
+    const xValuesSet = new Set<string>();
+    result.rows.forEach((row) => {
+      const xValue = row[xIndex];
+      xValuesSet.add(xValue === null ? '' : String(xValue));
+    });
+    const categories = Array.from(xValuesSet).sort();
+
+    // Get unique series values
+    const seriesNamesSet = new Set<string>();
+    result.rows.forEach((row) => {
+      const seriesValue = row[seriesIndex];
+      seriesNamesSet.add(seriesValue === null ? '' : String(seriesValue));
+    });
+    const seriesNames = Array.from(seriesNamesSet).sort();
+
+    // Create a series for each unique value in the series column
+    const series: ChartSeries[] = yColumns.flatMap((yColName) => {
+      const yIndex = result.columns.indexOf(yColName);
+      if (yIndex === -1) {
+        return [];
+      }
+
+      return seriesNames.map((seriesName) => {
+        // For this series, extract data for each category
+        const data = categories.map((category) => {
+          // Find the row that matches this series name and category
+          const row = result.rows.find((r) => {
+            const rowSeriesValue = r[seriesIndex];
+            const rowXValue = r[xIndex];
+            return (
+              String(rowSeriesValue) === seriesName &&
+              String(rowXValue) === category
+            );
+          });
+
+          if (!row) {
+            return null;
+          }
+
+          const value = row[yIndex];
+          if (value === null || value === undefined) {
+            return null;
+          }
+          return typeof value === 'number' ? value : Number(value);
+        });
+
+        return {
+          name: seriesName,
+          data,
+        };
+      });
+    });
+
+    return { categories, series };
+  }
+
+  // Original behavior: no series column, extract categories from X column
   const categories: string[] = result.rows.map((row) => {
     const value = row[xIndex];
     return value === null ? '' : String(value);
@@ -66,13 +131,69 @@ export function queryResultToChartData(
  * @param data - Array of data points
  * @param xColumn - Property name for X axis
  * @param yColumns - Property names for Y axis values
+ * @param seriesColumn - Optional column that defines series (for long-format data)
  * @returns Object with categories and series arrays
  */
 export function dataPointsToChartData(
   data: ChartDataPoint[],
   xColumn: string,
-  yColumns: string[]
+  yColumns: string[],
+  seriesColumn?: string
 ): { categories: string[]; series: ChartSeries[] } {
+  // If seriesColumn is provided, pivot the data to create multiple series
+  if (seriesColumn) {
+    // Get unique x-axis values (categories)
+    const xValuesSet = new Set<string>();
+    data.forEach((point) => {
+      const xValue = point[xColumn];
+      xValuesSet.add(xValue === null ? '' : String(xValue));
+    });
+    const categories = Array.from(xValuesSet).sort();
+
+    // Get unique series values
+    const seriesNamesSet = new Set<string>();
+    data.forEach((point) => {
+      const seriesValue = point[seriesColumn];
+      seriesNamesSet.add(seriesValue === null ? '' : String(seriesValue));
+    });
+    const seriesNames = Array.from(seriesNamesSet).sort();
+
+    // Create a series for each unique value in the series column
+    const series: ChartSeries[] = yColumns.flatMap((yColName) => {
+      return seriesNames.map((seriesName) => {
+        // For this series, extract data for each category
+        const seriesData = categories.map((category) => {
+          // Find the data point that matches this series name and category
+          const point = data.find((p) => {
+            const pSeriesValue = p[seriesColumn];
+            const pXValue = p[xColumn];
+            return (
+              String(pSeriesValue) === seriesName && String(pXValue) === category
+            );
+          });
+
+          if (!point) {
+            return null;
+          }
+
+          const value = point[yColName];
+          if (value === null || value === undefined) {
+            return null;
+          }
+          return typeof value === 'number' ? value : Number(value);
+        });
+
+        return {
+          name: seriesName,
+          data: seriesData,
+        };
+      });
+    });
+
+    return { categories, series };
+  }
+
+  // Original behavior: no series column
   const categories: string[] = data.map((point) => {
     const value = point[xColumn];
     return value === null ? '' : String(value);
@@ -114,12 +235,13 @@ export function isQueryResult(
 export function toChartData(
   data: QueryResult | ChartDataPoint[],
   xColumn: string,
-  yColumns: string[]
+  yColumns: string[],
+  seriesColumn?: string
 ): { categories: string[]; series: ChartSeries[] } {
   if (isQueryResult(data)) {
-    return queryResultToChartData(data, xColumn, yColumns);
+    return queryResultToChartData(data, xColumn, yColumns, seriesColumn);
   }
-  return dataPointsToChartData(data, xColumn, yColumns);
+  return dataPointsToChartData(data, xColumn, yColumns, seriesColumn);
 }
 
 // ============================================================================
@@ -291,13 +413,25 @@ function mergeAxisConfig(
 export function formatAxisLabel(
   value: number,
   format: AxisFormat,
-  options?: { currencySymbol?: string; decimals?: number }
+  options?: {
+    currencySymbol?: string;
+    decimals?: number;
+    compactNotation?: 'K' | 'M' | 'B' | 'T' | null;
+  }
 ): string {
-  const { currencySymbol = '$', decimals = 0 } = options || {};
+  const { currencySymbol = '$', decimals = 2, compactNotation } = options || {};
 
   switch (format) {
     case 'currency':
-      return `${currencySymbol}${formatCompact(value, decimals)}`;
+      // Only use compact notation if explicitly specified
+      if (compactNotation) {
+        return `${currencySymbol}${formatCompactAtThreshold(value, compactNotation, decimals)}`;
+      }
+      // Otherwise show full number with proper formatting
+      return `${currencySymbol}${value.toLocaleString(undefined, {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+      })}`;
 
     case 'percent':
       return `${(value * 100).toFixed(decimals)}%`;
@@ -334,21 +468,78 @@ export function formatCompact(value: number, decimals: number = 1): string {
 }
 
 /**
+ * Formats a number with compact notation at a specific threshold.
+ * Only applies notation if value meets the threshold.
+ *
+ * @param value - The number to format
+ * @param notation - The notation threshold (K, M, B, T)
+ * @param decimals - Number of decimal places
+ * @returns Formatted string
+ *
+ * @example
+ * formatCompactAtThreshold(8693, 'K', 3) => "8.693K"
+ * formatCompactAtThreshold(8693, 'M', 3) => "8,693" (below threshold)
+ * formatCompactAtThreshold(8693000, 'M', 3) => "8.693M"
+ */
+export function formatCompactAtThreshold(
+  value: number,
+  notation: 'K' | 'M' | 'B' | 'T',
+  decimals: number = 0
+): string {
+  const absValue = Math.abs(value);
+  const sign = value < 0 ? '-' : '';
+
+  // Define thresholds and divisors
+  const thresholds: Record<'K' | 'M' | 'B' | 'T', { threshold: number; divisor: number }> = {
+    K: { threshold: 1_000, divisor: 1_000 },
+    M: { threshold: 1_000_000, divisor: 1_000_000 },
+    B: { threshold: 1_000_000_000, divisor: 1_000_000_000 },
+    T: { threshold: 1_000_000_000_000, divisor: 1_000_000_000_000 },
+  };
+
+  const config = thresholds[notation];
+
+  // Only apply notation if value meets the threshold
+  if (absValue >= config.threshold) {
+    const formatted = (absValue / config.divisor).toFixed(decimals);
+    return `${sign}${formatted}${notation}`;
+  }
+
+  // Below threshold: show full number with locale formatting
+  return `${sign}${absValue.toLocaleString(undefined, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })}`;
+}
+
+/**
  * Formats a metric value for display in a MetricCard.
+ *
+ * @param value - The numeric value to format
+ * @param format - Format type: 'number', 'currency', 'percent', or 'compact'
+ * @param options - Formatting options
+ * @param options.currencySymbol - Currency symbol (default: '$')
+ * @param options.decimals - Number of decimal places (default: 0)
+ * @param options.compactNotation - Compact notation: 'K', 'M', 'B', or 'T' (applies to currency too)
  */
 export function formatMetricValue(
   value: number | string,
   format: 'number' | 'currency' | 'percent' | 'compact' = 'number',
-  options?: { currencySymbol?: string; decimals?: number }
+  options?: { currencySymbol?: string; decimals?: number; compactNotation?: 'K' | 'M' | 'B' | 'T' | null }
 ): string {
   if (typeof value === 'string') {
     return value;
   }
 
-  const { currencySymbol = '$', decimals = 0 } = options || {};
+  const { currencySymbol = '$', decimals = 0, compactNotation } = options || {};
 
   switch (format) {
     case 'currency':
+      // If compact notation is specified, use it with the currency symbol
+      if (compactNotation) {
+        const compactValue = formatCompactAtThreshold(value, compactNotation, decimals);
+        return `${currencySymbol}${compactValue}`;
+      }
       return `${currencySymbol}${value.toLocaleString(undefined, {
         minimumFractionDigits: decimals,
         maximumFractionDigits: decimals,
@@ -362,6 +553,10 @@ export function formatMetricValue(
 
     case 'number':
     default:
+      // Support compact notation for plain numbers too
+      if (compactNotation) {
+        return formatCompactAtThreshold(value, compactNotation, decimals);
+      }
       return value.toLocaleString(undefined, {
         minimumFractionDigits: decimals,
         maximumFractionDigits: decimals,

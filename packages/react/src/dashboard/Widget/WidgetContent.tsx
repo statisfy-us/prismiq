@@ -14,6 +14,7 @@ import {
 } from '../../charts';
 import { ResultsTable } from '../../components';
 import { useCrossFilterOptional } from '../../context';
+import { createDateFormatters, pivotQueryResult } from '../../utils';
 import type { Widget, WidgetConfig } from '../types';
 import type { QueryResult } from '../../types';
 import type { ChartDataPoint, ChartClickParams, CrossFilterConfig } from '../../charts/types';
@@ -45,8 +46,9 @@ function TextContent({ config }: { config: WidgetConfig }): JSX.Element {
     lineHeight: 1.6,
   };
 
+  // If no text content, render nothing (title is shown in widget header)
   if (!config.content) {
-    return <div style={contentStyle}>No content</div>;
+    return <></>;
   }
 
   // For now, just render plain text. In the future, could add markdown support.
@@ -237,6 +239,14 @@ export function WidgetContent({
     [crossFilterContext, crossFilterEnabled, widget.id, crossFilterColumn]
   );
 
+  // Create date formatters for table widgets (must be called unconditionally per Rules of Hooks)
+  const dateFormatters = useMemo(() => {
+    if (widget.type === 'table' && widget.config.dateFormats) {
+      return createDateFormatters(widget.config.dateFormats);
+    }
+    return undefined;
+  }, [widget.type, widget.config.dateFormats]);
+
   // Container style
   const containerStyle: React.CSSProperties = {
     flex: 1,
@@ -302,6 +312,10 @@ export function WidgetContent({
             title=""
             value={typeof value === 'number' ? value : Number(value) || 0}
             format={widget.config.format ?? 'number'}
+            currencySymbol={widget.config.currencySymbol}
+            decimals={widget.config.decimalDigits}
+            compactNotation={widget.config.compactNotation}
+            centered={true}
             trend={
               comparisonValue !== undefined
                 ? {
@@ -332,6 +346,11 @@ export function WidgetContent({
             showLegend={showLegend}
             showDataLabels={showDataLabels}
             colors={colors}
+            xAxisFormat={widget.config.dateFormats?.[xAxis]}
+            yAxisFormat={widget.config.valueFormat ?? 'number'}
+            currencySymbol={widget.config.currencySymbol}
+            compactNotation={widget.config.compactNotation}
+            decimalDigits={widget.config.decimalDigits}
             height="100%"
             crossFilter={crossFilterConfig}
             selectedValue={selectedValue}
@@ -347,9 +366,11 @@ export function WidgetContent({
             data={data}
             xAxis={xAxis}
             yAxis={yAxis}
+            seriesColumn={widget.config.series_column}
             showLegend={showLegend}
             showDataLabels={showDataLabels}
             colors={colors}
+            xAxisFormat={widget.config.dateFormats?.[xAxis]}
             height="100%"
             crossFilter={crossFilterConfig}
             selectedValue={selectedValue}
@@ -368,6 +389,7 @@ export function WidgetContent({
             stacked={widget.config.stacked}
             showLegend={showLegend}
             colors={colors}
+            xAxisFormat={widget.config.dateFormats?.[xAxis]}
             height="100%"
             crossFilter={crossFilterConfig}
             selectedValue={selectedValue}
@@ -386,6 +408,7 @@ export function WidgetContent({
             showLegend={showLegend}
             showLabels={showDataLabels}
             colors={colors}
+            labelFormat={widget.config.dateFormats?.[xAxis]}
             height="100%"
             crossFilter={crossFilterConfig}
             selectedValue={selectedValue}
@@ -406,16 +429,35 @@ export function WidgetContent({
         </div>
       );
 
-    case 'table':
+    case 'table': {
+      // Check if this is a pivot table
+      let tableResult = result;
+
+      if (widget.config.pivot_column && widget.config.value_column) {
+        // Get dimension columns (all columns except pivot and value)
+        const dimensionColumns = result.columns.filter(
+          (col) => col !== widget.config.pivot_column && col !== widget.config.value_column
+        );
+
+        // Pivot the data
+        tableResult = pivotQueryResult(result, {
+          pivotColumn: widget.config.pivot_column,
+          valueColumn: widget.config.value_column,
+          dimensionColumns,
+        });
+      }
+
       return (
         <div style={containerStyle}>
           <ResultsTable
-            result={result}
+            result={tableResult}
             pageSize={widget.config.page_size ?? 10}
             sortable={widget.config.sortable ?? true}
+            formatters={dateFormatters}
           />
         </div>
       );
+    }
 
     default:
       return (
