@@ -545,7 +545,7 @@ def calculate_year_over_year(
             elif isinstance(date_val, date):
                 row_date = date_val
             else:
-                row_date = None
+                row_date = None  # type: ignore[assignment]
 
             if row_date is not None:
                 key = (row_date.month, row_date.day)

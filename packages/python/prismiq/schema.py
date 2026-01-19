@@ -18,7 +18,7 @@ from prismiq.types import (
 )
 
 if TYPE_CHECKING:
-    from asyncpg import Pool, Record
+    from asyncpg import Pool, Record  # type: ignore[import-not-found]
 
     from prismiq.cache import CacheBackend
 

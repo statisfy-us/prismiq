@@ -23,7 +23,7 @@ from prismiq.dashboards import (
 from prismiq.types import QueryDefinition
 
 if TYPE_CHECKING:
-    from asyncpg import Pool
+    from asyncpg import Pool  # type: ignore[import-not-found]
 
 
 class PostgresDashboardStore:

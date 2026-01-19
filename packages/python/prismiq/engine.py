@@ -11,7 +11,7 @@ import time
 from datetime import date, timedelta
 from typing import TYPE_CHECKING, Any
 
-import asyncpg
+import asyncpg  # type: ignore[import-not-found]
 
 from prismiq.cache import CacheBackend, CacheConfig, QueryCache
 from prismiq.dashboard_store import DashboardStore, InMemoryDashboardStore

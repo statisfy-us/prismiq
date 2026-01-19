@@ -27,7 +27,7 @@ from prismiq.types import (
 )
 
 if TYPE_CHECKING:
-    from asyncpg import Pool
+    from asyncpg import Pool  # type: ignore[import-not-found]
 
 
 def serialize_value(value: Any) -> Any:
