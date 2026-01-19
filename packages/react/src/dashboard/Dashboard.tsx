@@ -2,10 +2,10 @@
  * Main Dashboard component for embedding.
  */
 
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback } from 'react';
 import { useTheme } from '../theme';
 import { CrossFilterProvider, useCrossFilterOptional } from '../context';
-import { Button, Icon } from '../components/ui';
+import { Button } from '../components/ui';
 import { DashboardProvider } from './DashboardProvider';
 import { useDashboard } from './useDashboard';
 import { useDashboardFilters } from './useDashboardFilters';
@@ -30,33 +30,12 @@ function DashboardContent({
     widgetResults,
     widgetErrors,
     widgetLoading,
-    refreshWidget,
   } = useDashboard();
 
   const { filters, values, setValue, resetAll } = useDashboardFilters();
 
   // Get cross-filter context
   const crossFilterContext = useCrossFilterOptional();
-
-  // Fullscreen state
-  const [fullscreenWidgetId, setFullscreenWidgetId] = useState<string | null>(null);
-
-  // Get the fullscreen widget
-  const fullscreenWidget = dashboard?.widgets.find((w) => w.id === fullscreenWidgetId);
-
-  // Close fullscreen on Escape key
-  useEffect(() => {
-    if (!fullscreenWidgetId) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setFullscreenWidgetId(null);
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [fullscreenWidgetId]);
 
   // Render widget function for DashboardLayout
   const renderWidget = useCallback(
@@ -66,12 +45,9 @@ function DashboardContent({
         result={widgetResults[widget.id] ?? null}
         isLoading={widgetLoading[widget.id] ?? false}
         error={widgetErrors[widget.id]}
-        editable={false}
-        onRefresh={() => refreshWidget(widget.id)}
-        onFullscreen={() => setFullscreenWidgetId(widget.id)}
       />
     ),
-    [widgetResults, widgetLoading, widgetErrors, refreshWidget]
+    [widgetResults, widgetLoading, widgetErrors]
   );
 
   // Container styles
@@ -159,54 +135,6 @@ function DashboardContent({
     borderTopColor: theme.colors.primary,
     borderRadius: '50%',
     animation: 'prismiq-dashboard-spin 1s linear infinite',
-  };
-
-  // Fullscreen overlay styles
-  const fullscreenOverlayStyle: React.CSSProperties = {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: theme.colors.background,
-    zIndex: 1000,
-    display: 'flex',
-    flexDirection: 'column',
-  };
-
-  const fullscreenHeaderStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: theme.spacing.md,
-    borderBottom: `1px solid ${theme.colors.border}`,
-    backgroundColor: theme.colors.surface,
-  };
-
-  const fullscreenTitleStyle: React.CSSProperties = {
-    fontSize: theme.fontSizes.lg,
-    fontWeight: 600,
-    color: theme.colors.text,
-  };
-
-  const fullscreenContentStyle: React.CSSProperties = {
-    flex: 1,
-    padding: theme.spacing.md,
-    overflow: 'auto',
-  };
-
-  const closeButtonStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '36px',
-    height: '36px',
-    border: 'none',
-    borderRadius: theme.radius.sm,
-    backgroundColor: 'transparent',
-    color: theme.colors.textMuted,
-    cursor: 'pointer',
-    transition: 'background-color 150ms, color 150ms',
   };
 
   // Loading state
@@ -302,43 +230,6 @@ function DashboardContent({
           renderWidget={renderWidget}
         />
       </div>
-
-      {/* Fullscreen overlay */}
-      {fullscreenWidget && (
-        <div style={fullscreenOverlayStyle}>
-          <div style={fullscreenHeaderStyle}>
-            <span style={fullscreenTitleStyle}>{fullscreenWidget.title}</span>
-            <button
-              style={closeButtonStyle}
-              onClick={() => setFullscreenWidgetId(null)}
-              title="Exit fullscreen (Esc)"
-              className="prismiq-fullscreen-close"
-            >
-              <Icon name="x" size={20} />
-            </button>
-          </div>
-          <div style={fullscreenContentStyle}>
-            <Widget
-              widget={fullscreenWidget}
-              result={widgetResults[fullscreenWidget.id] ?? null}
-              isLoading={widgetLoading[fullscreenWidget.id] ?? false}
-              error={widgetErrors[fullscreenWidget.id]}
-              editable={false}
-              onRefresh={() => refreshWidget(fullscreenWidget.id)}
-              className="prismiq-fullscreen-widget"
-            />
-          </div>
-          <style>{`
-            .prismiq-fullscreen-close:hover {
-              background-color: ${theme.colors.surfaceHover};
-              color: ${theme.colors.text};
-            }
-            .prismiq-fullscreen-widget {
-              height: 100%;
-            }
-          `}</style>
-        </div>
-      )}
     </div>
   );
 }

@@ -189,35 +189,6 @@ export function DashboardEditor({
     }));
   }, []);
 
-  // Remove widget
-  const removeWidget = useCallback((widgetId: string) => {
-    setDashboard((prev) => ({
-      ...prev,
-      widgets: prev.widgets.filter((w) => w.id !== widgetId),
-    }));
-  }, []);
-
-  // Duplicate widget
-  const duplicateWidget = useCallback((widgetId: string) => {
-    const widget = dashboard.widgets.find((w) => w.id === widgetId);
-    if (!widget) return;
-
-    const newWidget: WidgetType = {
-      ...widget,
-      id: generateId(),
-      title: `${widget.title} (copy)`,
-      position: {
-        ...widget.position,
-        y: widget.position.y + widget.position.h,
-      },
-    };
-
-    setDashboard((prev) => ({
-      ...prev,
-      widgets: [...prev.widgets, newWidget],
-    }));
-  }, [dashboard.widgets]);
-
   // Handle layout changes
   const handleLayoutChange = useCallback(
     (positions: Record<string, WidgetPosition>) => {
@@ -297,14 +268,9 @@ export function DashboardEditor({
         result={widgetResults[widget.id] ?? null}
         isLoading={widgetLoading[widget.id] ?? false}
         error={widgetErrors[widget.id]}
-        editable={true}
-        onEdit={() => setEditingWidget(widget)}
-        onRemove={() => removeWidget(widget.id)}
-        onDuplicate={() => duplicateWidget(widget.id)}
-        onRefresh={() => refreshWidget(widget.id)}
       />
     ),
-    [widgetResults, widgetLoading, widgetErrors, removeWidget, duplicateWidget, refreshWidget]
+    [widgetResults, widgetLoading, widgetErrors]
   );
 
   // Styles
