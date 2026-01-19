@@ -74,25 +74,16 @@ export function LineChart({
 
   // Create date formatter if xAxisFormat is provided
   const dateFormatter = useMemo(
-    () => {
-      console.log('[LineChart DEBUG] xAxisFormat:', xAxisFormat);
-      const formatter = xAxisFormat ? createDateFormatter(xAxisFormat) : null;
-      console.log('[LineChart DEBUG] dateFormatter created:', !!formatter);
-      return formatter;
-    },
+    () => (xAxisFormat ? createDateFormatter(xAxisFormat) : null),
     [xAxisFormat]
   );
 
   // Format categories if date formatter is available
   const formattedCategories = useMemo(() => {
-    console.log('[LineChart DEBUG] chartData.categories:', chartData.categories.slice(0, 3));
     if (!dateFormatter) {
-      console.log('[LineChart DEBUG] No dateFormatter, returning raw categories');
       return chartData.categories;
     }
-    const formatted = chartData.categories.map((cat) => dateFormatter(cat));
-    console.log('[LineChart DEBUG] Formatted categories:', formatted.slice(0, 3));
-    return formatted;
+    return chartData.categories.map((cat) => dateFormatter(cat));
   }, [chartData.categories, dateFormatter]);
 
   // Get colors

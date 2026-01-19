@@ -238,14 +238,9 @@ export function WidgetContent({
 
   // Create date formatters for table widgets (must be called unconditionally per Rules of Hooks)
   const dateFormatters = useMemo(() => {
-    console.log('[WidgetContent DEBUG] widget.type:', widget.type);
-    console.log('[WidgetContent DEBUG] widget.config.dateFormats:', widget.config.dateFormats);
     if (widget.type === 'table' && widget.config.dateFormats) {
-      const formatters = createDateFormatters(widget.config.dateFormats);
-      console.log('[WidgetContent DEBUG] Created dateFormatters:', Object.keys(formatters));
-      return formatters;
+      return createDateFormatters(widget.config.dateFormats);
     }
-    console.log('[WidgetContent DEBUG] No dateFormatters created');
     return undefined;
   }, [widget.type, widget.config.dateFormats]);
 
@@ -441,24 +436,11 @@ export function WidgetContent({
           (col) => col !== widget.config.pivot_column && col !== widget.config.value_column
         );
 
-        console.log('[PIVOT DEBUG] Pivoting table:', {
-          pivot_column: widget.config.pivot_column,
-          value_column: widget.config.value_column,
-          dimensions: dimensionColumns,
-          original_columns: result.columns,
-        });
-
         // Pivot the data
         tableResult = pivotQueryResult(result, {
           pivotColumn: widget.config.pivot_column,
           valueColumn: widget.config.value_column,
           dimensionColumns,
-        });
-
-        console.log('[PIVOT DEBUG] Pivoted result:', {
-          columns: tableResult.columns,
-          row_count: tableResult.row_count,
-          sample_rows: tableResult.rows.slice(0, 3),
         });
       }
 

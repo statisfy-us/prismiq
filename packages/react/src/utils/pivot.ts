@@ -53,14 +53,10 @@ export function pivotQueryResult(
     new Set(result.rows.map((row) => String(row[pivotColIndex])))
   ).sort();
 
-  console.log(`[pivot] Found ${pivotValues.length} unique pivot values:`, pivotValues);
-
   // Build dimension column indices
   const dimIndices = dimensionColumns
     .map((col) => result.columns.indexOf(col))
     .filter((idx) => idx !== -1);
-
-  console.log(`[pivot] Grouping by ${dimIndices.length} dimension columns:`, dimensionColumns);
 
   // Group rows by dimension values
   const grouped = new Map<string, Map<string, unknown>>();
@@ -82,8 +78,6 @@ export function pivotQueryResult(
     grouped.get(key)!.set(pivotValue, value);
   }
 
-  console.log(`[pivot] Grouped into ${grouped.size} rows`);
-
   // Build pivoted result
   const newColumns = [...dimensionColumns, ...pivotValues];
   const newRows: unknown[][] = [];
@@ -96,8 +90,6 @@ export function pivotQueryResult(
     ];
     newRows.push(newRow);
   }
-
-  console.log(`[pivot] Result: ${newRows.length} rows x ${newColumns.length} columns`);
 
   // Build column_types array (dimension types + value type for each pivot column)
   const dimColTypes = dimensionColumns
