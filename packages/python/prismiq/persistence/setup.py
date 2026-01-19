@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from asyncpg import Pool
+    from asyncpg import Pool  # type: ignore[import-not-found]
 
 # Load SQL from adjacent schema.sql file
 SCHEMA_SQL = (Path(__file__).parent / "schema.sql").read_text()
