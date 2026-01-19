@@ -57,6 +57,9 @@ from prismiq.calculated_fields import (
     resolve_calculated_fields,
 )
 
+# Calculated field processor (no external dependencies)
+from prismiq.calculated_field_processor import preprocess_calculated_fields
+
 # Types (pydantic only)
 from prismiq.types import (
     AggregationType,
@@ -351,6 +354,7 @@ __all__ = [
     # Calculated fields (lightweight)
     "ExpressionParser",
     "has_aggregation",
+    "preprocess_calculated_fields",
     "resolve_calculated_fields",
     # Types (lightweight)
     "AggregationType",

@@ -125,7 +125,7 @@ def convert_revealbi_date_format_to_postgres(revealbi_format: str) -> str:
 
 # Constants for validation
 ALLOWED_JOIN_TYPES = frozenset({"INNER", "LEFT", "RIGHT", "FULL"})
-ALLOWED_OPERATORS = frozenset({"eq", "ne", "gt", "gte", "lt", "lte", "in", "in_subquery", "like", "not_like"})
+ALLOWED_OPERATORS = frozenset({"eq", "ne", "gt", "gte", "lt", "lte", "in", "in_or_null", "in_subquery", "like", "not_like"})
 ALLOWED_AGGREGATIONS = frozenset({"none", "sum", "avg", "count", "count_distinct", "min", "max"})
 ALLOWED_DATE_TRUNCS = frozenset({
     "year", "quarter", "month", "week", "day", "hour", "minute", "second"

@@ -8,17 +8,89 @@ Use this when working with SQLAlchemy's `text()` function.
 
 from __future__ import annotations
 
-from typing import Any, Callable
+import re
+from typing import TYPE_CHECKING, Any, Callable
 
 from .sql_utils import (ALLOWED_AGGREGATIONS, ALLOWED_DATE_TRUNCS,
                         ALLOWED_JOIN_TYPES, ALLOWED_OPERATORS,
                         ALLOWED_ORDER_DIRECTIONS, validate_identifier)
+
+if TYPE_CHECKING:
+    pass
+
+
+def _postprocess_scalar_subqueries(sql: str) -> str:
+    """Replace scalar subquery placeholders with actual subqueries.
+
+    Calculated fields that use "percent of total" patterns (like [Sum:arr] / [Sum:total])
+    need the divisor to be computed across ALL rows, not just the grouped rows.
+    This is achieved using scalar subqueries.
+
+    The calculated_fields module generates placeholders like __SCALAR_SUM_columnname__
+    which this function replaces with actual scalar subqueries using the FROM and WHERE
+    clauses from the main query.
+
+    Args:
+        sql: Generated SQL query that may contain __SCALAR_SUM_*__ placeholders
+
+    Returns:
+        SQL with placeholders replaced by scalar subqueries
+
+    Example:
+        Input:  SELECT __SCALAR_SUM_arr__ FROM "public"."accounts" WHERE x = 1
+        Output: SELECT (SELECT SUM(("arr")::numeric) FROM "public"."accounts" WHERE x = 1)
+                FROM "public"."accounts" WHERE x = 1
+    """
+    # Pattern: __SCALAR_SUM_columnname__
+    scalar_pattern = r"__SCALAR_SUM_(\w+)__"
+    matches = re.findall(scalar_pattern, sql)
+
+    if not matches:
+        return sql
+
+    # Extract FROM clause from SQL to reuse in scalar subqueries
+    # Use negated character class to avoid ReDoS from backtracking
+    # Match FROM until we hit a SQL keyword boundary
+    from_match = re.search(
+        r"FROM\s+([^;]+?)(?=\s+WHERE\s|\s+GROUP\s+BY\s|\s+ORDER\s+BY\s|\s+LIMIT\s|$)",
+        sql,
+        re.IGNORECASE,
+    )
+    if not from_match:
+        # Can't extract FROM clause - return SQL as-is with placeholders
+        # This shouldn't happen in practice but handles edge cases gracefully
+        return sql
+
+    from_clause = from_match.group(1).strip()
+
+    # Extract WHERE clause if present
+    # Use negated character class to avoid ReDoS from backtracking
+    where_match = re.search(
+        r"WHERE\s+([^;]+?)(?=\s+GROUP\s+BY\s|\s+ORDER\s+BY\s|\s+LIMIT\s|$)",
+        sql,
+        re.IGNORECASE,
+    )
+    where_clause = where_match.group(1).strip() if where_match else None
+
+    # Replace each placeholder with a scalar subquery
+    for column_name in matches:
+        # Build scalar subquery: (SELECT SUM("column") FROM table WHERE filters)
+        subquery = f'(SELECT SUM(("{column_name}")::numeric) FROM {from_clause}'
+        if where_clause:
+            subquery += f" WHERE {where_clause}"
+        subquery += ")"
+
+        # Replace placeholder with scalar subquery
+        sql = sql.replace(f"__SCALAR_SUM_{column_name}__", subquery)
+
+    return sql
 
 
 def build_sql_from_dict(
     query: dict[str, Any],
     *,
     table_validator: Callable[[str], None] | None = None,
+    preprocess_calculated_fields: bool = True,
 ) -> tuple[str, dict[str, Any]]:
     """Build SQL query from dictionary-based query definition.
 
@@ -34,12 +106,16 @@ def build_sql_from_dict(
             - group_by: list[str] column names
             - order_by: list[dict] with column, direction
             - limit: int | None
-            - calculated_fields: list[dict] (optional, handled by caller)
+            - calculated_fields: list[dict] with name and expression (optional)
 
         table_validator: Optional callback to validate table names against
                          application-specific whitelist. Should raise ValueError
                          if table is not allowed. This enables business-specific
                          table access control while keeping core logic generic.
+
+        preprocess_calculated_fields: If True (default), automatically preprocess
+                         calculated_fields in the query. Set to False if the caller
+                         has already preprocessed them.
 
     Returns:
         Tuple of (sql, params) where params is a dict for SQLAlchemy text()
@@ -63,6 +139,14 @@ def build_sql_from_dict(
         >>> # sql: 'SELECT "users"."email" FROM "public"."users" WHERE "users"."id" = :param_0'
         >>> # params: {"param_0": 42}
     """
+    # Preprocess calculated fields if present and not already processed
+    if preprocess_calculated_fields and query.get("calculated_fields"):
+        from .calculated_field_processor import (
+            preprocess_calculated_fields as preprocess_calc_fields,
+        )
+
+        query = preprocess_calc_fields(query)
+
     # Extract query parts
     tables = query.get("tables", [])
     joins = query.get("joins", [])
@@ -96,9 +180,14 @@ def build_sql_from_dict(
         if column_name != "*" and not col.get("sql_expression"):
             validate_identifier(column_name, "column name")
 
-        # Validate column alias if present (alias must always be valid for SELECT ... AS "alias")
-        if col.get("alias"):
-            validate_identifier(col["alias"], "column alias")
+            # Validate column alias if present for regular columns
+            # (aliases are double-quoted in SQL so they can contain special chars,
+            # but we validate regular column aliases for consistency)
+            if col.get("alias"):
+                validate_identifier(col["alias"], "column alias")
+        # Note: For calculated fields (with sql_expression), we skip alias validation
+        # because calculated field names can contain spaces, %, etc. and are safely
+        # quoted as AS "alias" in the generated SQL
 
     # Validate JOIN types against whitelist
     for join in joins:
@@ -311,6 +400,23 @@ def build_sql_from_dict(
                 params[param_name] = val
                 param_counter += 1
             where_parts.append(f'{col_ref} IN ({", ".join(param_names)})')
+        elif operator == "in_or_null":
+            # Handle mixed selection of concrete values AND NULL
+            # Generates: (col IN (...) OR col IS NULL)
+            if not value:
+                # No concrete values, just NULL filter
+                where_parts.append(f"{col_ref} IS NULL")
+                continue
+
+            param_names = []
+            for val in value:
+                param_name = f"param_{param_counter}"
+                param_names.append(f":{param_name}")
+                params[param_name] = val
+                param_counter += 1
+            where_parts.append(
+                f'({col_ref} IN ({", ".join(param_names)}) OR {col_ref} IS NULL)'
+            )
         elif operator == "in_subquery":
             # For subquery filters (used in RLS filtering)
             subquery_sql = value.get("sql", "").strip()
@@ -337,10 +443,7 @@ def build_sql_from_dict(
         # Build GROUP BY expressions
         group_cols = []
         for col_name in group_by:
-            # Validate group by column name
-            validate_identifier(col_name, "group_by column")
-
-            # Find the corresponding column definition to check for date_trunc
+            # Find the corresponding column definition first
             col_def = next(
                 (
                     c
@@ -350,23 +453,43 @@ def build_sql_from_dict(
                 None,
             )
             if col_def:
-                # Get table reference and column name
-                table_id = col_def.get("table_id", "t1")
-                column_name = col_def["column"]
-                table_ref = table_refs.get(table_id, f'"{tables[0]["name"]}"')
-                col_ref = f'{table_ref}."{column_name}"'
+                # Skip columns that have aggregation - they shouldn't be in GROUP BY
+                # This includes both calculated fields with _has_aggregation flag
+                # and regular columns with aggregation set
+                if col_def.get("_has_aggregation") or (
+                    col_def.get("aggregation") and col_def.get("aggregation") != "none"
+                ):
+                    continue
 
-                if col_def.get("date_trunc"):
-                    # Use the same expression as in SELECT - DATE_TRUNC
-                    date_trunc = col_def["date_trunc"]
-                    group_cols.append(f"DATE_TRUNC('{date_trunc}', {col_ref})")
+                # Check if this is a calculated field with sql_expression
+                if col_def.get("sql_expression"):
+                    # Use the sql_expression directly for GROUP BY
+                    # No validation needed - sql_expression is already validated/safe
+                    group_cols.append(col_def["sql_expression"])
                 else:
-                    # Regular column
-                    group_cols.append(col_ref)
+                    # Regular column - validate the identifier
+                    column_name = col_def["column"]
+                    validate_identifier(column_name, "group_by column")
+
+                    # Get table reference and column name
+                    table_id = col_def.get("table_id", "t1")
+                    table_ref = table_refs.get(table_id, f'"{tables[0]["name"]}"')
+                    col_ref = f'{table_ref}."{column_name}"'
+
+                    if col_def.get("date_trunc"):
+                        # Use the same expression as in SELECT - DATE_TRUNC
+                        date_trunc = col_def["date_trunc"]
+                        group_cols.append(f"DATE_TRUNC('{date_trunc}', {col_ref})")
+                    else:
+                        # Regular column
+                        group_cols.append(col_ref)
             else:
-                # Fallback: column not found in definitions, quote as-is
+                # Fallback: column not found in definitions - validate and quote as-is
+                validate_identifier(col_name, "group_by column")
                 group_cols.append(f'"{col_name}"')
-        sql += f" GROUP BY {', '.join(group_cols)}"
+        # Only add GROUP BY clause if there are non-aggregate columns to group by
+        if group_cols:
+            sql += f" GROUP BY {', '.join(group_cols)}"
 
     if order_by:
         order_parts = []
@@ -374,42 +497,52 @@ def build_sql_from_dict(
             col = order["column"]
             direction = order.get("direction", "asc").upper()
 
-            # Validate order by column name
-            validate_identifier(col, "order_by column")
-
             # Validate direction
             if direction not in ALLOWED_ORDER_DIRECTIONS:
                 # Default to ASC for invalid directions
                 direction = "ASC"
 
-            # Find the column definition to check for date_trunc
+            # Find the column definition first
             col_def = next(
                 (c for c in columns if c["column"] == col or c.get("alias") == col),
                 None,
             )
 
             if col_def:
-                # Get table reference and column name
-                table_id = col_def.get("table_id", "t1")
-                column_name = col_def["column"]
-                table_ref = table_refs.get(table_id, f'"{tables[0]["name"]}"')
-                col_ref = f'{table_ref}."{column_name}"'
-
-                if col_def.get("date_trunc"):
-                    # Use the same expression as in SELECT/GROUP BY - DATE_TRUNC
-                    date_trunc = col_def["date_trunc"]
-                    expr = f"DATE_TRUNC('{date_trunc}', {col_ref})"
-                    order_parts.append(f"{expr} {direction}")
+                # Check if this is a calculated field with sql_expression
+                if col_def.get("sql_expression"):
+                    # Use the sql_expression directly for ORDER BY
+                    # No validation needed - sql_expression is already validated/safe
+                    order_parts.append(f"{col_def['sql_expression']} {direction}")
                 else:
-                    # Regular column
-                    order_parts.append(f"{col_ref} {direction}")
+                    # Regular column - validate the identifier
+                    column_name = col_def["column"]
+                    validate_identifier(column_name, "order_by column")
+
+                    # Get table reference and column name
+                    table_id = col_def.get("table_id", "t1")
+                    table_ref = table_refs.get(table_id, f'"{tables[0]["name"]}"')
+                    col_ref = f'{table_ref}."{column_name}"'
+
+                    if col_def.get("date_trunc"):
+                        # Use the same expression as in SELECT/GROUP BY - DATE_TRUNC
+                        date_trunc = col_def["date_trunc"]
+                        expr = f"DATE_TRUNC('{date_trunc}', {col_ref})"
+                        order_parts.append(f"{expr} {direction}")
+                    else:
+                        # Regular column
+                        order_parts.append(f"{col_ref} {direction}")
             else:
-                # Fallback: column not found in definitions, quote as-is
+                # Fallback: column not found in definitions - validate and quote as-is
+                validate_identifier(col, "order_by column")
                 order_parts.append(f'"{col}" {direction}')
         sql += f" ORDER BY {', '.join(order_parts)}"
 
     # Handle LIMIT clause (use is not None to allow limit=0)
     if limit is not None:
         sql += f" LIMIT {int(limit)}"
+
+    # Post-process scalar subquery placeholders (for percent-of-total patterns)
+    sql = _postprocess_scalar_subqueries(sql)
 
     return sql, params
