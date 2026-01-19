@@ -1,5 +1,4 @@
-"""
-SQL validation for custom SQL queries.
+"""SQL validation for custom SQL queries.
 
 This module validates raw SQL queries to ensure they are safe to execute:
 - Only SELECT statements allowed
@@ -48,8 +47,7 @@ class SQLValidator:
     ALLOWED_STATEMENT_TYPES = frozenset({"SELECT"})
 
     def __init__(self, schema: DatabaseSchema) -> None:
-        """
-        Initialize the validator.
+        """Initialize the validator.
 
         Args:
             schema: Database schema defining allowed tables.
@@ -58,8 +56,7 @@ class SQLValidator:
         self._allowed_tables = frozenset(t.name.lower() for t in schema.tables)
 
     def validate(self, sql: str) -> SQLValidationResult:
-        """
-        Validate a raw SQL query.
+        """Validate a raw SQL query.
 
         Args:
             sql: The SQL query to validate.
@@ -181,7 +178,10 @@ class SQLValidator:
         return sorted(tables)
 
     def _check_table_access(self, tables: list[str]) -> set[str]:
-        """Check if all tables are allowed. Returns set of invalid tables."""
+        """Check if all tables are allowed.
+
+        Returns set of invalid tables.
+        """
         invalid: set[str] = set()
         for table in tables:
             if table.lower() not in self._allowed_tables:
@@ -206,8 +206,7 @@ class SQLValidator:
 
 
 def validate_sql(sql: str, schema: DatabaseSchema) -> SQLValidationResult:
-    """
-    Convenience function to validate SQL.
+    """Convenience function to validate SQL.
 
     Args:
         sql: The SQL query to validate.

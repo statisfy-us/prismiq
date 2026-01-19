@@ -1,8 +1,8 @@
-"""
-Data transformation utilities for Prismiq analytics.
+"""Data transformation utilities for Prismiq analytics.
 
 This module provides functions for transforming query results including
-pivot, transpose, null filling, running totals, and percentage calculations.
+pivot, transpose, null filling, running totals, and percentage
+calculations.
 """
 
 from __future__ import annotations
@@ -21,8 +21,7 @@ def pivot_data(
     value_column: str,
     aggregation: str = "sum",
 ) -> QueryResult:
-    """
-    Pivot data from long to wide format.
+    """Pivot data from long to wide format.
 
     Args:
         result: Query result to pivot.
@@ -129,8 +128,7 @@ def pivot_data(
 
 
 def transpose_data(result: QueryResult) -> QueryResult:
-    """
-    Transpose rows and columns.
+    """Transpose rows and columns.
 
     The first row becomes column headers (if present),
     and columns become rows.
@@ -183,8 +181,7 @@ def fill_nulls(
     value: Any = 0,
     method: str | None = None,
 ) -> QueryResult:
-    """
-    Fill null values in result data.
+    """Fill null values in result data.
 
     Args:
         result: Query result to process.
@@ -249,8 +246,7 @@ def calculate_running_total(
     order_column: str | None = None,
     group_column: str | None = None,
 ) -> QueryResult:
-    """
-    Add a running total column.
+    """Add a running total column.
 
     Args:
         result: Query result to process.
@@ -331,8 +327,7 @@ def calculate_percent_of_total(
     value_column: str,
     group_column: str | None = None,
 ) -> QueryResult:
-    """
-    Add a percentage of total column.
+    """Add a percentage of total column.
 
     Args:
         result: Query result to process.
@@ -407,8 +402,7 @@ def sort_result(
     column: str,
     descending: bool = False,
 ) -> QueryResult:
-    """
-    Sort query result by a column.
+    """Sort query result by a column.
 
     Args:
         result: Query result to sort.
@@ -449,8 +443,7 @@ def limit_result(
     limit: int,
     offset: int = 0,
 ) -> QueryResult:
-    """
-    Limit and offset query result rows.
+    """Limit and offset query result rows.
 
     Args:
         result: Query result to limit.

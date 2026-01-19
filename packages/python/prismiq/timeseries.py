@@ -1,5 +1,4 @@
-"""
-Time series bucketing utilities for Prismiq analytics.
+"""Time series bucketing utilities for Prismiq analytics.
 
 This module provides utilities for grouping data by time intervals,
 generating time buckets, and filling missing data points.
@@ -42,8 +41,7 @@ class TimeBucket(BaseModel):
 
 
 def get_date_trunc_sql(interval: TimeInterval, column: str) -> str:
-    """
-    Generate PostgreSQL date_trunc expression.
+    """Generate PostgreSQL date_trunc expression.
 
     Args:
         interval: Time interval for truncation.
@@ -64,8 +62,7 @@ def get_date_trunc_sql(interval: TimeInterval, column: str) -> str:
 
 
 def get_interval_format(interval: TimeInterval) -> str:
-    """
-    Get the appropriate date format string for the interval.
+    """Get the appropriate date format string for the interval.
 
     Args:
         interval: Time interval.
@@ -91,8 +88,7 @@ def get_interval_format(interval: TimeInterval) -> str:
 
 
 def _format_bucket_label(dt: datetime, interval: TimeInterval) -> str:
-    """
-    Format a datetime as a human-readable bucket label.
+    """Format a datetime as a human-readable bucket label.
 
     Args:
         dt: Datetime to format.
@@ -130,8 +126,7 @@ def _format_bucket_label(dt: datetime, interval: TimeInterval) -> str:
 
 
 def _truncate_datetime(dt: datetime, interval: TimeInterval) -> datetime:
-    """
-    Truncate datetime to the start of the given interval.
+    """Truncate datetime to the start of the given interval.
 
     Args:
         dt: Datetime to truncate.
@@ -176,8 +171,7 @@ def _truncate_datetime(dt: datetime, interval: TimeInterval) -> datetime:
 
 
 def _get_next_bucket_start(dt: datetime, interval: TimeInterval) -> datetime:
-    """
-    Get the start of the next bucket after the given datetime.
+    """Get the start of the next bucket after the given datetime.
 
     Args:
         dt: Current bucket start.
@@ -218,8 +212,7 @@ def _get_next_bucket_start(dt: datetime, interval: TimeInterval) -> datetime:
 
 
 def _get_bucket_end(bucket_start: datetime, interval: TimeInterval) -> datetime:
-    """
-    Get the end datetime for a bucket (last moment before next bucket).
+    """Get the end datetime for a bucket (last moment before next bucket).
 
     Args:
         bucket_start: Start of the bucket.
@@ -238,8 +231,7 @@ def generate_time_buckets(
     end: datetime,
     interval: TimeInterval,
 ) -> list[TimeBucket]:
-    """
-    Generate all time buckets between start and end.
+    """Generate all time buckets between start and end.
 
     Args:
         start: Start datetime (inclusive).
@@ -291,8 +283,7 @@ def fill_missing_buckets(
     buckets: list[TimeBucket],
     fill_value: Any = 0,
 ) -> list[dict[str, Any]]:
-    """
-    Fill missing time buckets with default values.
+    """Fill missing time buckets with default values.
 
     Takes query result data and fills in missing time periods with
     default values for numeric columns.

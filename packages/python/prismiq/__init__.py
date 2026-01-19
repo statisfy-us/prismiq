@@ -35,160 +35,72 @@ __version__ = "0.1.0"
 # These are always loaded when the package is imported
 # =============================================================================
 
-# SQL utilities (no external dependencies)
-from prismiq.sql_utils import (
-    ALLOWED_AGGREGATIONS,
-    ALLOWED_DATE_TRUNCS,
-    ALLOWED_JOIN_TYPES,
-    ALLOWED_OPERATORS,
-    ALLOWED_ORDER_DIRECTIONS,
-    convert_revealbi_date_format_to_postgres,
-    quote_identifier,
-    validate_identifier,
-)
-
-# SQLAlchemy builder (only depends on sql_utils)
-from prismiq.sqlalchemy_builder import build_sql_from_dict
-
-# Calculated fields (no external dependencies)
-from prismiq.calculated_fields import (
-    ExpressionParser,
-    has_aggregation,
-    resolve_calculated_fields,
-)
-
+# Authentication (no external dependencies)
+from prismiq.auth import (AuthContext, SimpleAuthContext,
+                          create_header_auth_dependency)
 # Calculated field processor (no external dependencies)
 from prismiq.calculated_field_processor import preprocess_calculated_fields
-
-# Types (pydantic only)
-from prismiq.types import (
-    AggregationType,
-    ColumnSchema,
-    ColumnSelection,
-    DatabaseSchema,
-    FilterDefinition,
-    FilterOperator,
-    GroupByDefinition,
-    JoinDefinition,
-    JoinType,
-    PrismiqError,
-    QueryDefinition,
-    QueryExecutionError,
-    QueryResult,
-    QueryTable,
-    QueryTimeoutError,
-    QueryValidationError,
-    Relationship,
-    SortDefinition,
-    SortDirection,
-    TableNotFoundError,
-    TableSchema,
-    TimeSeriesConfig,
-)
-
-# Dashboard models (pydantic only)
-from prismiq.dashboards import (
-    Dashboard,
-    DashboardCreate,
-    DashboardExport,
-    DashboardFilter,
-    DashboardFilterType,
-    DashboardLayout,
-    DashboardUpdate,
-    Widget,
-    WidgetConfig,
-    WidgetCreate,
-    WidgetPosition,
-    WidgetType,
-    WidgetUpdate,
-)
-
-# Date utilities (no external dependencies)
-from prismiq.dates import (
-    DatePreset,
-    date_add,
-    date_trunc,
-    get_date_range_sql,
-    resolve_date_preset,
-)
-
-# Formatting utilities (no external dependencies)
-from prismiq.formatting import (
-    NumberFormat,
-    format_compact,
-    format_currency,
-    format_number,
-    format_percent,
-    parse_number,
-)
-
-# Time series utilities (no external dependencies)
-from prismiq.timeseries import (
-    TimeBucket,
-    TimeInterval,
-    fill_missing_buckets,
-    generate_time_buckets,
-    get_date_trunc_sql,
-    get_interval_format,
-)
-
-# Transform utilities (no external dependencies)
-from prismiq.transforms import (
-    calculate_percent_of_total,
-    calculate_running_total,
-    fill_nulls,
-    limit_result,
-    pivot_data,
-    sort_result,
-    transpose_data,
-)
-
-# Trend utilities (no external dependencies)
-from prismiq.trends import (
-    ComparisonPeriod,
-    TrendDirection,
-    TrendResult,
-    add_trend_column,
-    calculate_moving_average,
-    calculate_period_comparison,
-    calculate_trend,
-    calculate_year_over_year,
-)
-
-# Authentication (no external dependencies)
-from prismiq.auth import AuthContext, SimpleAuthContext, create_header_auth_dependency
-
-# Permissions (no external dependencies)
-from prismiq.permissions import (
-    can_delete_dashboard,
-    can_edit_dashboard,
-    can_edit_widget,
-    can_view_dashboard,
-)
-
-# Filter merge utilities (no external dependencies)
-from prismiq.filter_merge import (
-    FilterValue,
-    filter_to_query_filter,
-    filter_to_query_filters,
-    get_applicable_filters,
-    merge_filters,
-    resolve_date_filter,
-)
-
+# Calculated fields (no external dependencies)
+from prismiq.calculated_fields import (ExpressionParser, has_aggregation,
+                                       resolve_calculated_fields)
 # Dashboard store interface (no external dependencies)
 from prismiq.dashboard_store import DashboardStore, InMemoryDashboardStore
-
+# Dashboard models (pydantic only)
+from prismiq.dashboards import (Dashboard, DashboardCreate, DashboardExport,
+                                DashboardFilter, DashboardFilterType,
+                                DashboardLayout, DashboardUpdate, Widget,
+                                WidgetConfig, WidgetCreate, WidgetPosition,
+                                WidgetType, WidgetUpdate)
+# Date utilities (no external dependencies)
+from prismiq.dates import (DatePreset, date_add, date_trunc,
+                           get_date_range_sql, resolve_date_preset)
+# Filter merge utilities (no external dependencies)
+from prismiq.filter_merge import (FilterValue, filter_to_query_filter,
+                                  filter_to_query_filters,
+                                  get_applicable_filters, merge_filters,
+                                  resolve_date_filter)
+# Formatting utilities (no external dependencies)
+from prismiq.formatting import (NumberFormat, format_compact, format_currency,
+                                format_number, format_percent, parse_number)
+# Permissions (no external dependencies)
+from prismiq.permissions import (can_delete_dashboard, can_edit_dashboard,
+                                 can_edit_widget, can_view_dashboard)
 # Schema configuration (no external dependencies)
-from prismiq.schema_config import (
-    ColumnConfig,
-    EnhancedColumnSchema,
-    EnhancedDatabaseSchema,
-    EnhancedTableSchema,
-    SchemaConfig,
-    SchemaConfigManager,
-    TableConfig,
-)
+from prismiq.schema_config import (ColumnConfig, EnhancedColumnSchema,
+                                   EnhancedDatabaseSchema, EnhancedTableSchema,
+                                   SchemaConfig, SchemaConfigManager,
+                                   TableConfig)
+# SQL utilities (no external dependencies)
+from prismiq.sql_utils import (ALLOWED_AGGREGATIONS, ALLOWED_DATE_TRUNCS,
+                               ALLOWED_JOIN_TYPES, ALLOWED_OPERATORS,
+                               ALLOWED_ORDER_DIRECTIONS,
+                               convert_revealbi_date_format_to_postgres,
+                               quote_identifier, validate_identifier)
+# SQLAlchemy builder (only depends on sql_utils)
+from prismiq.sqlalchemy_builder import build_sql_from_dict
+# Time series utilities (no external dependencies)
+from prismiq.timeseries import (TimeBucket, TimeInterval, fill_missing_buckets,
+                                generate_time_buckets, get_date_trunc_sql,
+                                get_interval_format)
+# Transform utilities (no external dependencies)
+from prismiq.transforms import (calculate_percent_of_total,
+                                calculate_running_total, fill_nulls,
+                                limit_result, pivot_data, sort_result,
+                                transpose_data)
+# Trend utilities (no external dependencies)
+from prismiq.trends import (ComparisonPeriod, TrendDirection, TrendResult,
+                            add_trend_column, calculate_moving_average,
+                            calculate_period_comparison, calculate_trend,
+                            calculate_year_over_year)
+# Types (pydantic only)
+from prismiq.types import (AggregationType, ColumnSchema, ColumnSelection,
+                           DatabaseSchema, FilterDefinition, FilterOperator,
+                           GroupByDefinition, JoinDefinition, JoinType,
+                           PrismiqError, QueryDefinition, QueryExecutionError,
+                           QueryResult, QueryTable, QueryTimeoutError,
+                           QueryValidationError, Relationship, SortDefinition,
+                           SortDirection, TableNotFoundError, TableSchema,
+                           TimeSeriesConfig)
 
 # =============================================================================
 # Lazy imports for heavy modules (require asyncpg, redis, etc.)
@@ -276,66 +188,31 @@ def __getattr__(name: str):
 
 # Type hints for lazy imports (only used by type checkers, not at runtime)
 if TYPE_CHECKING:
-    from prismiq.api import (
-        HealthCheck,
-        HealthStatus,
-        LivenessResponse,
-        ReadinessResponse,
-        create_router,
-    )
-    from prismiq.cache import (
-        CacheBackend,
-        CacheConfig,
-        InMemoryCache,
-        QueryCache,
-        RedisCache,
-        SchemaCache,
-    )
+    from prismiq.api import (HealthCheck, HealthStatus, LivenessResponse,
+                             ReadinessResponse, create_router)
+    from prismiq.cache import (CacheBackend, CacheConfig, InMemoryCache,
+                               QueryCache, RedisCache, SchemaCache)
     from prismiq.engine import PrismiqEngine
     from prismiq.executor import QueryExecutor
-    from prismiq.logging import (
-        LogConfig,
-        LogContext,
-        Logger,
-        QueryLog,
-        QueryLogger,
-        RequestLoggingMiddleware,
-        StructuredFormatter,
-        TextFormatter,
-        configure_logging,
-        get_logger,
-        get_request_id,
-        set_request_id,
-    )
-    from prismiq.metrics import (
-        DEFAULT_BUCKETS,
-        HistogramValue,
-        Metrics,
-        MetricValue,
-        Timer,
-        create_metrics_router,
-        metrics,
-        record_cache_hit,
-        record_query_execution,
-        record_request,
-        set_active_connections,
-    )
-    from prismiq.middleware import (
-        RateLimitConfig,
-        RateLimiter,
-        RateLimitMiddleware,
-        SlidingWindowCounter,
-        TokenBucket,
-        create_rate_limiter,
-    )
-    from prismiq.persistence import PostgresDashboardStore, drop_tables, ensure_tables
+    from prismiq.logging import (LogConfig, LogContext, Logger, QueryLog,
+                                 QueryLogger, RequestLoggingMiddleware,
+                                 StructuredFormatter, TextFormatter,
+                                 configure_logging, get_logger, get_request_id,
+                                 set_request_id)
+    from prismiq.metrics import (DEFAULT_BUCKETS, HistogramValue, Metrics,
+                                 MetricValue, Timer, create_metrics_router,
+                                 metrics, record_cache_hit,
+                                 record_query_execution, record_request,
+                                 set_active_connections)
+    from prismiq.middleware import (RateLimitConfig, RateLimiter,
+                                    RateLimitMiddleware, SlidingWindowCounter,
+                                    TokenBucket, create_rate_limiter)
+    from prismiq.persistence import (PostgresDashboardStore, drop_tables,
+                                     ensure_tables)
     from prismiq.query import QueryBuilder, ValidationError, ValidationResult
     from prismiq.schema import SchemaIntrospector
-    from prismiq.sql_validator import (
-        SQLValidationError,
-        SQLValidationResult,
-        SQLValidator,
-    )
+    from prismiq.sql_validator import (SQLValidationError, SQLValidationResult,
+                                       SQLValidator)
 
 
 __all__ = [

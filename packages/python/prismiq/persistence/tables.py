@@ -2,17 +2,8 @@
 
 from __future__ import annotations
 
-from sqlalchemy import (
-    Boolean,
-    Column,
-    ForeignKey,
-    Index,
-    MetaData,
-    String,
-    Table,
-    Text,
-    UniqueConstraint,
-)
+from sqlalchemy import (Boolean, Column, ForeignKey, Index, MetaData, String,
+                        Table, Text, UniqueConstraint)
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TIMESTAMP, UUID
 
 metadata = MetaData()

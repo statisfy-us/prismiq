@@ -1,5 +1,4 @@
-"""
-Schema introspection for PostgreSQL databases.
+"""Schema introspection for PostgreSQL databases.
 
 This module provides the SchemaIntrospector class that reads database
 metadata from PostgreSQL's information_schema.
@@ -9,23 +8,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from prismiq.types import (
-    ColumnSchema,
-    DatabaseSchema,
-    Relationship,
-    TableNotFoundError,
-    TableSchema,
-)
+from prismiq.types import (ColumnSchema, DatabaseSchema, Relationship,
+                           TableNotFoundError, TableSchema)
 
 if TYPE_CHECKING:
     from asyncpg import Pool, Record  # type: ignore[import-not-found]
-
     from prismiq.cache import CacheBackend
 
 
 class SchemaIntrospector:
-    """
-    Introspects PostgreSQL database schema.
+    """Introspects PostgreSQL database schema.
 
     Reads table and column metadata from information_schema,
     detects foreign key relationships, and provides a filtered
@@ -56,8 +48,7 @@ class SchemaIntrospector:
         cache: CacheBackend | None = None,
         cache_ttl: int = 3600,
     ) -> None:
-        """
-        Initialize the schema introspector.
+        """Initialize the schema introspector.
 
         Args:
             pool: asyncpg connection pool to use for queries.
@@ -74,8 +65,7 @@ class SchemaIntrospector:
         self._cache_ttl = cache_ttl
 
     async def get_schema(self, force_refresh: bool = False) -> DatabaseSchema:
-        """
-        Get the complete database schema.
+        """Get the complete database schema.
 
         Args:
             force_refresh: If True, bypass cache and fetch fresh data.
@@ -111,9 +101,10 @@ class SchemaIntrospector:
 
         return DatabaseSchema(tables=tables, relationships=relationships)
 
-    async def get_table(self, table_name: str, force_refresh: bool = False) -> TableSchema:
-        """
-        Get schema information for a single table.
+    async def get_table(
+        self, table_name: str, force_refresh: bool = False
+    ) -> TableSchema:
+        """Get schema information for a single table.
 
         Args:
             table_name: Name of the table to retrieve.
@@ -154,8 +145,7 @@ class SchemaIntrospector:
         return table
 
     async def invalidate_cache(self) -> int:
-        """
-        Invalidate all cached schema data.
+        """Invalidate all cached schema data.
 
         Returns:
             Number of cache entries cleared.
@@ -166,8 +156,7 @@ class SchemaIntrospector:
         return await self._cache.clear("schema:*")
 
     async def detect_relationships(self) -> list[Relationship]:
-        """
-        Detect foreign key relationships between exposed tables.
+        """Detect foreign key relationships between exposed tables.
 
         Returns:
             List of Relationship objects representing foreign keys.
@@ -304,8 +293,7 @@ class SchemaIntrospector:
         return [row["column_name"] for row in rows]
 
     async def _get_row_count(self, table_name: str) -> int | None:
-        """
-        Get approximate row count for a table using pg_class.reltuples.
+        """Get approximate row count for a table using pg_class.reltuples.
 
         This is fast but may be slightly out of date. For exact counts,
         VACUUM ANALYZE should be run periodically.

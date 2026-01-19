@@ -1,5 +1,4 @@
-"""
-Schema customization for Prismiq analytics.
+"""Schema customization for Prismiq analytics.
 
 This module provides configuration models and a manager for customizing
 how database schema is presented to users, including friendly names,
@@ -11,9 +10,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
-
 from prismiq.types import DatabaseSchema
+from pydantic import BaseModel, ConfigDict
 
 
 class ColumnConfig(BaseModel):
@@ -64,8 +62,7 @@ class SchemaConfig(BaseModel):
     """Table-specific configurations."""
 
     def get_table_config(self, table_name: str) -> TableConfig:
-        """
-        Get config for a table, with defaults if not configured.
+        """Get config for a table, with defaults if not configured.
 
         Args:
             table_name: The table name to get configuration for.
@@ -76,8 +73,7 @@ class SchemaConfig(BaseModel):
         return self.tables.get(table_name, TableConfig())
 
     def get_column_config(self, table_name: str, column_name: str) -> ColumnConfig:
-        """
-        Get config for a column, with defaults if not configured.
+        """Get config for a column, with defaults if not configured.
 
         Args:
             table_name: The table containing the column.
@@ -90,8 +86,7 @@ class SchemaConfig(BaseModel):
         return table_config.columns.get(column_name, ColumnConfig())
 
     def get_display_name(self, table_name: str, column_name: str | None = None) -> str:
-        """
-        Get display name for table or column, falling back to actual name.
+        """Get display name for table or column, falling back to actual name.
 
         Args:
             table_name: The table name.
@@ -209,16 +204,14 @@ class EnhancedDatabaseSchema(BaseModel):
 
 
 class SchemaConfigManager:
-    """
-    Manages schema configuration persistence and application.
+    """Manages schema configuration persistence and application.
 
-    Provides methods for updating configuration and applying it
-    to database schemas.
+    Provides methods for updating configuration and applying it to
+    database schemas.
     """
 
     def __init__(self, config: SchemaConfig | None = None) -> None:
-        """
-        Initialize the schema config manager.
+        """Initialize the schema config manager.
 
         Args:
             config: Initial configuration. If None, an empty config is used.
@@ -226,8 +219,7 @@ class SchemaConfigManager:
         self._config = config or SchemaConfig()
 
     def get_config(self) -> SchemaConfig:
-        """
-        Get current configuration.
+        """Get current configuration.
 
         Returns:
             The current SchemaConfig.
@@ -235,8 +227,7 @@ class SchemaConfigManager:
         return self._config
 
     def update_table_config(self, table_name: str, config: TableConfig) -> None:
-        """
-        Update configuration for a table.
+        """Update configuration for a table.
 
         Creates a new config with the updated table (immutable operation).
 
@@ -248,9 +239,10 @@ class SchemaConfigManager:
         new_tables[table_name] = config
         self._config = SchemaConfig(tables=new_tables)
 
-    def update_column_config(self, table_name: str, column_name: str, config: ColumnConfig) -> None:
-        """
-        Update configuration for a column.
+    def update_column_config(
+        self, table_name: str, column_name: str, config: ColumnConfig
+    ) -> None:
+        """Update configuration for a column.
 
         Creates a new config with the updated column (immutable operation).
 
@@ -276,8 +268,7 @@ class SchemaConfigManager:
         self.update_table_config(table_name, new_table_config)
 
     def apply_to_schema(self, schema: DatabaseSchema) -> EnhancedDatabaseSchema:
-        """
-        Apply configuration to a schema.
+        """Apply configuration to a schema.
 
         Adds display names, descriptions, and formats from configuration.
         Filters out hidden tables and columns.
@@ -333,7 +324,8 @@ class SchemaConfigManager:
         visible_relationships = [
             rel
             for rel in schema.relationships
-            if rel.from_table in visible_table_names and rel.to_table in visible_table_names
+            if rel.from_table in visible_table_names
+            and rel.to_table in visible_table_names
         ]
 
         return EnhancedDatabaseSchema(
@@ -342,8 +334,7 @@ class SchemaConfigManager:
         )
 
     def to_json(self) -> str:
-        """
-        Serialize configuration to JSON.
+        """Serialize configuration to JSON.
 
         Returns:
             JSON string representation of the configuration.
@@ -352,8 +343,7 @@ class SchemaConfigManager:
 
     @classmethod
     def from_json(cls, json_str: str) -> SchemaConfigManager:
-        """
-        Deserialize configuration from JSON.
+        """Deserialize configuration from JSON.
 
         Args:
             json_str: JSON string to parse.

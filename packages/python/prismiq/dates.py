@@ -1,5 +1,4 @@
-"""
-Date/time utilities for Prismiq analytics.
+"""Date/time utilities for Prismiq analytics.
 
 This module provides utilities for handling relative date expressions
 and date manipulation commonly used in dashboard filters.
@@ -30,9 +29,10 @@ class DatePreset(str, Enum):
     ALL_TIME = "all_time"
 
 
-def resolve_date_preset(preset: DatePreset, reference: date | None = None) -> tuple[date, date]:
-    """
-    Convert a date preset to a concrete (start_date, end_date) tuple.
+def resolve_date_preset(
+    preset: DatePreset, reference: date | None = None
+) -> tuple[date, date]:
+    """Convert a date preset to a concrete (start_date, end_date) tuple.
 
     Args:
         preset: The relative date preset to resolve.
@@ -130,8 +130,7 @@ def resolve_date_preset(preset: DatePreset, reference: date | None = None) -> tu
 
 
 def date_trunc(unit: str, dt: datetime) -> datetime:
-    """
-    Truncate datetime to the specified unit.
+    """Truncate datetime to the specified unit.
 
     Args:
         unit: Truncation unit - one of 'day', 'week', 'month', 'quarter', 'year'.
@@ -177,8 +176,7 @@ def date_trunc(unit: str, dt: datetime) -> datetime:
 
 
 def date_add(dt: date, years: int = 0, months: int = 0, days: int = 0) -> date:
-    """
-    Add years, months, and days to a date.
+    """Add years, months, and days to a date.
 
     Handles edge cases like adding months that would result in invalid dates
     (e.g., Jan 31 + 1 month becomes Feb 28/29).
@@ -222,8 +220,7 @@ def date_add(dt: date, years: int = 0, months: int = 0, days: int = 0) -> date:
 
 
 def get_date_range_sql(preset: DatePreset, column: str) -> tuple[str, list[date]]:
-    """
-    Generate SQL WHERE clause for a date preset.
+    """Generate SQL WHERE clause for a date preset.
 
     Args:
         preset: The date preset to generate SQL for.

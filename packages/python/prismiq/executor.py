@@ -1,30 +1,25 @@
-"""
-Query executor for running validated queries against PostgreSQL.
+"""Query executor for running validated queries against PostgreSQL.
 
-This module provides the QueryExecutor class that executes queries
-with timeout handling, row limits, and proper result formatting.
+This module provides the QueryExecutor class that executes queries with
+timeout handling, row limits, and proper result formatting.
 """
 
 from __future__ import annotations
 
 import asyncio
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from datetime import time as time_type
+from datetime import timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from prismiq.query import QueryBuilder
 from prismiq.sql_validator import SQLValidationError, SQLValidator
-from prismiq.types import (
-    DatabaseSchema,
-    QueryDefinition,
-    QueryExecutionError,
-    QueryResult,
-    QueryTimeoutError,
-    QueryValidationError,
-)
+from prismiq.types import (DatabaseSchema, QueryDefinition,
+                           QueryExecutionError, QueryResult, QueryTimeoutError,
+                           QueryValidationError)
 
 if TYPE_CHECKING:
     from asyncpg import Pool  # type: ignore[import-not-found]
@@ -55,8 +50,7 @@ def serialize_value(value: Any) -> Any:
 
 
 class QueryExecutor:
-    """
-    Executes validated queries against a PostgreSQL database.
+    """Executes validated queries against a PostgreSQL database.
 
     Handles query validation, timeout enforcement, row limits,
     and result formatting.
@@ -75,8 +69,7 @@ class QueryExecutor:
         query_timeout: float = 30.0,
         max_rows: int = 10000,
     ) -> None:
-        """
-        Initialize the query executor.
+        """Initialize the query executor.
 
         Args:
             pool: asyncpg connection pool.
@@ -92,8 +85,7 @@ class QueryExecutor:
         self._sql_validator = SQLValidator(schema)
 
     async def execute(self, query: QueryDefinition) -> QueryResult:
-        """
-        Execute a query and return results.
+        """Execute a query and return results.
 
         Args:
             query: Query definition to execute.
@@ -149,8 +141,7 @@ class QueryExecutor:
         return self._format_result(rows, execution_time_ms, truncated)
 
     async def preview(self, query: QueryDefinition, limit: int = 100) -> QueryResult:
-        """
-        Execute a query with a smaller limit for quick preview.
+        """Execute a query with a smaller limit for quick preview.
 
         Args:
             query: Query definition to execute.
@@ -164,8 +155,7 @@ class QueryExecutor:
         return await self.execute(preview_query)
 
     async def explain(self, query: QueryDefinition) -> dict[str, Any]:
-        """
-        Run EXPLAIN ANALYZE on a query.
+        """Run EXPLAIN ANALYZE on a query.
 
         Args:
             query: Query definition to analyze.
@@ -204,8 +194,7 @@ class QueryExecutor:
         tenant_id: str | None = None,
         tenant_column: str = "tenant_id",
     ) -> QueryResult:
-        """
-        Execute a raw SQL query with validation.
+        """Execute a raw SQL query with validation.
 
         Args:
             sql: Raw SQL query (must be SELECT only).
@@ -234,7 +223,9 @@ class QueryExecutor:
         assert safe_sql is not None  # Guaranteed by valid=True
 
         # Apply row limit using a CTE wrapper
-        limited_sql = f"WITH _cte AS ({safe_sql}) SELECT * FROM _cte LIMIT {self._max_rows + 1}"
+        limited_sql = (
+            f"WITH _cte AS ({safe_sql}) SELECT * FROM _cte LIMIT {self._max_rows + 1}"
+        )
 
         # Convert named params to positional for asyncpg
         # asyncpg uses $1, $2, etc. for positional params
@@ -254,7 +245,9 @@ class QueryExecutor:
                     param_index += 1
                 return f"${param_mapping[name]}"
 
-            limited_sql = re.sub(r":([a-zA-Z_][a-zA-Z0-9_]*)", replace_param, limited_sql)
+            limited_sql = re.sub(
+                r":([a-zA-Z_][a-zA-Z0-9_]*)", replace_param, limited_sql
+            )
 
             # Build param list in order
             param_list = [None] * len(param_mapping)
@@ -264,7 +257,9 @@ class QueryExecutor:
                 else:
                     raise SQLValidationError(
                         f"Missing parameter: {name}",
-                        errors=[f"Parameter '{name}' referenced in SQL but not provided"],
+                        errors=[
+                            f"Parameter '{name}' referenced in SQL but not provided"
+                        ],
                     )
 
         # Execute with timeout

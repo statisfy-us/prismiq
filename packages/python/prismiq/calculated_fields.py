@@ -217,7 +217,9 @@ class FunctionCall(ExprNode):
                     return f"EXTRACT(EPOCH FROM ({date2}::timestamp - {date1}::timestamp)) / 60"
                 elif interval in ("s", "second", "seconds"):
                     # Second difference (end - start)
-                    return f"EXTRACT(EPOCH FROM ({date2}::timestamp - {date1}::timestamp))"
+                    return (
+                        f"EXTRACT(EPOCH FROM ({date2}::timestamp - {date1}::timestamp))"
+                    )
                 else:
                     # Default to days (end - start)
                     return f"(({date2})::date - ({date1})::date)"

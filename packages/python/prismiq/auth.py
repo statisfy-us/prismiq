@@ -10,8 +10,7 @@ from fastapi import Request
 
 @runtime_checkable
 class AuthContext(Protocol):
-    """
-    Protocol for authentication context.
+    """Protocol for authentication context.
 
     Developers implement this interface with their auth system.
     Prismiq only requires tenant_id and user_id properties.
@@ -26,8 +25,7 @@ class AuthContext(Protocol):
 
     @property
     def tenant_id(self) -> str:
-        """
-        Tenant/organization ID for data isolation.
+        """Tenant/organization ID for data isolation.
 
         All dashboard and widget operations are scoped to this tenant.
         This is REQUIRED for all operations.
@@ -36,8 +34,7 @@ class AuthContext(Protocol):
 
     @property
     def user_id(self) -> str | None:
-        """
-        User ID for ownership and permissions.
+        """User ID for ownership and permissions.
 
         Used for:
         - Setting owner_id on created dashboards
@@ -51,11 +48,10 @@ class AuthContext(Protocol):
 
 @dataclass(frozen=True)
 class SimpleAuthContext:
-    """
-    Simple implementation of AuthContext for basic use cases.
+    """Simple implementation of AuthContext for basic use cases.
 
-    Use this when you have simple header-based authentication.
-    For production, implement your own AuthContext with your auth system.
+    Use this when you have simple header-based authentication. For
+    production, implement your own AuthContext with your auth system.
     """
 
     tenant_id: str
@@ -67,8 +63,7 @@ class SimpleAuthContext:
 
 
 def create_header_auth_dependency():
-    """
-    Create a FastAPI dependency that extracts auth from headers.
+    """Create a FastAPI dependency that extracts auth from headers.
 
     Returns a factory function that creates the dependency.
     This is the simplest way to add multi-tenancy.
@@ -86,7 +81,9 @@ def create_header_auth_dependency():
     async def get_auth_context(request: Request) -> SimpleAuthContext:
         tenant_id = request.headers.get("X-Tenant-ID")
         if not tenant_id:
-            raise HTTPException(status_code=400, detail="X-Tenant-ID header is required")
+            raise HTTPException(
+                status_code=400, detail="X-Tenant-ID header is required"
+            )
 
         user_id = request.headers.get("X-User-ID")
 

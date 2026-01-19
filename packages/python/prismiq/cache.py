@@ -1,5 +1,4 @@
-"""
-Caching layer for Prismiq with Redis and in-memory backends.
+"""Caching layer for Prismiq with Redis and in-memory backends.
 
 This module provides cache abstractions for storing query results,
 schema metadata, and other frequently accessed data.
@@ -21,17 +20,15 @@ if TYPE_CHECKING:
 
 
 class CacheBackend(ABC):
-    """
-    Abstract cache backend interface.
+    """Abstract cache backend interface.
 
-    All cache implementations must inherit from this class
-    and implement the required methods.
+    All cache implementations must inherit from this class and implement
+    the required methods.
     """
 
     @abstractmethod
     async def get(self, key: str) -> Any | None:
-        """
-        Get a value from cache.
+        """Get a value from cache.
 
         Args:
             key: Cache key to retrieve.
@@ -43,8 +40,7 @@ class CacheBackend(ABC):
 
     @abstractmethod
     async def set(self, key: str, value: Any, ttl: int | None = None) -> None:
-        """
-        Set a value in cache with optional TTL.
+        """Set a value in cache with optional TTL.
 
         Args:
             key: Cache key.
@@ -55,8 +51,7 @@ class CacheBackend(ABC):
 
     @abstractmethod
     async def delete(self, key: str) -> bool:
-        """
-        Delete a key from cache.
+        """Delete a key from cache.
 
         Args:
             key: Cache key to delete.
@@ -68,8 +63,7 @@ class CacheBackend(ABC):
 
     @abstractmethod
     async def clear(self, pattern: str | None = None) -> int:
-        """
-        Clear cache entries, optionally matching a pattern.
+        """Clear cache entries, optionally matching a pattern.
 
         Args:
             pattern: Glob-style pattern (e.g., "query:*"). If None, clears all.
@@ -81,8 +75,7 @@ class CacheBackend(ABC):
 
     @abstractmethod
     async def exists(self, key: str) -> bool:
-        """
-        Check if a key exists in cache.
+        """Check if a key exists in cache.
 
         Args:
             key: Cache key to check.
@@ -94,11 +87,10 @@ class CacheBackend(ABC):
 
 
 class InMemoryCache(CacheBackend):
-    """
-    In-memory cache for development and testing.
+    """In-memory cache for development and testing.
 
-    Stores values with optional TTL-based expiration.
-    Not suitable for production use with multiple processes.
+    Stores values with optional TTL-based expiration. Not suitable for
+    production use with multiple processes.
     """
 
     def __init__(self) -> None:
@@ -173,8 +165,7 @@ class InMemoryCache(CacheBackend):
 
 
 class RedisCache(CacheBackend):
-    """
-    Redis-backed cache for production use.
+    """Redis-backed cache for production use.
 
     Requires redis-py async client. Install with:
         pip install redis
@@ -187,8 +178,7 @@ class RedisCache(CacheBackend):
     """
 
     def __init__(self, redis_url: str, key_prefix: str = "prismiq:") -> None:
-        """
-        Initialize Redis cache.
+        """Initialize Redis cache.
 
         Args:
             redis_url: Redis connection URL (e.g., "redis://localhost:6379/0").
@@ -199,8 +189,7 @@ class RedisCache(CacheBackend):
         self._redis: Any | None = None
 
     async def connect(self) -> None:
-        """
-        Connect to Redis.
+        """Connect to Redis.
 
         Must be called before using the cache.
         """
@@ -275,13 +264,17 @@ class RedisCache(CacheBackend):
             raise RuntimeError("RedisCache not connected. Call connect() first.")
 
         # Determine search pattern with prefix
-        search_pattern = f"{self._key_prefix}*" if pattern is None else self._make_key(pattern)
+        search_pattern = (
+            f"{self._key_prefix}*" if pattern is None else self._make_key(pattern)
+        )
 
         # Use SCAN to find matching keys (safer than KEYS for large datasets)
         count = 0
         cursor = 0
         while True:
-            cursor, keys = await self._redis.scan(cursor, match=search_pattern, count=100)
+            cursor, keys = await self._redis.scan(
+                cursor, match=search_pattern, count=100
+            )
             if keys:
                 await self._redis.delete(*keys)
                 count += len(keys)
@@ -310,8 +303,7 @@ class CacheConfig(BaseModel):
 
 
 class QueryCache:
-    """
-    High-level cache for query results.
+    """High-level cache for query results.
 
     Handles serialization, key generation, and table-based invalidation.
     """
@@ -321,8 +313,7 @@ class QueryCache:
         backend: CacheBackend,
         config: CacheConfig | None = None,
     ) -> None:
-        """
-        Initialize query cache.
+        """Initialize query cache.
 
         Args:
             backend: Cache backend to use.
@@ -334,8 +325,7 @@ class QueryCache:
         self._table_keys: dict[str, set[str]] = {}
 
     def make_key(self, query: QueryDefinition) -> str:
-        """
-        Generate a cache key from a query definition.
+        """Generate a cache key from a query definition.
 
         Uses a hash of the query's JSON representation.
 
@@ -352,8 +342,7 @@ class QueryCache:
         return f"query:{query_hash}"
 
     async def get_result(self, query: QueryDefinition) -> QueryResult | None:
-        """
-        Get a cached query result.
+        """Get a cached query result.
 
         Args:
             query: Query definition to look up.
@@ -377,8 +366,7 @@ class QueryCache:
         result: QueryResult,
         ttl: int | None = None,
     ) -> None:
-        """
-        Cache a query result.
+        """Cache a query result.
 
         Args:
             query: Query definition (used for key generation).
@@ -404,8 +392,7 @@ class QueryCache:
         await self._backend.set(key, result.model_dump(), effective_ttl)
 
     async def invalidate_table(self, table_name: str) -> int:
-        """
-        Invalidate all cached queries involving a table.
+        """Invalidate all cached queries involving a table.
 
         Args:
             table_name: Name of the table that changed.
@@ -429,8 +416,7 @@ class QueryCache:
         return count
 
     async def invalidate_all(self) -> int:
-        """
-        Invalidate all cached query results.
+        """Invalidate all cached query results.
 
         Returns:
             Number of cache entries invalidated.
@@ -441,8 +427,7 @@ class QueryCache:
 
 
 class SchemaCache:
-    """
-    High-level cache for database schema.
+    """High-level cache for database schema.
 
     Provides caching for schema introspection results.
     """
@@ -452,8 +437,7 @@ class SchemaCache:
         backend: CacheBackend,
         ttl: int = 3600,
     ) -> None:
-        """
-        Initialize schema cache.
+        """Initialize schema cache.
 
         Args:
             backend: Cache backend to use.
@@ -463,8 +447,7 @@ class SchemaCache:
         self._ttl = ttl
 
     async def get_schema(self) -> dict[str, Any] | None:
-        """
-        Get cached schema.
+        """Get cached schema.
 
         Returns:
             Cached schema dict or None if not found.
@@ -472,8 +455,7 @@ class SchemaCache:
         return await self._backend.get("schema:full")
 
     async def set_schema(self, schema_dict: dict[str, Any]) -> None:
-        """
-        Cache schema.
+        """Cache schema.
 
         Args:
             schema_dict: Schema dictionary to cache.
@@ -481,8 +463,7 @@ class SchemaCache:
         await self._backend.set("schema:full", schema_dict, self._ttl)
 
     async def get_table(self, table_name: str) -> dict[str, Any] | None:
-        """
-        Get cached table schema.
+        """Get cached table schema.
 
         Args:
             table_name: Name of the table.
@@ -493,8 +474,7 @@ class SchemaCache:
         return await self._backend.get(f"schema:table:{table_name}")
 
     async def set_table(self, table_name: str, table_dict: dict[str, Any]) -> None:
-        """
-        Cache table schema.
+        """Cache table schema.
 
         Args:
             table_name: Name of the table.
@@ -503,8 +483,7 @@ class SchemaCache:
         await self._backend.set(f"schema:table:{table_name}", table_dict, self._ttl)
 
     async def invalidate(self) -> int:
-        """
-        Invalidate all schema cache.
+        """Invalidate all schema cache.
 
         Returns:
             Number of cache entries invalidated.

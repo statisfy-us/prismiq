@@ -1,8 +1,7 @@
-"""
-Structured logging for Prismiq.
+"""Structured logging for Prismiq.
 
-This module provides structured logging with JSON output,
-request correlation, and performance tracking.
+This module provides structured logging with JSON output, request
+correlation, and performance tracking.
 """
 
 from __future__ import annotations
@@ -25,12 +24,13 @@ if TYPE_CHECKING:
     from starlette.responses import Response
 
 # Context variable for request ID (available across async calls)
-_request_id: contextvars.ContextVar[str | None] = contextvars.ContextVar("request_id", default=None)
+_request_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "request_id", default=None
+)
 
 
 def get_request_id() -> str | None:
-    """
-    Get the current request ID from context.
+    """Get the current request ID from context.
 
     Returns:
         Request ID if in request context, None otherwise.
@@ -39,8 +39,7 @@ def get_request_id() -> str | None:
 
 
 def set_request_id(request_id: str) -> None:
-    """
-    Set the request ID in context.
+    """Set the request ID in context.
 
     Args:
         request_id: Request ID to set.
@@ -77,8 +76,7 @@ class LogContext:
     """Extra fields to include in all logs."""
 
     def with_field(self, key: str, value: Any) -> LogContext:
-        """
-        Create a new context with an additional field.
+        """Create a new context with an additional field.
 
         Args:
             key: Field name.
@@ -91,8 +89,7 @@ class LogContext:
         return LogContext(extra=new_extra)
 
     def with_fields(self, **fields: Any) -> LogContext:
-        """
-        Create a new context with additional fields.
+        """Create a new context with additional fields.
 
         Args:
             **fields: Fields to add.
@@ -105,15 +102,13 @@ class LogContext:
 
 
 class StructuredFormatter(logging.Formatter):
-    """
-    JSON-formatted log output.
+    """JSON-formatted log output.
 
     Outputs log records as JSON with structured fields.
     """
 
     def __init__(self, config: LogConfig | None = None) -> None:
-        """
-        Initialize formatter.
+        """Initialize formatter.
 
         Args:
             config: Logging configuration.
@@ -158,15 +153,13 @@ class StructuredFormatter(logging.Formatter):
 
 
 class TextFormatter(logging.Formatter):
-    """
-    Human-readable text log output.
+    """Human-readable text log output.
 
     Outputs log records in a readable text format.
     """
 
     def __init__(self, config: LogConfig | None = None) -> None:
-        """
-        Initialize formatter.
+        """Initialize formatter.
 
         Args:
             config: Logging configuration.
@@ -210,8 +203,7 @@ class TextFormatter(logging.Formatter):
 
 
 class Logger:
-    """
-    Structured logger with context support.
+    """Structured logger with context support.
 
     Wraps Python's standard logger with structured logging capabilities.
     """
@@ -221,8 +213,7 @@ class Logger:
         name: str,
         context: LogContext | None = None,
     ) -> None:
-        """
-        Initialize logger.
+        """Initialize logger.
 
         Args:
             name: Logger name.
@@ -232,8 +223,7 @@ class Logger:
         self._context = context or LogContext()
 
     def with_context(self, **fields: Any) -> Logger:
-        """
-        Create a new logger with additional context fields.
+        """Create a new logger with additional context fields.
 
         Args:
             **fields: Fields to add to context.
@@ -297,8 +287,7 @@ class Logger:
 
 
 def configure_logging(config: LogConfig | None = None) -> None:
-    """
-    Configure the root logger with structured output.
+    """Configure the root logger with structured output.
 
     Args:
         config: Logging configuration.
@@ -318,7 +307,9 @@ def configure_logging(config: LogConfig | None = None) -> None:
 
     # Set formatter based on config
     formatter: logging.Formatter = (
-        StructuredFormatter(config) if config.format == "json" else TextFormatter(config)
+        StructuredFormatter(config)
+        if config.format == "json"
+        else TextFormatter(config)
     )
 
     handler.setFormatter(formatter)
@@ -326,8 +317,7 @@ def configure_logging(config: LogConfig | None = None) -> None:
 
 
 def get_logger(name: str) -> Logger:
-    """
-    Get a structured logger.
+    """Get a structured logger.
 
     Args:
         name: Logger name (usually __name__).
@@ -339,8 +329,7 @@ def get_logger(name: str) -> Logger:
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
-    """
-    Middleware for logging HTTP requests.
+    """Middleware for logging HTTP requests.
 
     Logs request start, completion, and performance metrics.
     """
@@ -353,8 +342,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         log_response_body: bool = False,
         exclude_paths: list[str] | None = None,
     ) -> None:
-        """
-        Initialize request logging middleware.
+        """Initialize request logging middleware.
 
         Args:
             app: ASGI application.
@@ -369,7 +357,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         self._log_response_body = log_response_body
         self._exclude_paths = set(exclude_paths or [])
 
-    async def dispatch(self, request: Request, call_next: Callable[..., Any]) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: Callable[..., Any]
+    ) -> Response:
         """Process request through logging middleware."""
         # Skip excluded paths
         if request.url.path in self._exclude_paths:
@@ -447,15 +437,13 @@ class QueryLog:
 
 
 class QueryLogger:
-    """
-    Logger for database queries.
+    """Logger for database queries.
 
     Tracks and logs query performance for monitoring.
     """
 
     def __init__(self, logger: Logger | None = None) -> None:
-        """
-        Initialize query logger.
+        """Initialize query logger.
 
         Args:
             logger: Logger to use.
@@ -470,8 +458,7 @@ class QueryLogger:
         row_count: int,
         parameters: dict[str, Any] | None = None,
     ) -> QueryLog:
-        """
-        Log a query execution.
+        """Log a query execution.
 
         Args:
             query: SQL query.

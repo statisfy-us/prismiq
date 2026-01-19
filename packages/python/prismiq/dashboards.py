@@ -1,7 +1,7 @@
-"""
-Dashboard and Widget models for Prismiq.
+"""Dashboard and Widget models for Prismiq.
 
-This module provides Pydantic models for dashboards, widgets, and filters.
+This module provides Pydantic models for dashboards, widgets, and
+filters.
 """
 
 from __future__ import annotations
@@ -10,9 +10,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
-
 from prismiq.types import QueryDefinition
+from pydantic import BaseModel, ConfigDict, Field
 
 
 def _utc_now() -> datetime:

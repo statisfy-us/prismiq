@@ -7,19 +7,10 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
-from prismiq.dashboards import (
-    Dashboard,
-    DashboardCreate,
-    DashboardFilter,
-    DashboardLayout,
-    DashboardUpdate,
-    Widget,
-    WidgetConfig,
-    WidgetCreate,
-    WidgetPosition,
-    WidgetType,
-    WidgetUpdate,
-)
+from prismiq.dashboards import (Dashboard, DashboardCreate, DashboardFilter,
+                                DashboardLayout, DashboardUpdate, Widget,
+                                WidgetConfig, WidgetCreate, WidgetPosition,
+                                WidgetType, WidgetUpdate)
 from prismiq.types import QueryDefinition
 
 if TYPE_CHECKING:
@@ -27,15 +18,13 @@ if TYPE_CHECKING:
 
 
 class PostgresDashboardStore:
-    """
-    PostgreSQL-backed dashboard storage with tenant isolation.
+    """PostgreSQL-backed dashboard storage with tenant isolation.
 
     All operations are scoped to a tenant_id for multi-tenant security.
     """
 
     def __init__(self, pool: Pool) -> None:
-        """
-        Initialize PostgresDashboardStore.
+        """Initialize PostgresDashboardStore.
 
         Args:
             pool: asyncpg connection pool
@@ -252,7 +241,10 @@ class PostgresDashboardStore:
         dashboard_id: str,
         tenant_id: str,
     ) -> bool:
-        """Delete a dashboard with tenant check. Widgets cascade delete."""
+        """Delete a dashboard with tenant check.
+
+        Widgets cascade delete.
+        """
         query = "DELETE FROM prismiq_dashboards WHERE id = $1 AND tenant_id = $2"
         async with self._pool.acquire() as conn:
             result = await conn.execute(query, uuid.UUID(dashboard_id), tenant_id)

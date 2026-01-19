@@ -1,8 +1,7 @@
-"""
-Trend calculation utilities for Prismiq analytics.
+"""Trend calculation utilities for Prismiq analytics.
 
-This module provides utilities for calculating trends, period-over-period
-comparisons, and moving averages.
+This module provides utilities for calculating trends, period-over-
+period comparisons, and moving averages.
 """
 
 from __future__ import annotations
@@ -13,9 +12,8 @@ from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
-
 from prismiq.types import QueryResult
+from pydantic import BaseModel, ConfigDict
 
 
 class TrendDirection(str, Enum):
@@ -61,8 +59,7 @@ def calculate_trend(
     previous: float | None,
     threshold: float = 0.001,
 ) -> TrendResult:
-    """
-    Calculate trend between two values.
+    """Calculate trend between two values.
 
     Args:
         current: Current period value.
@@ -128,8 +125,7 @@ def _get_comparison_date_range(
     current_end: date,
     comparison: ComparisonPeriod,
 ) -> tuple[date, date]:
-    """
-    Calculate the comparison period date range.
+    """Calculate the comparison period date range.
 
     Args:
         current_start: Start of current period.
@@ -211,8 +207,7 @@ def calculate_period_comparison(
     current_start: date,
     current_end: date,
 ) -> TrendResult:
-    """
-    Calculate trend comparing current period to comparison period.
+    """Calculate trend comparing current period to comparison period.
 
     Args:
         result: Query result containing date and value columns.
@@ -241,7 +236,9 @@ def calculate_period_comparison(
         raise ValueError(f"Column not found: {e}") from e
 
     # Calculate comparison period
-    prev_start, prev_end = _get_comparison_date_range(current_start, current_end, comparison)
+    prev_start, prev_end = _get_comparison_date_range(
+        current_start, current_end, comparison
+    )
 
     # Sum values for each period
     current_sum = 0.0
@@ -281,8 +278,7 @@ def add_trend_column(
     order_column: str,
     group_column: str | None = None,
 ) -> QueryResult:
-    """
-    Add columns for trend calculation to each row.
+    """Add columns for trend calculation to each row.
 
     Adds: {value_column}_prev, {value_column}_change, {value_column}_pct_change
 
@@ -350,7 +346,11 @@ def add_trend_column(
             if previous != 0:
                 pct_change = (change / abs(previous)) * 100
             else:
-                pct_change = 100.0 if current_float > 0 else (-100.0 if current_float < 0 else 0.0)
+                pct_change = (
+                    100.0
+                    if current_float > 0
+                    else (-100.0 if current_float < 0 else 0.0)
+                )
         else:
             change = None
             pct_change = None
@@ -388,8 +388,7 @@ def calculate_moving_average(
     window: int = 7,
     order_column: str | None = None,
 ) -> QueryResult:
-    """
-    Add a moving average column.
+    """Add a moving average column.
 
     Args:
         result: Query result to process.
@@ -469,8 +468,7 @@ def calculate_year_over_year(
     date_column: str,
     value_column: str,
 ) -> QueryResult:
-    """
-    Add year-over-year comparison columns.
+    """Add year-over-year comparison columns.
 
     Adds: {value_column}_prev_year, {value_column}_yoy_change, {value_column}_yoy_pct
 

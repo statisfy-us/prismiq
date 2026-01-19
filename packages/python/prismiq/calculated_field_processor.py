@@ -24,8 +24,9 @@ from .calculated_fields import resolve_calculated_fields
 def _has_special_characters(column_name: str) -> bool:
     """Check if column name contains special characters.
 
-    Special characters indicate a calculated field name (e.g., "Total Revenue %")
-    rather than a regular database column (e.g., "account_id").
+    Special characters indicate a calculated field name (e.g., "Total
+    Revenue %") rather than a regular database column (e.g.,
+    "account_id").
     """
     if not column_name:
         return False
@@ -96,9 +97,9 @@ def _apply_calculated_fields_to_columns(
                 col_copy["_has_aggregation"] = True
                 col_copy["aggregation"] = "none"
             elif aggregation == "count_distinct":
-                col_copy["sql_expression"] = (
-                    f'COUNT(DISTINCT "{safe_column_name}") OVER ()'
-                )
+                col_copy[
+                    "sql_expression"
+                ] = f'COUNT(DISTINCT "{safe_column_name}") OVER ()'
                 col_copy["_has_aggregation"] = True
                 col_copy["aggregation"] = "none"
             elif aggregation == "sum":

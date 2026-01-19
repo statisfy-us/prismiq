@@ -1,5 +1,4 @@
-"""
-Prometheus-compatible metrics for Prismiq.
+"""Prometheus-compatible metrics for Prismiq.
 
 This module provides a metrics collection system compatible with
 Prometheus exposition format for monitoring and observability.
@@ -70,8 +69,7 @@ class HistogramValue:
 
 
 class Metrics:
-    """
-    Prometheus-compatible metrics collector.
+    """Prometheus-compatible metrics collector.
 
     Supports counters, gauges, and histograms with labels.
     Thread-safe through atomic operations on primitive types.
@@ -85,8 +83,7 @@ class Metrics:
     """
 
     def __init__(self, prefix: str = "prismiq") -> None:
-        """
-        Initialize metrics collector.
+        """Initialize metrics collector.
 
         Args:
             prefix: Prefix for all metric names.
@@ -125,8 +122,7 @@ class Metrics:
     # ========================================================================
 
     def register_counter(self, name: str, help_text: str = "") -> None:
-        """
-        Register a counter metric.
+        """Register a counter metric.
 
         Args:
             name: Metric name (without prefix).
@@ -136,8 +132,7 @@ class Metrics:
         self._counter_help[full_name] = help_text
 
     def inc_counter(self, name: str, value: float = 1.0, **labels: str) -> None:
-        """
-        Increment a counter.
+        """Increment a counter.
 
         Args:
             name: Counter name (without prefix).
@@ -152,8 +147,7 @@ class Metrics:
         self._counters[key] += value
 
     def get_counter(self, name: str, **labels: str) -> float:
-        """
-        Get current counter value.
+        """Get current counter value.
 
         Args:
             name: Counter name (without prefix).
@@ -171,8 +165,7 @@ class Metrics:
     # ========================================================================
 
     def register_gauge(self, name: str, help_text: str = "") -> None:
-        """
-        Register a gauge metric.
+        """Register a gauge metric.
 
         Args:
             name: Metric name (without prefix).
@@ -182,8 +175,7 @@ class Metrics:
         self._gauge_help[full_name] = help_text
 
     def set_gauge(self, name: str, value: float, **labels: str) -> None:
-        """
-        Set a gauge value.
+        """Set a gauge value.
 
         Args:
             name: Gauge name (without prefix).
@@ -195,8 +187,7 @@ class Metrics:
         self._gauges[key] = value
 
     def get_gauge(self, name: str, **labels: str) -> float | None:
-        """
-        Get current gauge value.
+        """Get current gauge value.
 
         Args:
             name: Gauge name (without prefix).
@@ -210,8 +201,7 @@ class Metrics:
         return self._gauges.get(key)
 
     def inc_gauge(self, name: str, value: float = 1.0, **labels: str) -> None:
-        """
-        Increment a gauge.
+        """Increment a gauge.
 
         Args:
             name: Gauge name (without prefix).
@@ -223,8 +213,7 @@ class Metrics:
         self._gauges[key] = self._gauges.get(key, 0.0) + value
 
     def dec_gauge(self, name: str, value: float = 1.0, **labels: str) -> None:
-        """
-        Decrement a gauge.
+        """Decrement a gauge.
 
         Args:
             name: Gauge name (without prefix).
@@ -243,8 +232,7 @@ class Metrics:
         help_text: str = "",
         buckets: tuple[float, ...] = DEFAULT_BUCKETS,
     ) -> None:
-        """
-        Register a histogram metric.
+        """Register a histogram metric.
 
         Args:
             name: Metric name (without prefix).
@@ -261,8 +249,7 @@ class Metrics:
         self._histogram_buckets[full_name] = buckets
 
     def observe_histogram(self, name: str, value: float, **labels: str) -> None:
-        """
-        Record a histogram observation.
+        """Record a histogram observation.
 
         Args:
             name: Histogram name (without prefix).
@@ -288,8 +275,7 @@ class Metrics:
                 hist.buckets[bucket] += 1
 
     def get_histogram(self, name: str, **labels: str) -> HistogramValue | None:
-        """
-        Get histogram data.
+        """Get histogram data.
 
         Args:
             name: Histogram name (without prefix).
@@ -307,8 +293,7 @@ class Metrics:
     # ========================================================================
 
     def format_prometheus(self) -> str:
-        """
-        Format all metrics in Prometheus exposition format.
+        """Format all metrics in Prometheus exposition format.
 
         Returns:
             Metrics in Prometheus text format.
@@ -424,7 +409,9 @@ metrics.register_counter("queries_total", "Total number of queries executed")
 metrics.register_counter("cache_total", "Cache hit/miss counts")
 metrics.register_counter("requests_total", "Total HTTP requests")
 metrics.register_histogram("query_duration_ms", "Query execution time in milliseconds")
-metrics.register_histogram("request_duration_ms", "HTTP request duration in milliseconds")
+metrics.register_histogram(
+    "request_duration_ms", "HTTP request duration in milliseconds"
+)
 metrics.register_gauge("active_connections", "Number of active database connections")
 
 
@@ -434,8 +421,7 @@ metrics.register_gauge("active_connections", "Number of active database connecti
 
 
 def record_query_execution(duration_ms: float, status: str = "success") -> None:
-    """
-    Record a query execution metric.
+    """Record a query execution metric.
 
     Args:
         duration_ms: Query execution time in milliseconds.
@@ -446,8 +432,7 @@ def record_query_execution(duration_ms: float, status: str = "success") -> None:
 
 
 def record_cache_hit(hit: bool) -> None:
-    """
-    Record cache hit/miss.
+    """Record cache hit/miss.
 
     Args:
         hit: True if cache hit, False if miss.
@@ -462,8 +447,7 @@ def record_request(
     status_code: int,
     duration_ms: float,
 ) -> None:
-    """
-    Record an HTTP request metric.
+    """Record an HTTP request metric.
 
     Args:
         endpoint: Request endpoint path.
@@ -487,8 +471,7 @@ def record_request(
 
 
 def set_active_connections(count: int) -> None:
-    """
-    Set the active database connections gauge.
+    """Set the active database connections gauge.
 
     Args:
         count: Number of active connections.
@@ -502,8 +485,7 @@ def set_active_connections(count: int) -> None:
 
 
 def create_metrics_router() -> APIRouter:
-    """
-    Create a FastAPI router for the metrics endpoint.
+    """Create a FastAPI router for the metrics endpoint.
 
     Returns:
         APIRouter with /metrics endpoint.
@@ -516,8 +498,7 @@ def create_metrics_router() -> APIRouter:
 
     @router.get("/metrics", response_class=PlainTextResponse)
     async def get_metrics() -> str:
-        """
-        Prometheus metrics endpoint.
+        """Prometheus metrics endpoint.
 
         Returns metrics in Prometheus exposition format.
         """
@@ -532,8 +513,7 @@ def create_metrics_router() -> APIRouter:
 
 
 class Timer:
-    """
-    Context manager for timing operations.
+    """Context manager for timing operations.
 
     Example:
         >>> with Timer() as t:

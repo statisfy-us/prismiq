@@ -1,8 +1,7 @@
-"""
-FastAPI routes for the Prismiq analytics engine.
+"""FastAPI routes for the Prismiq analytics engine.
 
-This module provides a factory function to create an API router
-that exposes schema, validation, and query execution endpoints.
+This module provides a factory function to create an API router that
+exposes schema, validation, and query execution endpoints.
 """
 
 # ruff: noqa: B008  # FastAPI's Depends() in function defaults is standard pattern
@@ -15,49 +14,27 @@ from datetime import date
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict
-
-from prismiq import __version__
 from prismiq.auth import AuthContext, create_header_auth_dependency
-from prismiq.dashboards import (
-    Dashboard,
-    DashboardCreate,
-    DashboardExport,
-    DashboardUpdate,
-    Widget,
-    WidgetCreate,
-    WidgetUpdate,
-)
+from prismiq.dashboards import (Dashboard, DashboardCreate, DashboardExport,
+                                DashboardUpdate, Widget, WidgetCreate,
+                                WidgetUpdate)
 from prismiq.filter_merge import FilterValue, merge_filters
-from prismiq.permissions import (
-    can_delete_dashboard,
-    can_edit_dashboard,
-    can_edit_widget,
-    can_view_dashboard,
-)
+from prismiq.permissions import (can_delete_dashboard, can_edit_dashboard,
+                                 can_edit_widget, can_view_dashboard)
 from prismiq.query import ValidationResult
-from prismiq.schema_config import (
-    ColumnConfig,
-    EnhancedDatabaseSchema,
-    EnhancedTableSchema,
-    SchemaConfig,
-    TableConfig,
-)
+from prismiq.schema_config import (ColumnConfig, EnhancedDatabaseSchema,
+                                   EnhancedTableSchema, SchemaConfig,
+                                   TableConfig)
 from prismiq.sql_validator import SQLValidationError
 from prismiq.timeseries import TimeInterval
 from prismiq.transforms import pivot_data
 from prismiq.trends import ComparisonPeriod, TrendResult, add_trend_column
-from prismiq.types import (
-    DatabaseSchema,
-    QueryDefinition,
-    QueryResult,
-    QueryValidationError,
-    SavedQuery,
-    SavedQueryCreate,
-    SavedQueryUpdate,
-    TableNotFoundError,
-    TableSchema,
-)
+from prismiq.types import (DatabaseSchema, QueryDefinition, QueryResult,
+                           QueryValidationError, SavedQuery, SavedQueryCreate,
+                           SavedQueryUpdate, TableNotFoundError, TableSchema)
+from pydantic import BaseModel, ConfigDict
+
+from prismiq import __version__
 
 if TYPE_CHECKING:
     from prismiq.engine import PrismiqEngine
@@ -360,8 +337,7 @@ def create_router(
     engine: PrismiqEngine,
     get_auth_context: Callable[..., Awaitable[AuthContext]] | None = None,
 ) -> APIRouter:
-    """
-    Create a FastAPI router for the Prismiq analytics engine.
+    """Create a FastAPI router for the Prismiq analytics engine.
 
     Args:
         engine: Initialized PrismiqEngine instance.
@@ -403,8 +379,7 @@ def create_router(
 
     @router.get("/health", response_model=HealthStatus)
     async def health_check() -> HealthStatus:
-        """
-        Comprehensive health check endpoint.
+        """Comprehensive health check endpoint.
 
         Checks the health of all dependencies (database, cache, etc.)
         and returns an overall status.
@@ -475,8 +450,7 @@ def create_router(
 
     @router.get("/health/live", response_model=LivenessResponse)
     async def liveness() -> LivenessResponse:
-        """
-        Kubernetes liveness probe endpoint.
+        """Kubernetes liveness probe endpoint.
 
         Indicates whether the application process is running.
         This should only fail if the process is in a broken state
@@ -489,8 +463,7 @@ def create_router(
 
     @router.get("/health/ready", response_model=ReadinessResponse)
     async def readiness() -> ReadinessResponse:
-        """
-        Kubernetes readiness probe endpoint.
+        """Kubernetes readiness probe endpoint.
 
         Indicates whether the application is ready to receive traffic.
         Checks if the database connection is available.
@@ -516,8 +489,7 @@ def create_router(
 
     @router.get("/schema", response_model=DatabaseSchema)
     async def get_schema() -> DatabaseSchema:
-        """
-        Get the complete database schema (raw).
+        """Get the complete database schema (raw).
 
         Returns all exposed tables, their columns, and relationships
         without any configuration applied.
@@ -526,8 +498,7 @@ def create_router(
 
     @router.get("/schema/enhanced", response_model=EnhancedDatabaseSchema)
     async def get_enhanced_schema() -> EnhancedDatabaseSchema:
-        """
-        Get the enhanced database schema with configuration applied.
+        """Get the enhanced database schema with configuration applied.
 
         Returns schema with display names, descriptions, and hidden
         tables/columns filtered out.
@@ -536,8 +507,7 @@ def create_router(
 
     @router.get("/tables", response_model=TableListResponse)
     async def get_tables() -> TableListResponse:
-        """
-        Get list of available table names.
+        """Get list of available table names.
 
         Returns a simple list of table names for quick reference.
         """
@@ -546,8 +516,7 @@ def create_router(
 
     @router.get("/tables/{table_name}", response_model=TableSchema)
     async def get_table(table_name: str) -> TableSchema:
-        """
-        Get schema information for a single table (raw).
+        """Get schema information for a single table (raw).
 
         Args:
             table_name: Name of the table to retrieve.
@@ -565,8 +534,7 @@ def create_router(
 
     @router.get("/tables/{table_name}/enhanced", response_model=EnhancedTableSchema)
     async def get_enhanced_table(table_name: str) -> EnhancedTableSchema:
-        """
-        Get enhanced schema information for a single table.
+        """Get enhanced schema information for a single table.
 
         Args:
             table_name: Name of the table to retrieve.
@@ -580,7 +548,9 @@ def create_router(
         enhanced_schema = await engine.get_enhanced_schema()
         table = enhanced_schema.get_table(table_name)
         if table is None:
-            raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Table '{table_name}' not found"
+            )
         return table
 
     @router.get("/tables/{table_name}/columns/{column_name}/sample")
@@ -589,8 +559,7 @@ def create_router(
         column_name: str,
         limit: int = 5,
     ) -> dict[str, list[Any]]:
-        """
-        Get sample values from a column for data preview.
+        """Get sample values from a column for data preview.
 
         Args:
             table_name: Name of the table.
@@ -617,8 +586,7 @@ def create_router(
 
     @router.post("/query/validate", response_model=ValidationResponse)
     async def validate_query(query: QueryDefinition) -> ValidationResponse:
-        """
-        Validate a query without executing it.
+        """Validate a query without executing it.
 
         Checks that all tables and columns exist in the schema,
         and that join columns are compatible.
@@ -633,9 +601,10 @@ def create_router(
         return ValidationResponse(valid=len(errors) == 0, errors=errors)
 
     @router.post("/query/validate/detailed", response_model=DetailedValidationResponse)
-    async def validate_query_detailed(query: QueryDefinition) -> DetailedValidationResponse:
-        """
-        Validate a query with detailed error information.
+    async def validate_query_detailed(
+        query: QueryDefinition,
+    ) -> DetailedValidationResponse:
+        """Validate a query with detailed error information.
 
         Returns detailed errors with error codes, field paths, and suggestions.
 
@@ -650,8 +619,7 @@ def create_router(
 
     @router.post("/query/sql")
     async def generate_sql(query: QueryDefinition) -> dict[str, str]:
-        """
-        Generate SQL from a query definition without executing.
+        """Generate SQL from a query definition without executing.
 
         Useful for previewing the SQL that will be generated.
 
@@ -674,8 +642,7 @@ def create_router(
 
     @router.post("/query/execute", response_model=QueryResult)
     async def execute_query(query: QueryDefinition) -> QueryResult:
-        """
-        Execute a query and return results.
+        """Execute a query and return results.
 
         Args:
             query: Query definition to execute.
@@ -698,8 +665,7 @@ def create_router(
 
     @router.post("/query/preview", response_model=QueryResult)
     async def preview_query(request: PreviewRequest) -> QueryResult:
-        """
-        Execute a query with a limited number of rows.
+        """Execute a query with a limited number of rows.
 
         Useful for quick previews in the query builder UI.
 
@@ -728,8 +694,7 @@ def create_router(
 
     @router.post("/query/validate-sql", response_model=SQLValidationResponse)
     async def validate_sql(request: ExecuteSQLRequest) -> SQLValidationResponse:
-        """
-        Validate a raw SQL query without executing it.
+        """Validate a raw SQL query without executing it.
 
         Checks that the SQL is a valid SELECT statement and only
         references tables visible in the schema.
@@ -749,8 +714,7 @@ def create_router(
 
     @router.post("/query/execute-sql", response_model=QueryResult)
     async def execute_sql(request: ExecuteSQLRequest) -> QueryResult:
-        """
-        Execute a raw SQL query.
+        """Execute a raw SQL query.
 
         Only SELECT statements are allowed. Queries are restricted
         to tables visible in the schema.
@@ -783,8 +747,7 @@ def create_router(
 
     @router.post("/query/execute/timeseries", response_model=QueryResult)
     async def execute_timeseries_query(request: TimeSeriesQueryRequest) -> QueryResult:
-        """
-        Execute a time series query with automatic bucketing.
+        """Execute a time series query with automatic bucketing.
 
         Automatically adds date_trunc to the query for time bucketing
         and optionally fills missing time buckets.
@@ -821,8 +784,7 @@ def create_router(
 
     @router.post("/transform/pivot", response_model=QueryResult)
     async def pivot_result(request: PivotRequest) -> QueryResult:
-        """
-        Pivot query result data from long to wide format.
+        """Pivot query result data from long to wide format.
 
         Transforms data like:
           region | month | sales
@@ -857,8 +819,7 @@ def create_router(
 
     @router.post("/transform/trend", response_model=QueryResult)
     async def add_trend(request: TrendColumnRequest) -> QueryResult:
-        """
-        Add trend columns to query result.
+        """Add trend columns to query result.
 
         Adds columns for previous value, absolute change, and percent change
         based on the order of rows.
@@ -890,8 +851,7 @@ def create_router(
 
     @router.post("/metrics/trend", response_model=TrendResult)
     async def calculate_metric_trend(request: MetricTrendRequest) -> TrendResult:
-        """
-        Calculate trend for a metric query.
+        """Calculate trend for a metric query.
 
         Executes the query for both current and comparison periods,
         then calculates the trend between them.
@@ -930,8 +890,7 @@ def create_router(
 
     @router.get("/config", response_model=SchemaConfig)
     async def get_schema_config() -> SchemaConfig:
-        """
-        Get the current schema configuration.
+        """Get the current schema configuration.
 
         Returns:
             Current SchemaConfig with all table and column settings.
@@ -940,8 +899,7 @@ def create_router(
 
     @router.put("/config", response_model=SuccessResponse)
     async def set_schema_config(config: SchemaConfig) -> SuccessResponse:
-        """
-        Replace the entire schema configuration.
+        """Replace the entire schema configuration.
 
         Args:
             config: New schema configuration.
@@ -954,8 +912,7 @@ def create_router(
 
     @router.get("/config/tables/{table_name}", response_model=TableConfig)
     async def get_table_config(table_name: str) -> TableConfig:
-        """
-        Get configuration for a specific table.
+        """Get configuration for a specific table.
 
         Args:
             table_name: Name of the table.
@@ -967,9 +924,10 @@ def create_router(
         return config.get_table_config(table_name)
 
     @router.put("/config/tables/{table_name}", response_model=SuccessResponse)
-    async def update_table_config(table_name: str, update: TableConfigUpdate) -> SuccessResponse:
-        """
-        Update configuration for a specific table.
+    async def update_table_config(
+        table_name: str, update: TableConfigUpdate
+    ) -> SuccessResponse:
+        """Update configuration for a specific table.
 
         Only the provided fields are updated; others are preserved.
 
@@ -996,10 +954,11 @@ def create_router(
         engine.update_table_config(table_name, new_config)
         return SuccessResponse(message=f"Table '{table_name}' configuration updated")
 
-    @router.get("/config/tables/{table_name}/columns/{column_name}", response_model=ColumnConfig)
+    @router.get(
+        "/config/tables/{table_name}/columns/{column_name}", response_model=ColumnConfig
+    )
     async def get_column_config(table_name: str, column_name: str) -> ColumnConfig:
-        """
-        Get configuration for a specific column.
+        """Get configuration for a specific column.
 
         Args:
             table_name: Name of the table.
@@ -1011,12 +970,14 @@ def create_router(
         config = engine.get_schema_config()
         return config.get_column_config(table_name, column_name)
 
-    @router.put("/config/tables/{table_name}/columns/{column_name}", response_model=SuccessResponse)
+    @router.put(
+        "/config/tables/{table_name}/columns/{column_name}",
+        response_model=SuccessResponse,
+    )
     async def update_column_config(
         table_name: str, column_name: str, update: ColumnConfigUpdate
     ) -> SuccessResponse:
-        """
-        Update configuration for a specific column.
+        """Update configuration for a specific column.
 
         Only the provided fields are updated; others are preserved.
 
@@ -1045,12 +1006,13 @@ def create_router(
         )
 
         engine.update_column_config(table_name, column_name, new_config)
-        return SuccessResponse(message=f"Column '{table_name}.{column_name}' configuration updated")
+        return SuccessResponse(
+            message=f"Column '{table_name}.{column_name}' configuration updated"
+        )
 
     @router.delete("/config/tables/{table_name}", response_model=SuccessResponse)
     async def reset_table_config(table_name: str) -> SuccessResponse:
-        """
-        Reset configuration for a specific table to defaults.
+        """Reset configuration for a specific table to defaults.
 
         Args:
             table_name: Name of the table.
@@ -1062,11 +1024,11 @@ def create_router(
         return SuccessResponse(message=f"Table '{table_name}' configuration reset")
 
     @router.delete(
-        "/config/tables/{table_name}/columns/{column_name}", response_model=SuccessResponse
+        "/config/tables/{table_name}/columns/{column_name}",
+        response_model=SuccessResponse,
     )
     async def reset_column_config(table_name: str, column_name: str) -> SuccessResponse:
-        """
-        Reset configuration for a specific column to defaults.
+        """Reset configuration for a specific column to defaults.
 
         Args:
             table_name: Name of the table.
@@ -1076,7 +1038,9 @@ def create_router(
             Success response.
         """
         engine.update_column_config(table_name, column_name, ColumnConfig())
-        return SuccessResponse(message=f"Column '{table_name}.{column_name}' configuration reset")
+        return SuccessResponse(
+            message=f"Column '{table_name}.{column_name}' configuration reset"
+        )
 
     # ========================================================================
     # Dashboard Endpoints
@@ -1086,8 +1050,7 @@ def create_router(
     async def list_dashboards(
         auth: AuthContext = Depends(get_auth_context),
     ) -> DashboardListResponse:
-        """
-        List all dashboards for the current tenant.
+        """List all dashboards for the current tenant.
 
         Returns:
             List of dashboards the user can access.
@@ -1103,8 +1066,7 @@ def create_router(
         dashboard_id: str,
         auth: AuthContext = Depends(get_auth_context),
     ) -> Dashboard:
-        """
-        Get a dashboard by ID.
+        """Get a dashboard by ID.
 
         Args:
             dashboard_id: Dashboard ID.
@@ -1118,7 +1080,9 @@ def create_router(
         """
         dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if dashboard is None:
-            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
+            )
 
         if not can_view_dashboard(dashboard, auth.user_id):
             raise HTTPException(status_code=403, detail="Permission denied")
@@ -1130,8 +1094,7 @@ def create_router(
         data: DashboardCreate,
         auth: AuthContext = Depends(get_auth_context),
     ) -> Dashboard:
-        """
-        Create a new dashboard.
+        """Create a new dashboard.
 
         Args:
             data: Dashboard creation data.
@@ -1151,8 +1114,7 @@ def create_router(
         data: DashboardUpdate,
         auth: AuthContext = Depends(get_auth_context),
     ) -> Dashboard:
-        """
-        Update a dashboard.
+        """Update a dashboard.
 
         Args:
             dashboard_id: Dashboard ID.
@@ -1167,14 +1129,20 @@ def create_router(
         """
         dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if dashboard is None:
-            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
+            )
 
         if not can_edit_dashboard(dashboard, auth.user_id):
             raise HTTPException(status_code=403, detail="Permission denied")
 
-        updated = await store.update_dashboard(dashboard_id, data, tenant_id=auth.tenant_id)
+        updated = await store.update_dashboard(
+            dashboard_id, data, tenant_id=auth.tenant_id
+        )
         if updated is None:
-            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
+            )
         return updated
 
     @router.delete("/dashboards/{dashboard_id}", response_model=SuccessResponse)
@@ -1182,8 +1150,7 @@ def create_router(
         dashboard_id: str,
         auth: AuthContext = Depends(get_auth_context),
     ) -> SuccessResponse:
-        """
-        Delete a dashboard.
+        """Delete a dashboard.
 
         Args:
             dashboard_id: Dashboard ID.
@@ -1197,14 +1164,18 @@ def create_router(
         """
         dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if dashboard is None:
-            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
+            )
 
         if not can_delete_dashboard(dashboard, auth.user_id):
             raise HTTPException(status_code=403, detail="Permission denied")
 
         deleted = await store.delete_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if not deleted:
-            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
+            )
         return SuccessResponse(message=f"Dashboard '{dashboard_id}' deleted")
 
     # ========================================================================
@@ -1221,8 +1192,7 @@ def create_router(
         data: WidgetCreate,
         auth: AuthContext = Depends(get_auth_context),
     ) -> Widget:
-        """
-        Add a widget to a dashboard.
+        """Add a widget to a dashboard.
 
         Args:
             dashboard_id: Dashboard ID.
@@ -1237,25 +1207,30 @@ def create_router(
         """
         dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if dashboard is None:
-            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
+            )
 
         if not can_edit_widget(dashboard, auth.user_id):
             raise HTTPException(status_code=403, detail="Permission denied")
 
         created = await store.add_widget(dashboard_id, data, tenant_id=auth.tenant_id)
         if created is None:
-            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
+            )
         return created
 
-    @router.patch("/dashboards/{dashboard_id}/widgets/{widget_id}", response_model=Widget)
+    @router.patch(
+        "/dashboards/{dashboard_id}/widgets/{widget_id}", response_model=Widget
+    )
     async def update_widget(
         dashboard_id: str,
         widget_id: str,
         data: WidgetUpdate,
         auth: AuthContext = Depends(get_auth_context),
     ) -> Widget:
-        """
-        Update a widget.
+        """Update a widget.
 
         Args:
             dashboard_id: Dashboard ID.
@@ -1271,24 +1246,29 @@ def create_router(
         """
         dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if dashboard is None:
-            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
+            )
 
         if not can_edit_widget(dashboard, auth.user_id):
             raise HTTPException(status_code=403, detail="Permission denied")
 
         updated = await store.update_widget(widget_id, data, tenant_id=auth.tenant_id)
         if updated is None:
-            raise HTTPException(status_code=404, detail=f"Widget '{widget_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Widget '{widget_id}' not found"
+            )
         return updated
 
-    @router.delete("/dashboards/{dashboard_id}/widgets/{widget_id}", response_model=SuccessResponse)
+    @router.delete(
+        "/dashboards/{dashboard_id}/widgets/{widget_id}", response_model=SuccessResponse
+    )
     async def delete_widget(
         dashboard_id: str,
         widget_id: str,
         auth: AuthContext = Depends(get_auth_context),
     ) -> SuccessResponse:
-        """
-        Delete a widget.
+        """Delete a widget.
 
         Args:
             dashboard_id: Dashboard ID.
@@ -1303,14 +1283,18 @@ def create_router(
         """
         dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if dashboard is None:
-            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
+            )
 
         if not can_edit_widget(dashboard, auth.user_id):
             raise HTTPException(status_code=403, detail="Permission denied")
 
         deleted = await store.delete_widget(widget_id, tenant_id=auth.tenant_id)
         if not deleted:
-            raise HTTPException(status_code=404, detail=f"Widget '{widget_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Widget '{widget_id}' not found"
+            )
         return SuccessResponse(message=f"Widget '{widget_id}' deleted")
 
     @router.post(
@@ -1323,8 +1307,7 @@ def create_router(
         widget_id: str,
         auth: AuthContext = Depends(get_auth_context),
     ) -> Widget:
-        """
-        Duplicate a widget.
+        """Duplicate a widget.
 
         Args:
             dashboard_id: Dashboard ID.
@@ -1339,14 +1322,18 @@ def create_router(
         """
         dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if dashboard is None:
-            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
+            )
 
         if not can_edit_widget(dashboard, auth.user_id):
             raise HTTPException(status_code=403, detail="Permission denied")
 
         duplicated = await store.duplicate_widget(widget_id, tenant_id=auth.tenant_id)
         if duplicated is None:
-            raise HTTPException(status_code=404, detail=f"Widget '{widget_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Widget '{widget_id}' not found"
+            )
         return duplicated
 
     # ========================================================================
@@ -1359,8 +1346,7 @@ def create_router(
         positions: list[dict[str, Any]],
         auth: AuthContext = Depends(get_auth_context),
     ) -> Dashboard:
-        """
-        Batch update widget positions in a dashboard.
+        """Batch update widget positions in a dashboard.
 
         Args:
             dashboard_id: Dashboard ID.
@@ -1376,7 +1362,9 @@ def create_router(
         """
         dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if dashboard is None:
-            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
+            )
 
         if not can_edit_dashboard(dashboard, auth.user_id):
             raise HTTPException(status_code=403, detail="Permission denied")
@@ -1392,7 +1380,9 @@ def create_router(
         # Return updated dashboard
         updated = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if updated is None:
-            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
+            )
         return updated
 
     @router.post(
@@ -1405,8 +1395,7 @@ def create_router(
         auth: AuthContext = Depends(get_auth_context),
         filter_values: list[FilterValue] | None = None,
     ) -> QueryResult:
-        """
-        Execute a widget's query with dashboard filters applied.
+        """Execute a widget's query with dashboard filters applied.
 
         Args:
             dashboard_id: Dashboard ID.
@@ -1423,7 +1412,9 @@ def create_router(
         """
         dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if dashboard is None:
-            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
+            )
 
         if not can_view_dashboard(dashboard, auth.user_id):
             raise HTTPException(status_code=403, detail="Permission denied")
@@ -1436,7 +1427,9 @@ def create_router(
                 break
 
         if widget is None:
-            raise HTTPException(status_code=404, detail=f"Widget '{widget_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Widget '{widget_id}' not found"
+            )
 
         if widget.query is None:
             raise HTTPException(status_code=400, detail="Widget has no query")
@@ -1468,8 +1461,7 @@ def create_router(
         dashboard_id: str,
         auth: AuthContext = Depends(get_auth_context),
     ) -> DashboardExport:
-        """
-        Export a dashboard to a portable format.
+        """Export a dashboard to a portable format.
 
         Args:
             dashboard_id: Dashboard ID.
@@ -1483,7 +1475,9 @@ def create_router(
         """
         dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if dashboard is None:
-            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
+            )
 
         if not can_view_dashboard(dashboard, auth.user_id):
             raise HTTPException(status_code=403, detail="Permission denied")
@@ -1512,8 +1506,7 @@ def create_router(
         request: DashboardImportRequest,
         auth: AuthContext = Depends(get_auth_context),
     ) -> Dashboard:
-        """
-        Import a dashboard from exported data.
+        """Import a dashboard from exported data.
 
         Args:
             request: Import request with export data.
@@ -1559,7 +1552,9 @@ def create_router(
         # Return the complete dashboard
         result = await store.get_dashboard(dashboard.id, tenant_id=auth.tenant_id)
         if result is None:
-            raise HTTPException(status_code=500, detail="Failed to retrieve imported dashboard")
+            raise HTTPException(
+                status_code=500, detail="Failed to retrieve imported dashboard"
+            )
         return result
 
     # ========================================================================
@@ -1570,8 +1565,7 @@ def create_router(
     async def list_saved_queries(
         auth: AuthContext = Depends(get_auth_context),
     ) -> SavedQueryListResponse:
-        """
-        List saved queries for the current tenant.
+        """List saved queries for the current tenant.
 
         Returns queries owned by the user or shared with all users.
 
@@ -1590,8 +1584,7 @@ def create_router(
         query_id: str,
         auth: AuthContext = Depends(get_auth_context),
     ) -> SavedQuery:
-        """
-        Get a saved query by ID.
+        """Get a saved query by ID.
 
         Args:
             query_id: Saved query ID.
@@ -1605,7 +1598,9 @@ def create_router(
         saved_query_store = engine.saved_query_store
         query = await saved_query_store.get(query_id, tenant_id=auth.tenant_id)
         if query is None:
-            raise HTTPException(status_code=404, detail=f"Saved query '{query_id}' not found")
+            raise HTTPException(
+                status_code=404, detail=f"Saved query '{query_id}' not found"
+            )
         return query
 
     @router.post("/saved-queries", response_model=SavedQuery, status_code=201)
@@ -1613,8 +1608,7 @@ def create_router(
         data: SavedQueryCreate,
         auth: AuthContext = Depends(get_auth_context),
     ) -> SavedQuery:
-        """
-        Create a new saved query.
+        """Create a new saved query.
 
         Args:
             data: Saved query creation data.
@@ -1635,8 +1629,7 @@ def create_router(
         data: SavedQueryUpdate,
         auth: AuthContext = Depends(get_auth_context),
     ) -> SavedQuery:
-        """
-        Update a saved query.
+        """Update a saved query.
 
         Only the owner can update a query.
 
@@ -1669,8 +1662,7 @@ def create_router(
         query_id: str,
         auth: AuthContext = Depends(get_auth_context),
     ) -> SuccessResponse:
-        """
-        Delete a saved query.
+        """Delete a saved query.
 
         Only the owner can delete a query.
 

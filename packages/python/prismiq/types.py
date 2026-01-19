@@ -1,8 +1,7 @@
-"""
-Prismiq type definitions.
+"""Prismiq type definitions.
 
-This module contains all Pydantic models and custom exceptions
-for the Prismiq embedded analytics platform.
+This module contains all Pydantic models and custom exceptions for the
+Prismiq embedded analytics platform.
 """
 
 from __future__ import annotations
@@ -390,7 +389,9 @@ class QueryDefinition(BaseModel):
 
     @field_validator("columns")
     @classmethod
-    def validate_columns_not_empty(cls, v: list[ColumnSelection]) -> list[ColumnSelection]:
+    def validate_columns_not_empty(
+        cls, v: list[ColumnSelection]
+    ) -> list[ColumnSelection]:
         """Ensure at least one column is selected."""
         if not v:
             raise ValueError("At least one column must be selected")
@@ -404,14 +405,20 @@ class QueryDefinition(BaseModel):
         # Check joins
         for join in self.joins:
             if join.from_table_id not in table_ids:
-                raise ValueError(f"Join references unknown table_id: {join.from_table_id}")
+                raise ValueError(
+                    f"Join references unknown table_id: {join.from_table_id}"
+                )
             if join.to_table_id not in table_ids:
-                raise ValueError(f"Join references unknown table_id: {join.to_table_id}")
+                raise ValueError(
+                    f"Join references unknown table_id: {join.to_table_id}"
+                )
 
         # Check columns
         for col in self.columns:
             if col.table_id not in table_ids:
-                raise ValueError(f"Column selection references unknown table_id: {col.table_id}")
+                raise ValueError(
+                    f"Column selection references unknown table_id: {col.table_id}"
+                )
 
         # Check filters
         for f in self.filters:
@@ -452,11 +459,10 @@ class QueryDefinition(BaseModel):
         return [col for col in self.columns if col.aggregation == AggregationType.NONE]
 
     def derive_group_by(self) -> list[GroupByDefinition]:
-        """
-        Auto-derive GROUP BY from non-aggregated columns.
+        """Auto-derive GROUP BY from non-aggregated columns.
 
-        When aggregations are present but group_by is empty,
-        all non-aggregated columns should be in GROUP BY.
+        When aggregations are present but group_by is empty, all non-
+        aggregated columns should be in GROUP BY.
         """
         if not self.has_aggregations():
             return []

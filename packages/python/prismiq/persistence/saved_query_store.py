@@ -7,27 +7,21 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
-from prismiq.types import (
-    QueryDefinition,
-    SavedQuery,
-    SavedQueryCreate,
-    SavedQueryUpdate,
-)
+from prismiq.types import (QueryDefinition, SavedQuery, SavedQueryCreate,
+                           SavedQueryUpdate)
 
 if TYPE_CHECKING:
     from asyncpg import Pool  # type: ignore[import-not-found]
 
 
 class SavedQueryStore:
-    """
-    PostgreSQL-backed saved query storage with tenant isolation.
+    """PostgreSQL-backed saved query storage with tenant isolation.
 
     All operations are scoped to a tenant_id for multi-tenant security.
     """
 
     def __init__(self, pool: Pool) -> None:
-        """
-        Initialize SavedQueryStore.
+        """Initialize SavedQueryStore.
 
         Args:
             pool: asyncpg connection pool
@@ -39,11 +33,10 @@ class SavedQueryStore:
         tenant_id: str,
         user_id: str | None = None,
     ) -> list[SavedQuery]:
-        """
-        List saved queries for a tenant.
+        """List saved queries for a tenant.
 
-        Returns queries owned by the user or shared with all users.
-        If user_id is None, returns all queries for the tenant.
+        Returns queries owned by the user or shared with all users. If
+        user_id is None, returns all queries for the tenant.
         """
         query = """
             SELECT *
@@ -120,8 +113,7 @@ class SavedQueryStore:
         tenant_id: str,
         user_id: str | None = None,
     ) -> SavedQuery | None:
-        """
-        Update a saved query.
+        """Update a saved query.
 
         Only the owner can update a query.
         """
@@ -183,8 +175,7 @@ class SavedQueryStore:
         tenant_id: str,
         user_id: str | None = None,
     ) -> bool:
-        """
-        Delete a saved query.
+        """Delete a saved query.
 
         Only the owner can delete a query.
         """

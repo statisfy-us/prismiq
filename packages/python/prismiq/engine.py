@@ -1,8 +1,7 @@
-"""
-Main PrismiqEngine class that ties all components together.
+"""Main PrismiqEngine class that ties all components together.
 
-This module provides the central engine class for the Prismiq
-embedded analytics platform.
+This module provides the central engine class for the Prismiq embedded
+analytics platform.
 """
 
 from __future__ import annotations
@@ -12,42 +11,32 @@ from datetime import date, timedelta
 from typing import TYPE_CHECKING, Any
 
 import asyncpg  # type: ignore[import-not-found]
-
 from prismiq.cache import CacheBackend, CacheConfig, QueryCache
 from prismiq.dashboard_store import DashboardStore, InMemoryDashboardStore
 from prismiq.executor import QueryExecutor
-from prismiq.metrics import record_cache_hit, record_query_execution, set_active_connections
-from prismiq.persistence import PostgresDashboardStore, SavedQueryStore, ensure_tables
+from prismiq.metrics import (record_cache_hit, record_query_execution,
+                             set_active_connections)
+from prismiq.persistence import (PostgresDashboardStore, SavedQueryStore,
+                                 ensure_tables)
 from prismiq.query import QueryBuilder, ValidationResult
 from prismiq.schema import SchemaIntrospector
-from prismiq.schema_config import (
-    ColumnConfig,
-    EnhancedDatabaseSchema,
-    SchemaConfig,
-    SchemaConfigManager,
-    TableConfig,
-)
+from prismiq.schema_config import (ColumnConfig, EnhancedDatabaseSchema,
+                                   SchemaConfig, SchemaConfigManager,
+                                   TableConfig)
 from prismiq.sql_validator import SQLValidationResult, SQLValidator
 from prismiq.timeseries import TimeInterval
 from prismiq.transforms import pivot_data
 from prismiq.trends import ComparisonPeriod, TrendResult, calculate_trend
-from prismiq.types import (
-    DatabaseSchema,
-    FilterDefinition,
-    FilterOperator,
-    QueryDefinition,
-    QueryResult,
-    TableSchema,
-    TimeSeriesConfig,
-)
+from prismiq.types import (DatabaseSchema, FilterDefinition, FilterOperator,
+                           QueryDefinition, QueryResult, TableSchema,
+                           TimeSeriesConfig)
 
 if TYPE_CHECKING:
     from asyncpg import Pool
 
 
 class PrismiqEngine:
-    """
-    Main engine for embedded analytics.
+    """Main engine for embedded analytics.
 
     Provides a high-level interface for schema introspection,
     query building, and execution.
@@ -104,8 +93,7 @@ class PrismiqEngine:
         enable_metrics: bool = True,
         persist_dashboards: bool = False,
     ) -> None:
-        """
-        Initialize the Prismiq engine.
+        """Initialize the Prismiq engine.
 
         Args:
             database_url: PostgreSQL connection URL.
@@ -168,7 +156,9 @@ class PrismiqEngine:
             RuntimeError: If engine has not been started.
         """
         if self._dashboard_store is None:
-            raise RuntimeError("Engine not started. Call 'await engine.startup()' first.")
+            raise RuntimeError(
+                "Engine not started. Call 'await engine.startup()' first."
+            )
         return self._dashboard_store
 
     @property
@@ -191,12 +181,13 @@ class PrismiqEngine:
             RuntimeError: If engine has not been started.
         """
         if self._saved_query_store is None:
-            raise RuntimeError("Engine not started. Call 'await engine.startup()' first.")
+            raise RuntimeError(
+                "Engine not started. Call 'await engine.startup()' first."
+            )
         return self._saved_query_store
 
     async def startup(self) -> None:
-        """
-        Initialize the engine.
+        """Initialize the engine.
 
         Creates the database connection pool and introspects the schema.
         Must be called before using other methods.
@@ -246,10 +237,10 @@ class PrismiqEngine:
             set_active_connections(self._pool.get_size())
 
     async def shutdown(self) -> None:
-        """
-        Shutdown the engine.
+        """Shutdown the engine.
 
-        Closes the database connection pool. Should be called on application shutdown.
+        Closes the database connection pool. Should be called on
+        application shutdown.
         """
         if self._pool:
             await self._pool.close()
@@ -272,8 +263,7 @@ class PrismiqEngine:
     # ========================================================================
 
     async def check_connection(self) -> bool:
-        """
-        Check if the database connection is healthy.
+        """Check if the database connection is healthy.
 
         Executes a simple query to verify the database connection.
 
@@ -297,8 +287,7 @@ class PrismiqEngine:
     # ========================================================================
 
     async def get_schema(self, force_refresh: bool = False) -> DatabaseSchema:
-        """
-        Get the complete database schema (raw, without config applied).
+        """Get the complete database schema (raw, without config applied).
 
         Args:
             force_refresh: If True, bypass cache and introspect fresh.
@@ -314,8 +303,7 @@ class PrismiqEngine:
         return await self._introspector.get_schema(force_refresh=force_refresh)
 
     async def get_enhanced_schema(self) -> EnhancedDatabaseSchema:
-        """
-        Get the database schema with configuration applied.
+        """Get the database schema with configuration applied.
 
         Returns schema with display names, descriptions, and hidden
         tables/columns filtered out.
@@ -331,8 +319,7 @@ class PrismiqEngine:
         return self._schema_config_manager.apply_to_schema(schema)
 
     async def get_table(self, table_name: str) -> TableSchema:
-        """
-        Get schema information for a single table.
+        """Get schema information for a single table.
 
         Args:
             table_name: Name of the table to retrieve.
@@ -357,8 +344,7 @@ class PrismiqEngine:
         query: QueryDefinition,
         use_cache: bool = True,
     ) -> QueryResult:
-        """
-        Execute a query and return results.
+        """Execute a query and return results.
 
         Args:
             query: Query definition to execute.
@@ -409,9 +395,10 @@ class PrismiqEngine:
                 record_query_execution(duration, "error")
             raise
 
-    async def preview_query(self, query: QueryDefinition, limit: int = 100) -> QueryResult:
-        """
-        Execute a query with a limited number of rows.
+    async def preview_query(
+        self, query: QueryDefinition, limit: int = 100
+    ) -> QueryResult:
+        """Execute a query with a limited number of rows.
 
         Args:
             query: Query definition to execute.
@@ -434,8 +421,7 @@ class PrismiqEngine:
         column_name: str,
         limit: int = 5,
     ) -> list[Any]:
-        """
-        Get sample values from a column for data preview.
+        """Get sample values from a column for data preview.
 
         Args:
             table_name: Name of the table.
@@ -461,7 +447,9 @@ class PrismiqEngine:
         # Validate column exists
         column_exists = any(col.name == column_name for col in table.columns)
         if not column_exists:
-            raise ValueError(f"Column '{column_name}' not found in table '{table_name}'")
+            raise ValueError(
+                f"Column '{column_name}' not found in table '{table_name}'"
+            )
 
         # Query distinct values with limit
         # Note: table_name and column_name are validated against the schema above,
@@ -483,8 +471,7 @@ class PrismiqEngine:
         return [serialize_value(row[0]) for row in rows]
 
     def validate_query(self, query: QueryDefinition) -> list[str]:
-        """
-        Validate a query without executing it.
+        """Validate a query without executing it.
 
         Args:
             query: Query definition to validate.
@@ -500,8 +487,7 @@ class PrismiqEngine:
         return self._builder.validate(query)
 
     def validate_query_detailed(self, query: QueryDefinition) -> ValidationResult:
-        """
-        Validate a query with detailed error information.
+        """Validate a query with detailed error information.
 
         Args:
             query: Query definition to validate.
@@ -517,8 +503,7 @@ class PrismiqEngine:
         return self._builder.validate_detailed(query)
 
     def generate_sql(self, query: QueryDefinition) -> str:
-        """
-        Generate SQL from a query definition without executing.
+        """Generate SQL from a query definition without executing.
 
         Useful for previewing the SQL that will be executed.
 
@@ -550,8 +535,7 @@ class PrismiqEngine:
     # ========================================================================
 
     async def validate_sql(self, sql: str) -> SQLValidationResult:
-        """
-        Validate a raw SQL query without executing.
+        """Validate a raw SQL query without executing.
 
         Checks that the SQL is a valid SELECT statement and only
         references tables visible in the schema.
@@ -574,8 +558,7 @@ class PrismiqEngine:
         sql: str,
         params: dict[str, Any] | None = None,
     ) -> QueryResult:
-        """
-        Execute a raw SQL query.
+        """Execute a raw SQL query.
 
         Only SELECT statements are allowed. Queries are restricted
         to tables visible in the schema.
@@ -619,8 +602,7 @@ class PrismiqEngine:
     # ========================================================================
 
     async def invalidate_cache(self, table_name: str | None = None) -> int:
-        """
-        Invalidate cached data.
+        """Invalidate cached data.
 
         Args:
             table_name: If provided, invalidate only queries involving this table.
@@ -638,8 +620,7 @@ class PrismiqEngine:
             return await self._cache.clear("query:*")
 
     async def invalidate_schema_cache(self) -> None:
-        """
-        Invalidate the schema cache.
+        """Invalidate the schema cache.
 
         Forces the next get_schema() call to introspect the database.
         """
@@ -657,8 +638,7 @@ class PrismiqEngine:
         date_column: str,
         fill_missing: bool = True,
     ) -> QueryResult:
-        """
-        Execute a time series query with automatic bucketing.
+        """Execute a time series query with automatic bucketing.
 
         Adds date_trunc to the query for time bucketing and optionally
         fills missing time buckets.
@@ -705,7 +685,9 @@ class PrismiqEngine:
 
         return await self._executor.execute(modified_query)
 
-    def _find_table_for_column(self, query: QueryDefinition, column_name: str) -> str | None:
+    def _find_table_for_column(
+        self, query: QueryDefinition, column_name: str
+    ) -> str | None:
         """Find the table ID that contains the specified column."""
         self._ensure_started()
         assert self._schema is not None
@@ -729,8 +711,7 @@ class PrismiqEngine:
         value_column: str,
         aggregation: str = "sum",
     ) -> QueryResult:
-        """
-        Pivot a query result from long to wide format.
+        """Pivot a query result from long to wide format.
 
         Args:
             result: Query result to pivot.
@@ -760,8 +741,7 @@ class PrismiqEngine:
         previous: float | None,
         threshold: float = 0.001,
     ) -> TrendResult:
-        """
-        Calculate a trend between two values.
+        """Calculate a trend between two values.
 
         Args:
             current: Current value.
@@ -782,8 +762,7 @@ class PrismiqEngine:
         value_column: str,
         date_column: str,
     ) -> TrendResult:
-        """
-        Calculate trend for a metric query.
+        """Calculate trend for a metric query.
 
         Executes the query for both current and comparison periods,
         then calculates the trend between them.
@@ -852,7 +831,9 @@ class PrismiqEngine:
         elif comparison == ComparisonPeriod.PREVIOUS_MONTH:
             # Move back one month
             if current_start.month == 1:
-                previous_start = current_start.replace(year=current_start.year - 1, month=12)
+                previous_start = current_start.replace(
+                    year=current_start.year - 1, month=12
+                )
             else:
                 previous_start = current_start.replace(month=current_start.month - 1)
 
@@ -934,8 +915,7 @@ class PrismiqEngine:
     # ========================================================================
 
     def get_schema_config(self) -> SchemaConfig:
-        """
-        Get the current schema configuration.
+        """Get the current schema configuration.
 
         Returns:
             Current SchemaConfig with all table and column settings.
@@ -943,8 +923,7 @@ class PrismiqEngine:
         return self._schema_config_manager.get_config()
 
     def set_schema_config(self, config: SchemaConfig) -> None:
-        """
-        Replace the entire schema configuration.
+        """Replace the entire schema configuration.
 
         Args:
             config: New schema configuration.
@@ -952,8 +931,7 @@ class PrismiqEngine:
         self._schema_config_manager = SchemaConfigManager(config)
 
     def update_table_config(self, table_name: str, config: TableConfig) -> None:
-        """
-        Update configuration for a specific table.
+        """Update configuration for a specific table.
 
         Args:
             table_name: Name of the table.
@@ -961,16 +939,19 @@ class PrismiqEngine:
         """
         self._schema_config_manager.update_table_config(table_name, config)
 
-    def update_column_config(self, table_name: str, column_name: str, config: ColumnConfig) -> None:
-        """
-        Update configuration for a specific column.
+    def update_column_config(
+        self, table_name: str, column_name: str, config: ColumnConfig
+    ) -> None:
+        """Update configuration for a specific column.
 
         Args:
             table_name: Name of the table.
             column_name: Name of the column.
             config: New configuration for the column.
         """
-        self._schema_config_manager.update_column_config(table_name, column_name, config)
+        self._schema_config_manager.update_column_config(
+            table_name, column_name, config
+        )
 
     # ========================================================================
     # Private Methods
@@ -979,4 +960,6 @@ class PrismiqEngine:
     def _ensure_started(self) -> None:
         """Ensure the engine has been started."""
         if self._pool is None:
-            raise RuntimeError("Engine not started. Call 'await engine.startup()' first.")
+            raise RuntimeError(
+                "Engine not started. Call 'await engine.startup()' first."
+            )

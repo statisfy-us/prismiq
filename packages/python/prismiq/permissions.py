@@ -6,8 +6,7 @@ from prismiq.dashboards import Dashboard
 
 
 def can_view_dashboard(dashboard: Dashboard, user_id: str | None) -> bool:
-    """
-    Check if a user can view a dashboard.
+    """Check if a user can view a dashboard.
 
     A user can view a dashboard if:
     1. The dashboard is public (is_public=True)
@@ -38,8 +37,7 @@ def can_view_dashboard(dashboard: Dashboard, user_id: str | None) -> bool:
 
 
 def can_edit_dashboard(dashboard: Dashboard, user_id: str | None) -> bool:
-    """
-    Check if a user can edit a dashboard.
+    """Check if a user can edit a dashboard.
 
     Only the owner can edit a dashboard.
 
@@ -57,8 +55,7 @@ def can_edit_dashboard(dashboard: Dashboard, user_id: str | None) -> bool:
 
 
 def can_delete_dashboard(dashboard: Dashboard, user_id: str | None) -> bool:
-    """
-    Check if a user can delete a dashboard.
+    """Check if a user can delete a dashboard.
 
     Only the owner can delete a dashboard.
 
@@ -76,8 +73,7 @@ def can_delete_dashboard(dashboard: Dashboard, user_id: str | None) -> bool:
 
 
 def can_edit_widget(dashboard: Dashboard, user_id: str | None) -> bool:
-    """
-    Check if a user can edit widgets in a dashboard.
+    """Check if a user can edit widgets in a dashboard.
 
     Requires dashboard edit permission.
 

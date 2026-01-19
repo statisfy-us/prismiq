@@ -1,5 +1,4 @@
-"""
-Number formatting utilities for Prismiq analytics.
+"""Number formatting utilities for Prismiq analytics.
 
 This module provides utilities for formatting numbers in various styles
 commonly used in dashboards and reports.
@@ -30,8 +29,7 @@ def format_number(
     compact_threshold: int = 1000,
     locale: str = "en_US",
 ) -> str:
-    """
-    Format a number according to the specified style.
+    """Format a number according to the specified style.
 
     Args:
         value: The number to format. None returns empty string.
@@ -69,11 +67,15 @@ def format_number(
 
     if format_type == NumberFormat.COMPACT:
         if abs(num) < compact_threshold:
-            return _format_with_separators(num, 0 if num == int(num) else decimals, locale)
+            return _format_with_separators(
+                num, 0 if num == int(num) else decimals, locale
+            )
         return format_compact(num, decimals=1)
 
     if format_type == NumberFormat.CURRENCY:
-        return format_currency(num, symbol=currency_symbol, decimals=decimals, locale=locale)
+        return format_currency(
+            num, symbol=currency_symbol, decimals=decimals, locale=locale
+        )
 
     if format_type == NumberFormat.PERCENT:
         return format_percent(num, decimals=decimals)
@@ -86,8 +88,7 @@ def format_number(
 
 
 def format_compact(value: float, decimals: int = 1) -> str:
-    """
-    Format number in compact notation (K, M, B, T).
+    """Format number in compact notation (K, M, B, T).
 
     Args:
         value: The number to format.
@@ -138,8 +139,7 @@ def format_currency(
     decimals: int = 2,
     locale: str = "en_US",
 ) -> str:
-    """
-    Format as currency with thousands separators.
+    """Format as currency with thousands separators.
 
     Args:
         value: The number to format.
@@ -168,8 +168,7 @@ def format_currency(
 
 
 def format_percent(value: float, decimals: int = 2) -> str:
-    """
-    Format as percentage.
+    """Format as percentage.
 
     The value is expected to be a ratio (e.g., 0.1234 for 12.34%).
 
@@ -197,8 +196,7 @@ def format_percent(value: float, decimals: int = 2) -> str:
 
 
 def parse_number(value: str) -> float | None:
-    """
-    Parse a formatted number string back to float.
+    """Parse a formatted number string back to float.
 
     Handles common formats including currency symbols, percentage signs,
     thousands separators, and compact notation.
@@ -258,7 +256,12 @@ def parse_number(value: str) -> float | None:
     original = original.strip()
 
     # Handle compact notation
-    compact_suffixes = {"K": 1_000, "M": 1_000_000, "B": 1_000_000_000, "T": 1_000_000_000_000}
+    compact_suffixes = {
+        "K": 1_000,
+        "M": 1_000_000,
+        "B": 1_000_000_000,
+        "T": 1_000_000_000_000,
+    }
 
     for suffix, multiplier in compact_suffixes.items():
         if original.upper().endswith(suffix):

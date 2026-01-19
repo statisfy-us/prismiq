@@ -1,8 +1,8 @@
-"""
-SQL utilities for building safe parameterized queries.
+"""SQL utilities for building safe parameterized queries.
 
 This module provides generic SQL validation and formatting utilities
-that can be used across different database drivers (asyncpg, SQLAlchemy, etc.).
+that can be used across different database drivers (asyncpg, SQLAlchemy,
+etc.).
 """
 
 from __future__ import annotations
@@ -125,9 +125,25 @@ def convert_revealbi_date_format_to_postgres(revealbi_format: str) -> str:
 
 # Constants for validation
 ALLOWED_JOIN_TYPES = frozenset({"INNER", "LEFT", "RIGHT", "FULL"})
-ALLOWED_OPERATORS = frozenset({"eq", "ne", "gt", "gte", "lt", "lte", "in", "in_or_null", "in_subquery", "like", "not_like"})
-ALLOWED_AGGREGATIONS = frozenset({"none", "sum", "avg", "count", "count_distinct", "min", "max"})
-ALLOWED_DATE_TRUNCS = frozenset({
-    "year", "quarter", "month", "week", "day", "hour", "minute", "second"
-})
+ALLOWED_OPERATORS = frozenset(
+    {
+        "eq",
+        "ne",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "in",
+        "in_or_null",
+        "in_subquery",
+        "like",
+        "not_like",
+    }
+)
+ALLOWED_AGGREGATIONS = frozenset(
+    {"none", "sum", "avg", "count", "count_distinct", "min", "max"}
+)
+ALLOWED_DATE_TRUNCS = frozenset(
+    {"year", "quarter", "month", "week", "day", "hour", "minute", "second"}
+)
 ALLOWED_ORDER_DIRECTIONS = frozenset({"ASC", "DESC"})

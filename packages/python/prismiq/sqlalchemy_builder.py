@@ -141,9 +141,8 @@ def build_sql_from_dict(
     """
     # Preprocess calculated fields if present and not already processed
     if preprocess_calculated_fields and query.get("calculated_fields"):
-        from .calculated_field_processor import (
-            preprocess_calculated_fields as preprocess_calc_fields,
-        )
+        from .calculated_field_processor import \
+            preprocess_calculated_fields as preprocess_calc_fields
 
         query = preprocess_calc_fields(query)
 

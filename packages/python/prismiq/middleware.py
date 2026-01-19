@@ -1,8 +1,7 @@
-"""
-HTTP middleware for Prismiq API.
+"""HTTP middleware for Prismiq API.
 
-This module provides middleware components for rate limiting,
-request tracking, and other cross-cutting concerns.
+This module provides middleware components for rate limiting, request
+tracking, and other cross-cutting concerns.
 """
 
 from __future__ import annotations
@@ -45,11 +44,11 @@ class RateLimitConfig(BaseModel):
 
 @dataclass
 class TokenBucket:
-    """
-    Token bucket for rate limiting.
+    """Token bucket for rate limiting.
 
-    Implements a token bucket algorithm where tokens are added at a fixed rate
-    and consumed on each request. Allows for controlled bursting.
+    Implements a token bucket algorithm where tokens are added at a
+    fixed rate and consumed on each request. Allows for controlled
+    bursting.
     """
 
     capacity: float
@@ -65,8 +64,7 @@ class TokenBucket:
     """Timestamp of last token update."""
 
     def consume(self, tokens: int = 1) -> bool:
-        """
-        Attempt to consume tokens from the bucket.
+        """Attempt to consume tokens from the bucket.
 
         Args:
             tokens: Number of tokens to consume.
@@ -90,8 +88,7 @@ class TokenBucket:
         self.last_update = now
 
     def time_until_available(self, tokens: int = 1) -> float:
-        """
-        Calculate time until the requested tokens are available.
+        """Calculate time until the requested tokens are available.
 
         Args:
             tokens: Number of tokens needed.
@@ -110,8 +107,7 @@ class TokenBucket:
 
 @dataclass
 class SlidingWindowCounter:
-    """
-    Sliding window counter for rate limiting.
+    """Sliding window counter for rate limiting.
 
     Tracks request counts in a sliding time window for more accurate
     rate limiting than fixed windows.
@@ -127,8 +123,7 @@ class SlidingWindowCounter:
     """List of request timestamps."""
 
     def record(self) -> bool:
-        """
-        Record a request and check if rate limited.
+        """Record a request and check if rate limited.
 
         Returns:
             True if request is allowed, False if rate limited.
@@ -166,16 +161,14 @@ class SlidingWindowCounter:
 
 
 class RateLimiter:
-    """
-    Rate limiter that combines token bucket and sliding window algorithms.
+    """Rate limiter that combines token bucket and sliding window algorithms.
 
-    Uses token bucket for burst control and sliding window for
-    sustained rate limiting.
+    Uses token bucket for burst control and sliding window for sustained
+    rate limiting.
     """
 
     def __init__(self, config: RateLimitConfig | None = None) -> None:
-        """
-        Initialize rate limiter.
+        """Initialize rate limiter.
 
         Args:
             config: Rate limit configuration.
@@ -194,8 +187,7 @@ class RateLimiter:
         return self._config
 
     async def is_allowed(self, client_id: str) -> tuple[bool, dict[str, Any]]:
-        """
-        Check if a request from the client is allowed.
+        """Check if a request from the client is allowed.
 
         Args:
             client_id: Unique identifier for the client.
@@ -233,14 +225,15 @@ class RateLimiter:
                 "limit": self._config.requests_per_minute,
                 "remaining": window.remaining(),
                 "reset": window.reset_time(),
-                "retry_after": bucket.time_until_available() if not bucket_allowed else 0,
+                "retry_after": bucket.time_until_available()
+                if not bucket_allowed
+                else 0,
             }
 
             return bucket_allowed and window_allowed, info
 
     async def reset(self, client_id: str) -> None:
-        """
-        Reset rate limits for a client.
+        """Reset rate limits for a client.
 
         Args:
             client_id: Client to reset.
@@ -257,8 +250,7 @@ class RateLimiter:
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """
-    FastAPI/Starlette middleware for rate limiting.
+    """FastAPI/Starlette middleware for rate limiting.
 
     Applies rate limiting based on client IP address or API key.
     """
@@ -270,8 +262,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         key_func: Callable[[Request], str] | None = None,
         exclude_paths: list[str] | None = None,
     ) -> None:
-        """
-        Initialize rate limit middleware.
+        """Initialize rate limit middleware.
 
         Args:
             app: ASGI application.
@@ -339,8 +330,7 @@ def create_rate_limiter(
     burst_size: int = 10,
     enabled: bool = True,
 ) -> RateLimiter:
-    """
-    Create a rate limiter with common defaults.
+    """Create a rate limiter with common defaults.
 
     Args:
         requests_per_minute: Maximum requests per minute.
