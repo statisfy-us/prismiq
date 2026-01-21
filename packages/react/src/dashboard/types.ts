@@ -68,6 +68,8 @@ export interface WidgetConfig {
   y_axis?: string[];
   /** Column that defines series for multi-series charts (e.g., category column in long-format data). */
   series_column?: string;
+  /** Maximum number of series to display (top N by total value). Useful for charts with many series. */
+  max_series?: number;
   /** Chart orientation for bar charts. */
   orientation?: 'vertical' | 'horizontal';
   /** Whether to stack series. */

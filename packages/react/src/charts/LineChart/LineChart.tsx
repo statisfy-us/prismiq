@@ -38,6 +38,7 @@ export function LineChart({
   xAxis,
   yAxis,
   seriesColumn,
+  maxSeries,
   smooth = false,
   showArea = false,
   showPoints = false,
@@ -67,10 +68,34 @@ export function LineChart({
   );
 
   // Transform data
-  const chartData = useMemo(
+  const rawChartData = useMemo(
     () => toChartData(data, xAxis, yColumns, seriesColumn),
     [data, xAxis, yColumns, seriesColumn]
   );
+
+  // Limit series to top N by total value if maxSeries is specified
+  const chartData = useMemo(() => {
+    if (!maxSeries || rawChartData.series.length <= maxSeries) {
+      return rawChartData;
+    }
+
+    // Calculate total value for each series
+    const seriesWithTotals = rawChartData.series.map((s) => ({
+      ...s,
+      total: s.data.reduce<number>((sum, val) => sum + (val ?? 0), 0),
+    }));
+
+    // Sort by total descending and take top N
+    const topSeries = seriesWithTotals
+      .sort((a, b) => (b.total ?? 0) - (a.total ?? 0))
+      .slice(0, maxSeries)
+      .map(({ total: _total, ...rest }) => rest);
+
+    return {
+      categories: rawChartData.categories,
+      series: topSeries,
+    };
+  }, [rawChartData, maxSeries]);
 
   // Create date formatter if xAxisFormat is provided
   const dateFormatter = useMemo(
@@ -86,10 +111,10 @@ export function LineChart({
     return chartData.categories.map((cat) => dateFormatter(cat));
   }, [chartData.categories, dateFormatter]);
 
-  // Get colors
+  // Get colors - use actual series count (may be more than yColumns if seriesColumn is used)
   const seriesColors = useMemo(
-    () => colors || getChartColors(theme, yColumns.length),
-    [colors, theme, yColumns.length]
+    () => colors || getChartColors(theme, chartData.series.length),
+    [colors, theme, chartData.series.length]
   );
 
   // Check for empty data
@@ -177,10 +202,10 @@ export function LineChart({
       };
     });
 
-    // Legend config
+    // Legend config - show when multiple series exist (from yColumns or seriesColumn)
     const legend = showLegend
       ? {
-          show: yColumns.length > 1,
+          show: chartData.series.length > 1,
           data: chartData.series.map((s) => s.name),
           selectedMode: 'multiple' as const,
           top: 10,
@@ -256,7 +281,6 @@ export function LineChart({
     yAxisLabel,
     yAxisFormat,
     theme,
-    yColumns.length,
     selectedValue,
     crossFilter?.enabled,
   ]);

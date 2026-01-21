@@ -42,7 +42,8 @@ def validate_identifier(identifier: str, field_name: str) -> None:
     # - alphanumeric, underscore: standard identifier chars
     # - dot: for schema.table references
     # - space, parentheses, forward slash, hyphen, colon: common in PostgreSQL view column names
-    allowed_special = ("_", ".", " ", "(", ")", "/", "-", ":")
+    # - non-breaking space (\xa0): sometimes used in data imported from Excel/Word
+    allowed_special = ("_", ".", " ", "(", ")", "/", "-", ":", "\xa0")
     if not all(c.isalnum() or c in allowed_special for c in identifier):
         raise ValueError(
             f"Invalid {field_name} '{identifier}': contains invalid characters"

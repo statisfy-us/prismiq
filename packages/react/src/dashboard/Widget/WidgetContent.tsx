@@ -367,6 +367,7 @@ export function WidgetContent({
             xAxis={xAxis}
             yAxis={yAxis}
             seriesColumn={widget.config.series_column}
+            maxSeries={widget.config.max_series}
             showLegend={showLegend}
             showDataLabels={showDataLabels}
             colors={colors}

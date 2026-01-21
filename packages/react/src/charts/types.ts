@@ -193,6 +193,8 @@ export interface LineChartProps extends BaseChartProps {
   yAxis: string | string[];
   /** Column name that defines series (for multi-series charts with long-format data). */
   seriesColumn?: string;
+  /** Maximum number of series to display (top N by total value). Useful for charts with many series. */
+  maxSeries?: number;
   /** Whether to use smooth/curved lines. */
   smooth?: boolean;
   /** Whether to show area fill under lines. */

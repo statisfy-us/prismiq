@@ -13,7 +13,8 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from .sql_utils import (ALLOWED_AGGREGATIONS, ALLOWED_DATE_TRUNCS,
                         ALLOWED_JOIN_TYPES, ALLOWED_OPERATORS,
-                        ALLOWED_ORDER_DIRECTIONS, validate_identifier)
+                        ALLOWED_ORDER_DIRECTIONS, validate_identifier,
+                        convert_revealbi_date_format_to_postgres)
 
 if TYPE_CHECKING:
     pass
@@ -251,8 +252,18 @@ def build_sql_from_dict(
                 expr = sql_expression
         elif date_trunc:
             col_ref = f'{table_ref}."{column_name}"'
-            expr = f"DATE_TRUNC('{date_trunc}', {col_ref})"
+            date_trunc_expr = f"DATE_TRUNC('{date_trunc}', {col_ref})"
+            # Apply date formatting if date_format is specified
+            date_format = col.get("date_format")
+            if date_format:
+                pg_format = convert_revealbi_date_format_to_postgres(date_format)
+                expr = f"TO_CHAR({date_trunc_expr}, '{pg_format}')"
+            else:
+                expr = date_trunc_expr
         elif agg and agg != "none":
+            # Check if column needs type casting (e.g., boolean to int for SUM/AVG)
+            cast_type = col.get("cast_type")
+
             if agg == "count_distinct":
                 if column_name == "*":
                     expr = "COUNT(DISTINCT *)"
@@ -262,7 +273,11 @@ def build_sql_from_dict(
                 if column_name == "*":
                     expr = f"{agg.upper()}(*)"
                 else:
-                    expr = f'{agg.upper()}({table_ref}."{column_name}")'
+                    col_ref = f'{table_ref}."{column_name}"'
+                    # Apply type cast if specified (e.g., ::int for boolean SUM)
+                    if cast_type:
+                        col_ref = f"({col_ref})::{cast_type}"
+                    expr = f"{agg.upper()}({col_ref})"
         else:
             if column_name == "*":
                 expr = "*"
