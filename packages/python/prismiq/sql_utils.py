@@ -135,6 +135,7 @@ ALLOWED_OPERATORS = frozenset(
         "lt",
         "lte",
         "in",
+        "in_",  # Alias for "in" (React types use in_)
         "in_or_null",
         "in_subquery",
         "like",

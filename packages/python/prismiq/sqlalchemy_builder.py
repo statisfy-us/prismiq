@@ -401,8 +401,9 @@ def build_sql_from_dict(
             where_parts.append(f"{col_ref} <= :{param_name}")
             params[param_name] = value
             param_counter += 1
-        elif operator == "in":
+        elif operator in ("in", "in_"):
             # Guard against empty list (invalid SQL: IN ())
+            # Note: "in_" is an alias for "in" (React types use in_)
             if not value:
                 # Empty IN list evaluates to FALSE (no rows match)
                 where_parts.append("FALSE")
