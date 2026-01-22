@@ -103,17 +103,19 @@ const containerStyles: React.CSSProperties = {
   borderRadius: 'var(--prismiq-radius-md)',
   backgroundColor: 'var(--prismiq-color-background)',
   overflow: 'hidden',
+  height: '100%', // Fill parent container
 };
 
 const tableContainerStyles: React.CSSProperties = {
   flex: 1,
   overflow: 'auto',
-  maxHeight: '500px',
+  // Height will be constrained by the parent container
 };
 
 const tableStyles: React.CSSProperties = {
   width: '100%',
-  borderCollapse: 'collapse',
+  borderCollapse: 'separate',
+  borderSpacing: 0,
   fontFamily: 'var(--prismiq-font-sans)',
 };
 
@@ -273,12 +275,40 @@ export function ResultsTable({
     return byIndex;
   }, [formatters, result]);
 
-  // Paginate rows
+  // Sort and paginate rows
   const paginatedRows = useMemo(() => {
     if (!result) return [];
+
+    // Apply client-side sorting if sortColumn is set
+    let sortedRows = result.rows;
+    if (sortColumn) {
+      const columnIndex = result.columns.indexOf(sortColumn);
+      if (columnIndex >= 0) {
+        sortedRows = [...result.rows].sort((a, b) => {
+          const aVal = a[columnIndex];
+          const bVal = b[columnIndex];
+
+          // Handle nulls - always sort to end
+          if (aVal === null || aVal === undefined) return 1;
+          if (bVal === null || bVal === undefined) return -1;
+
+          // Numeric comparison
+          if (typeof aVal === 'number' && typeof bVal === 'number') {
+            return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+          }
+
+          // String comparison (case-insensitive)
+          const aStr = String(aVal).toLowerCase();
+          const bStr = String(bVal).toLowerCase();
+          const comparison = aStr.localeCompare(bStr);
+          return sortDirection === 'asc' ? comparison : -comparison;
+        });
+      }
+    }
+
     const startIndex = (currentPage - 1) * pageSize;
-    return result.rows.slice(startIndex, startIndex + pageSize);
-  }, [result, currentPage, pageSize]);
+    return sortedRows.slice(startIndex, startIndex + pageSize);
+  }, [result, currentPage, pageSize, sortColumn, sortDirection]);
 
   // Reset to first page when results change
   useEffect(() => {

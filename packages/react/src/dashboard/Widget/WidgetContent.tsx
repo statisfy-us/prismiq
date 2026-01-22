@@ -470,8 +470,18 @@ export function WidgetContent({
         });
       }
 
+      // For tables, use a non-scrolling container so the table handles its own scrolling
+      // This allows the sticky header to work properly
+      const tableContainerStyle: React.CSSProperties = {
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden', // Don't scroll here - let ResultsTable handle it
+        position: 'relative',
+      };
+
       return (
-        <div style={containerStyle}>
+        <div style={tableContainerStyle}>
           <ResultsTable
             result={tableResult}
             pageSize={widget.config.page_size ?? 10}

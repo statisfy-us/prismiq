@@ -10,6 +10,7 @@ import {
   useState,
   type KeyboardEvent,
 } from 'react';
+import { createPortal } from 'react-dom';
 
 import { Input } from './Input';
 
@@ -165,8 +166,11 @@ function SelectInner<T>(
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Find the selected option
   const selectedOption = options.find((opt) => opt.value === value);
@@ -181,10 +185,12 @@ function SelectInner<T>(
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
+      const target = event.target as Node;
+      // Check if click is inside container or dropdown portal
+      const isInsideContainer = containerRef.current?.contains(target);
+      const isInsideDropdown = dropdownRef.current?.contains(target);
+
+      if (!isInsideContainer && !isInsideDropdown) {
         setIsOpen(false);
         setSearch('');
       }
@@ -206,13 +212,30 @@ function SelectInner<T>(
     setHighlightedIndex(-1);
   }, [filteredOptions.length]);
 
+  // Update dropdown position when opening
+  const updateDropdownPosition = useCallback(() => {
+    if (triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY + 4, // 4px gap
+        left: rect.left + window.scrollX,
+        width: rect.width,
+      });
+    }
+  }, []);
+
   const handleToggle = useCallback(() => {
     if (!disabled) {
-      setIsOpen((prev) => !prev);
+      setIsOpen((prev) => {
+        if (!prev) {
+          updateDropdownPosition();
+        }
+        return !prev;
+      });
       setSearch('');
       setHighlightedIndex(-1);
     }
-  }, [disabled]);
+  }, [disabled, updateDropdownPosition]);
 
   const handleSelect = useCallback(
     (option: SelectOption<T>) => {
@@ -284,6 +307,7 @@ function SelectInner<T>(
       onKeyDown={handleKeyDown}
     >
       <div
+        ref={triggerRef}
         role="combobox"
         aria-expanded={isOpen}
         aria-haspopup="listbox"
@@ -311,8 +335,20 @@ function SelectInner<T>(
         />
       </div>
 
-      {isOpen && (
-        <div style={dropdownStyles} role="listbox">
+      {isOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          ref={dropdownRef}
+          style={{
+            ...dropdownStyles,
+            position: 'fixed',
+            top: dropdownPosition.top,
+            left: dropdownPosition.left,
+            width: dropdownPosition.width,
+            marginTop: 0,
+            fontSize: sizeStyles[size].fontSize,
+          }}
+          role="listbox"
+        >
           {searchable && (
             <div style={{ padding: 'var(--prismiq-spacing-sm)' }}>
               <Input
@@ -355,7 +391,8 @@ function SelectInner<T>(
               </div>
             ))
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

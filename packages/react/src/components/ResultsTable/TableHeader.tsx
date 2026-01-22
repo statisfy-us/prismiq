@@ -44,7 +44,9 @@ const headerCellStyles: React.CSSProperties = {
   position: 'sticky',
   top: 0,
   backgroundColor: 'var(--prismiq-color-surface)',
-  zIndex: 1,
+  zIndex: 10,
+  // Ensure header is visible when scrolling with a subtle shadow
+  boxShadow: '0 1px 0 var(--prismiq-color-border)',
 };
 
 const sortableStyles: React.CSSProperties = {
