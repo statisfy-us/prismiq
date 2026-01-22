@@ -39,11 +39,33 @@ export interface WidgetContentProps {
 function TextContent({ config }: { config: WidgetConfig }): JSX.Element {
   const { theme } = useTheme();
 
+  // Map alignment config to CSS text-align
+  const textAlignMap: Record<string, React.CSSProperties['textAlign']> = {
+    Left: 'left',
+    Center: 'center',
+    Right: 'right',
+  };
+  const textAlign = textAlignMap[config.alignment as string] ?? 'left';
+
+  // Map fontSize config to theme font sizes
+  const fontSizeMap: Record<string, string> = {
+    Small: theme.fontSizes.sm,
+    Normal: theme.fontSizes.base,
+    Large: theme.fontSizes.lg,
+    XLarge: theme.fontSizes.xl,
+  };
+  const fontSize = fontSizeMap[config.fontSize as string] ?? theme.fontSizes.base;
+
   const contentStyle: React.CSSProperties = {
     padding: theme.spacing.md,
-    fontSize: theme.fontSizes.base,
+    fontSize,
     color: theme.colors.text,
     lineHeight: 1.6,
+    textAlign,
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    height: '100%',
   };
 
   // If no text content, render nothing (title is shown in widget header)

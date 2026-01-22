@@ -118,6 +118,10 @@ export interface WidgetConfig {
   content?: string;
   /** Whether to render content as markdown. */
   markdown?: boolean;
+  /** Text alignment for text widgets. */
+  alignment?: 'Left' | 'Center' | 'Right';
+  /** Font size for text widgets. */
+  fontSize?: 'Small' | 'Normal' | 'Large' | 'XLarge';
 }
 
 /**

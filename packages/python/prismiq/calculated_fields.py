@@ -366,7 +366,7 @@ class ExpressionParser:
         # - Operators: ==, !=, >=, <=, >, <, +, -, *, /, = (single = for RevealBI compat)
         # - Delimiters: ( ) , .
         # Note: Order matters - must match == before = to avoid partial match
-        pattern = r'\[([^\]]+)\]|(\d+\.?\d*)|("(?:[^"\\]|\\.)*")|([a-zA-Z_]\w*)|(\(|\)|,|\.)|(<= |>=|==|!=|>|<|=|[\+\-*/])'
+        pattern = r'\[([^\]]+)\]|(\d+\.?\d*)|("(?:[^"\\]|\\.)*")|([a-zA-Z_]\w*)|(\(|\)|,|\.)|(<=|>=|==|!=|>|<|=|[\+\-*/])'
 
         tokens = []
         pos = 0
