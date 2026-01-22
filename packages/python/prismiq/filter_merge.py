@@ -10,11 +10,12 @@ import copy
 from datetime import date
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict
+
 from prismiq.dashboards import DashboardFilter, DashboardFilterType
 from prismiq.dates import DatePreset, resolve_date_preset
 from prismiq.types import (DatabaseSchema, FilterDefinition, FilterOperator,
                            QueryDefinition)
-from pydantic import BaseModel, ConfigDict
 
 
 class FilterValue(BaseModel):

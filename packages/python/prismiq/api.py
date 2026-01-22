@@ -14,6 +14,9 @@ from datetime import date
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, ConfigDict
+
+from prismiq import __version__
 from prismiq.auth import AuthContext, create_header_auth_dependency
 from prismiq.dashboards import (Dashboard, DashboardCreate, DashboardExport,
                                 DashboardUpdate, Widget, WidgetCreate,
@@ -32,9 +35,6 @@ from prismiq.trends import ComparisonPeriod, TrendResult, add_trend_column
 from prismiq.types import (DatabaseSchema, QueryDefinition, QueryResult,
                            QueryValidationError, SavedQuery, SavedQueryCreate,
                            SavedQueryUpdate, TableNotFoundError, TableSchema)
-from pydantic import BaseModel, ConfigDict
-
-from prismiq import __version__
 
 if TYPE_CHECKING:
     from prismiq.engine import PrismiqEngine

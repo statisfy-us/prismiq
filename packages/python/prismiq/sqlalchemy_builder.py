@@ -13,8 +13,9 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from .sql_utils import (ALLOWED_AGGREGATIONS, ALLOWED_DATE_TRUNCS,
                         ALLOWED_JOIN_TYPES, ALLOWED_OPERATORS,
-                        ALLOWED_ORDER_DIRECTIONS, validate_identifier,
-                        convert_revealbi_date_format_to_postgres)
+                        ALLOWED_ORDER_DIRECTIONS,
+                        convert_revealbi_date_format_to_postgres,
+                        validate_identifier)
 
 if TYPE_CHECKING:
     pass

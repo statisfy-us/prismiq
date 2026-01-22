@@ -10,8 +10,9 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
-from prismiq.types import QueryDefinition
 from pydantic import BaseModel, ConfigDict, Field
+
+from prismiq.types import QueryDefinition
 
 
 def _utc_now() -> datetime:

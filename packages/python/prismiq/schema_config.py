@@ -10,8 +10,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from prismiq.types import DatabaseSchema
 from pydantic import BaseModel, ConfigDict
+
+from prismiq.types import DatabaseSchema
 
 
 class ColumnConfig(BaseModel):
