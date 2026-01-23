@@ -12,9 +12,8 @@ from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
-
 from prismiq.types import QueryResult
+from pydantic import BaseModel, ConfigDict
 
 
 class TrendDirection(str, Enum):

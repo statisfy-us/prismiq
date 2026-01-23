@@ -9,10 +9,9 @@ from __future__ import annotations
 from difflib import get_close_matches
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
-
 from prismiq.types import (AggregationType, DatabaseSchema, FilterDefinition,
                            FilterOperator, JoinType, QueryDefinition)
+from pydantic import BaseModel, ConfigDict
 
 # ============================================================================
 # Validation Models

@@ -13,7 +13,6 @@ from prismiq.types import (ColumnSchema, DatabaseSchema, Relationship,
 
 if TYPE_CHECKING:
     from asyncpg import Pool, Record  # type: ignore[import-not-found]
-
     from prismiq.cache import CacheBackend
 
 
