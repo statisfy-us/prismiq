@@ -302,21 +302,25 @@ class QueryCache:
     """High-level cache for query results.
 
     Handles serialization, key generation, and table-based invalidation.
+    Supports multi-tenancy via schema_name parameter for cache key isolation.
     """
 
     def __init__(
         self,
         backend: CacheBackend,
         config: CacheConfig | None = None,
+        schema_name: str = "public",
     ) -> None:
         """Initialize query cache.
 
         Args:
             backend: Cache backend to use.
             config: Cache configuration.
+            schema_name: PostgreSQL schema name for cache key isolation (multi-tenancy).
         """
         self._backend = backend
         self._config = config or CacheConfig()
+        self._schema_name = schema_name
         # Track which tables are used in each cached query
         self._table_keys: dict[str, set[str]] = {}
 
@@ -324,6 +328,7 @@ class QueryCache:
         """Generate a cache key from a query definition.
 
         Uses a hash of the query's JSON representation.
+        Includes schema_name for multi-tenant isolation.
 
         Args:
             query: Query definition to hash.
@@ -335,7 +340,7 @@ class QueryCache:
         query_json = query.model_dump_json(exclude_none=True)
         # Create hash
         query_hash = hashlib.sha256(query_json.encode()).hexdigest()[:16]
-        return f"query:{query_hash}"
+        return f"query:{self._schema_name}:{query_hash}"
 
     async def get_result(self, query: QueryDefinition) -> QueryResult | None:
         """Get a cached query result.
@@ -437,14 +442,14 @@ class QueryCache:
         return count
 
     async def invalidate_all(self) -> int:
-        """Invalidate all cached query results.
+        """Invalidate all cached query results for this schema.
 
         Returns:
             Number of cache entries invalidated.
         """
-        count = await self._backend.clear("query:*")
-        # Also clear all metadata
-        await self._backend.clear("meta:query:*")
+        count = await self._backend.clear(f"query:{self._schema_name}:*")
+        # Also clear all metadata for this schema
+        await self._backend.clear(f"meta:query:{self._schema_name}:*")
         self._table_keys.clear()
         return count
 
@@ -453,21 +458,29 @@ class SchemaCache:
     """High-level cache for database schema.
 
     Provides caching for schema introspection results.
+    Supports multi-tenancy via schema_name parameter for cache key isolation.
     """
 
     def __init__(
         self,
         backend: CacheBackend,
         ttl: int = 3600,
+        schema_name: str = "public",
     ) -> None:
         """Initialize schema cache.
 
         Args:
             backend: Cache backend to use.
             ttl: TTL for schema cache in seconds.
+            schema_name: PostgreSQL schema name for cache key isolation (multi-tenancy).
         """
         self._backend = backend
         self._ttl = ttl
+        self._schema_name = schema_name
+
+    def _make_key(self, key: str) -> str:
+        """Create a cache key with schema prefix for tenant isolation."""
+        return f"schema:{self._schema_name}:{key}"
 
     async def get_schema(self) -> dict[str, Any] | None:
         """Get cached schema.
@@ -475,7 +488,7 @@ class SchemaCache:
         Returns:
             Cached schema dict or None if not found.
         """
-        return await self._backend.get("schema:full")
+        return await self._backend.get(self._make_key("full"))
 
     async def set_schema(self, schema_dict: dict[str, Any]) -> None:
         """Cache schema.
@@ -483,7 +496,7 @@ class SchemaCache:
         Args:
             schema_dict: Schema dictionary to cache.
         """
-        await self._backend.set("schema:full", schema_dict, self._ttl)
+        await self._backend.set(self._make_key("full"), schema_dict, self._ttl)
 
     async def get_table(self, table_name: str) -> dict[str, Any] | None:
         """Get cached table schema.
@@ -494,7 +507,7 @@ class SchemaCache:
         Returns:
             Cached table dict or None if not found.
         """
-        return await self._backend.get(f"schema:table:{table_name}")
+        return await self._backend.get(self._make_key(f"table:{table_name}"))
 
     async def set_table(self, table_name: str, table_dict: dict[str, Any]) -> None:
         """Cache table schema.
@@ -503,12 +516,12 @@ class SchemaCache:
             table_name: Name of the table.
             table_dict: Table dictionary to cache.
         """
-        await self._backend.set(f"schema:table:{table_name}", table_dict, self._ttl)
+        await self._backend.set(self._make_key(f"table:{table_name}"), table_dict, self._ttl)
 
     async def invalidate(self) -> int:
-        """Invalidate all schema cache.
+        """Invalidate all schema cache for this schema.
 
         Returns:
             Number of cache entries invalidated.
         """
-        return await self._backend.clear("schema:*")
+        return await self._backend.clear(f"schema:{self._schema_name}:*")
