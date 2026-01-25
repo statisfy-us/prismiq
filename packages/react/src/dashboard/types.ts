@@ -403,6 +403,8 @@ export interface DashboardEditorProps {
   onSave?: (dashboard: Dashboard) => void;
   /** Callback when editing is cancelled. */
   onCancel?: () => void;
+  /** Number of widgets to load in each batch (default: 4). */
+  batchSize?: number;
   /** Additional CSS class. */
   className?: string;
 }
