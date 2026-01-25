@@ -14,33 +14,59 @@ from datetime import date
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, ConfigDict
+
+from prismiq import __version__
 from prismiq.auth import AuthContext, create_header_auth_dependency
-from prismiq.dashboards import (Dashboard, DashboardCreate, DashboardExport,
-                                DashboardUpdate, Widget, WidgetCreate,
-                                WidgetUpdate)
+from prismiq.dashboards import (
+    Dashboard,
+    DashboardCreate,
+    DashboardExport,
+    DashboardUpdate,
+    Widget,
+    WidgetCreate,
+    WidgetUpdate,
+)
 from prismiq.filter_merge import FilterValue, merge_filters
-from prismiq.permissions import (can_delete_dashboard, can_edit_dashboard,
-                                 can_edit_widget, can_view_dashboard)
+from prismiq.logging import get_logger
+from prismiq.permissions import (
+    can_delete_dashboard,
+    can_edit_dashboard,
+    can_edit_widget,
+    can_view_dashboard,
+)
 from prismiq.query import ValidationResult
-from prismiq.schema_config import (ColumnConfig, EnhancedDatabaseSchema,
-                                   EnhancedTableSchema, SchemaConfig,
-                                   TableConfig)
+from prismiq.schema_config import (
+    ColumnConfig,
+    EnhancedDatabaseSchema,
+    EnhancedTableSchema,
+    SchemaConfig,
+    TableConfig,
+)
 from prismiq.sql_validator import SQLValidationError
 from prismiq.timeseries import TimeInterval
 from prismiq.transforms import pivot_data
 from prismiq.trends import ComparisonPeriod, TrendResult, add_trend_column
-from prismiq.types import (DatabaseSchema, QueryDefinition, QueryResult,
-                           QueryValidationError, SavedQuery, SavedQueryCreate,
-                           SavedQueryUpdate, TableNotFoundError, TableSchema)
-from pydantic import BaseModel, ConfigDict
-
-from prismiq import __version__
+from prismiq.types import (
+    DatabaseSchema,
+    QueryDefinition,
+    QueryResult,
+    QueryValidationError,
+    SavedQuery,
+    SavedQueryCreate,
+    SavedQueryUpdate,
+    TableNotFoundError,
+    TableSchema,
+)
 
 if TYPE_CHECKING:
     from prismiq.engine import PrismiqEngine
 
 # Track startup time for uptime calculation
 _startup_time: float | None = None
+
+# Module logger for cache operations
+_logger = get_logger(__name__)
 
 
 def _get_uptime() -> float:
@@ -77,6 +103,44 @@ class TableListResponse(BaseModel):
 
     tables: list[str]
     """List of table names."""
+
+
+class ExecuteQueryRequest(BaseModel):
+    """Request model for query execution endpoint."""
+
+    query: QueryDefinition
+    """Query definition to execute."""
+
+    bypass_cache: bool = False
+    """If True, bypass cache and re-execute query, then update cache."""
+
+
+class QueryResultWithCache(BaseModel):
+    """Query result with cache metadata."""
+
+    columns: list[str]
+    """Column names in result order."""
+
+    column_types: list[str]
+    """Column data types."""
+
+    rows: list[list[Any]]
+    """Result rows as list of lists."""
+
+    row_count: int
+    """Number of rows returned."""
+
+    truncated: bool
+    """Whether results were truncated due to limit."""
+
+    execution_time_ms: float
+    """Query execution time in milliseconds."""
+
+    cached_at: float | None = None
+    """Unix timestamp when result was cached (None if not from cache)."""
+
+    is_from_cache: bool = False
+    """Whether this result came from cache."""
 
 
 class PreviewRequest(BaseModel):
@@ -548,9 +612,7 @@ def create_router(
         enhanced_schema = await engine.get_enhanced_schema()
         table = enhanced_schema.get_table(table_name)
         if table is None:
-            raise HTTPException(
-                status_code=404, detail=f"Table '{table_name}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
         return table
 
     @router.get("/tables/{table_name}/columns/{column_name}/sample")
@@ -640,22 +702,84 @@ def create_router(
                 status_code=400, detail={"message": e.message, "errors": e.errors}
             ) from e
 
-    @router.post("/query/execute", response_model=QueryResult)
-    async def execute_query(query: QueryDefinition) -> QueryResult:
-        """Execute a query and return results.
+    @router.post("/query/execute", response_model=QueryResultWithCache)
+    async def execute_query(request: ExecuteQueryRequest) -> QueryResultWithCache:
+        """Execute a query and return results with cache metadata.
 
         Args:
-            query: Query definition to execute.
+            request: Query execution request with optional cache bypass.
 
         Returns:
-            QueryResult with columns, rows, and execution metadata.
+            QueryResultWithCache with columns, rows, execution metadata, and cache info.
 
         Raises:
             400: If the query fails validation.
             500: If the query execution fails.
         """
         try:
-            return await engine.execute_query(query)
+            query = request.query
+            bypass_cache = request.bypass_cache
+
+            # Execute query (bypass cache if requested)
+            use_cache = not bypass_cache
+            result = await engine.execute_query(query, use_cache=use_cache)
+
+            # Get cache metadata
+            cached_at: float | None = None
+            is_from_cache = False
+
+            if engine._query_cache:  # pyright: ignore[reportPrivateUsage]
+                if bypass_cache:
+                    # We just executed fresh, cache it and get the timestamp
+                    try:
+                        cached_at = await engine._query_cache.cache_result(  # pyright: ignore[reportPrivateUsage]
+                            query, result
+                        )
+                    except (TypeError, AttributeError, ImportError):
+                        # Re-raise programming bugs - these need to be fixed
+                        raise
+                    except Exception as cache_err:
+                        # Log infrastructure errors but don't fail - cache is optional
+                        _logger.warning(
+                            "Failed to cache query result",
+                            error=str(cache_err),
+                            error_type=type(cache_err).__name__,
+                            tables=[t.name for t in query.tables],
+                        )
+                        cached_at = None  # Don't report misleading timestamp
+                    is_from_cache = False
+                else:
+                    # Check if result was from cache
+                    try:
+                        metadata = await engine._query_cache.get_cache_metadata(  # pyright: ignore[reportPrivateUsage]
+                            query
+                        )
+                        if metadata and "cached_at" in metadata:
+                            cached_at = metadata["cached_at"]
+                            is_from_cache = True
+                    except (TypeError, AttributeError, ImportError):
+                        # Re-raise programming bugs - these need to be fixed
+                        raise
+                    except Exception as cache_err:
+                        # Log infrastructure errors but don't fail - metadata is optional
+                        _logger.warning(
+                            "Failed to get cache metadata",
+                            error=str(cache_err),
+                            error_type=type(cache_err).__name__,
+                            tables=[t.name for t in query.tables],
+                        )
+                        # Continue without cache metadata
+
+            return QueryResultWithCache(
+                columns=result.columns,
+                column_types=result.column_types,
+                rows=result.rows,
+                row_count=result.row_count,
+                truncated=result.truncated,
+                execution_time_ms=result.execution_time_ms,
+                cached_at=cached_at,
+                is_from_cache=is_from_cache,
+            )
         except QueryValidationError as e:
             raise HTTPException(
                 status_code=400, detail={"message": e.message, "errors": e.errors}
@@ -924,9 +1048,7 @@ def create_router(
         return config.get_table_config(table_name)
 
     @router.put("/config/tables/{table_name}", response_model=SuccessResponse)
-    async def update_table_config(
-        table_name: str, update: TableConfigUpdate
-    ) -> SuccessResponse:
+    async def update_table_config(table_name: str, update: TableConfigUpdate) -> SuccessResponse:
         """Update configuration for a specific table.
 
         Only the provided fields are updated; others are preserved.
@@ -954,9 +1076,7 @@ def create_router(
         engine.update_table_config(table_name, new_config)
         return SuccessResponse(message=f"Table '{table_name}' configuration updated")
 
-    @router.get(
-        "/config/tables/{table_name}/columns/{column_name}", response_model=ColumnConfig
-    )
+    @router.get("/config/tables/{table_name}/columns/{column_name}", response_model=ColumnConfig)
     async def get_column_config(table_name: str, column_name: str) -> ColumnConfig:
         """Get configuration for a specific column.
 
@@ -1006,9 +1126,7 @@ def create_router(
         )
 
         engine.update_column_config(table_name, column_name, new_config)
-        return SuccessResponse(
-            message=f"Column '{table_name}.{column_name}' configuration updated"
-        )
+        return SuccessResponse(message=f"Column '{table_name}.{column_name}' configuration updated")
 
     @router.delete("/config/tables/{table_name}", response_model=SuccessResponse)
     async def reset_table_config(table_name: str) -> SuccessResponse:
@@ -1038,9 +1156,7 @@ def create_router(
             Success response.
         """
         engine.update_column_config(table_name, column_name, ColumnConfig())
-        return SuccessResponse(
-            message=f"Column '{table_name}.{column_name}' configuration reset"
-        )
+        return SuccessResponse(message=f"Column '{table_name}.{column_name}' configuration reset")
 
     # ========================================================================
     # Dashboard Endpoints
@@ -1080,9 +1196,7 @@ def create_router(
         """
         dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if dashboard is None:
-            raise HTTPException(
-                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
 
         if not can_view_dashboard(dashboard, auth.user_id):
             raise HTTPException(status_code=403, detail="Permission denied")
@@ -1129,20 +1243,14 @@ def create_router(
         """
         dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if dashboard is None:
-            raise HTTPException(
-                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
 
         if not can_edit_dashboard(dashboard, auth.user_id):
             raise HTTPException(status_code=403, detail="Permission denied")
 
-        updated = await store.update_dashboard(
-            dashboard_id, data, tenant_id=auth.tenant_id
-        )
+        updated = await store.update_dashboard(dashboard_id, data, tenant_id=auth.tenant_id)
         if updated is None:
-            raise HTTPException(
-                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
         return updated
 
     @router.delete("/dashboards/{dashboard_id}", response_model=SuccessResponse)
@@ -1164,18 +1272,14 @@ def create_router(
         """
         dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if dashboard is None:
-            raise HTTPException(
-                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
 
         if not can_delete_dashboard(dashboard, auth.user_id):
             raise HTTPException(status_code=403, detail="Permission denied")
 
         deleted = await store.delete_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if not deleted:
-            raise HTTPException(
-                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
         return SuccessResponse(message=f"Dashboard '{dashboard_id}' deleted")
 
     # ========================================================================
@@ -1207,23 +1311,17 @@ def create_router(
         """
         dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if dashboard is None:
-            raise HTTPException(
-                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
 
         if not can_edit_widget(dashboard, auth.user_id):
             raise HTTPException(status_code=403, detail="Permission denied")
 
         created = await store.add_widget(dashboard_id, data, tenant_id=auth.tenant_id)
         if created is None:
-            raise HTTPException(
-                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
         return created
 
-    @router.patch(
-        "/dashboards/{dashboard_id}/widgets/{widget_id}", response_model=Widget
-    )
+    @router.patch("/dashboards/{dashboard_id}/widgets/{widget_id}", response_model=Widget)
     async def update_widget(
         dashboard_id: str,
         widget_id: str,
@@ -1246,23 +1344,17 @@ def create_router(
         """
         dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if dashboard is None:
-            raise HTTPException(
-                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
 
         if not can_edit_widget(dashboard, auth.user_id):
             raise HTTPException(status_code=403, detail="Permission denied")
 
         updated = await store.update_widget(widget_id, data, tenant_id=auth.tenant_id)
         if updated is None:
-            raise HTTPException(
-                status_code=404, detail=f"Widget '{widget_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Widget '{widget_id}' not found")
         return updated
 
-    @router.delete(
-        "/dashboards/{dashboard_id}/widgets/{widget_id}", response_model=SuccessResponse
-    )
+    @router.delete("/dashboards/{dashboard_id}/widgets/{widget_id}", response_model=SuccessResponse)
     async def delete_widget(
         dashboard_id: str,
         widget_id: str,
@@ -1283,18 +1375,14 @@ def create_router(
         """
         dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if dashboard is None:
-            raise HTTPException(
-                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
 
         if not can_edit_widget(dashboard, auth.user_id):
             raise HTTPException(status_code=403, detail="Permission denied")
 
         deleted = await store.delete_widget(widget_id, tenant_id=auth.tenant_id)
         if not deleted:
-            raise HTTPException(
-                status_code=404, detail=f"Widget '{widget_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Widget '{widget_id}' not found")
         return SuccessResponse(message=f"Widget '{widget_id}' deleted")
 
     @router.post(
@@ -1322,18 +1410,14 @@ def create_router(
         """
         dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if dashboard is None:
-            raise HTTPException(
-                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
 
         if not can_edit_widget(dashboard, auth.user_id):
             raise HTTPException(status_code=403, detail="Permission denied")
 
         duplicated = await store.duplicate_widget(widget_id, tenant_id=auth.tenant_id)
         if duplicated is None:
-            raise HTTPException(
-                status_code=404, detail=f"Widget '{widget_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Widget '{widget_id}' not found")
         return duplicated
 
     # ========================================================================
@@ -1362,9 +1446,7 @@ def create_router(
         """
         dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if dashboard is None:
-            raise HTTPException(
-                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
 
         if not can_edit_dashboard(dashboard, auth.user_id):
             raise HTTPException(status_code=403, detail="Permission denied")
@@ -1380,9 +1462,7 @@ def create_router(
         # Return updated dashboard
         updated = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if updated is None:
-            raise HTTPException(
-                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
         return updated
 
     @router.post(
@@ -1412,9 +1492,7 @@ def create_router(
         """
         dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if dashboard is None:
-            raise HTTPException(
-                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
 
         if not can_view_dashboard(dashboard, auth.user_id):
             raise HTTPException(status_code=403, detail="Permission denied")
@@ -1427,9 +1505,7 @@ def create_router(
                 break
 
         if widget is None:
-            raise HTTPException(
-                status_code=404, detail=f"Widget '{widget_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Widget '{widget_id}' not found")
 
         if widget.query is None:
             raise HTTPException(status_code=400, detail="Widget has no query")
@@ -1475,9 +1551,7 @@ def create_router(
         """
         dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
         if dashboard is None:
-            raise HTTPException(
-                status_code=404, detail=f"Dashboard '{dashboard_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
 
         if not can_view_dashboard(dashboard, auth.user_id):
             raise HTTPException(status_code=403, detail="Permission denied")
@@ -1552,9 +1626,7 @@ def create_router(
         # Return the complete dashboard
         result = await store.get_dashboard(dashboard.id, tenant_id=auth.tenant_id)
         if result is None:
-            raise HTTPException(
-                status_code=500, detail="Failed to retrieve imported dashboard"
-            )
+            raise HTTPException(status_code=500, detail="Failed to retrieve imported dashboard")
         return result
 
     # ========================================================================
@@ -1598,9 +1670,7 @@ def create_router(
         saved_query_store = engine.saved_query_store
         query = await saved_query_store.get(query_id, tenant_id=auth.tenant_id)
         if query is None:
-            raise HTTPException(
-                status_code=404, detail=f"Saved query '{query_id}' not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Saved query '{query_id}' not found")
         return query
 
     @router.post("/saved-queries", response_model=SavedQuery, status_code=201)

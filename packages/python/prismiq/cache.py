@@ -264,17 +264,13 @@ class RedisCache(CacheBackend):
             raise RuntimeError("RedisCache not connected. Call connect() first.")
 
         # Determine search pattern with prefix
-        search_pattern = (
-            f"{self._key_prefix}*" if pattern is None else self._make_key(pattern)
-        )
+        search_pattern = f"{self._key_prefix}*" if pattern is None else self._make_key(pattern)
 
         # Use SCAN to find matching keys (safer than KEYS for large datasets)
         count = 0
         cursor = 0
         while True:
-            cursor, keys = await self._redis.scan(
-                cursor, match=search_pattern, count=100
-            )
+            cursor, keys = await self._redis.scan(cursor, match=search_pattern, count=100)
             if keys:
                 await self._redis.delete(*keys)
                 count += len(keys)
@@ -289,14 +285,14 @@ class CacheConfig(BaseModel):
 
     model_config = ConfigDict(strict=True)
 
-    default_ttl: int = 300
-    """Default TTL in seconds (5 minutes)."""
+    default_ttl: int = 86400
+    """Default TTL in seconds (24 hours)."""
 
     schema_ttl: int = 3600
     """TTL for schema cache (1 hour)."""
 
-    query_ttl: int = 300
-    """TTL for query results (5 minutes)."""
+    query_ttl: int = 86400
+    """TTL for query results (24 hours)."""
 
     max_result_size: int = 1_000_000
     """Maximum size in bytes for cached query results."""
@@ -365,22 +361,26 @@ class QueryCache:
         query: QueryDefinition,
         result: QueryResult,
         ttl: int | None = None,
-    ) -> None:
+    ) -> float:
         """Cache a query result.
 
         Args:
             query: Query definition (used for key generation).
             result: Query result to cache.
             ttl: TTL in seconds (uses default if not specified).
+
+        Returns:
+            Unix timestamp when the result was cached.
         """
         key = self.make_key(query)
         effective_ttl = ttl if ttl is not None else self._config.query_ttl
+        cached_at = time.time()
 
         # Check result size
         result_json = result.model_dump_json()
         if len(result_json) > self._config.max_result_size:
             # Skip caching oversized results
-            return
+            return cached_at
 
         # Track tables used in this query for invalidation
         table_names = [t.name for t in query.tables]
@@ -389,7 +389,26 @@ class QueryCache:
                 self._table_keys[table_name] = set()
             self._table_keys[table_name].add(key)
 
+        # Store result and metadata
         await self._backend.set(key, result.model_dump(), effective_ttl)
+        await self._backend.set(
+            f"meta:{key}", {"cached_at": cached_at, "ttl": effective_ttl}, effective_ttl
+        )
+
+        return cached_at
+
+    async def get_cache_metadata(self, query: QueryDefinition) -> dict[str, float | int] | None:
+        """Get cache metadata for a query.
+
+        Args:
+            query: Query definition to look up.
+
+        Returns:
+            Dict with 'cached_at' timestamp and 'ttl', or None if not cached.
+        """
+        key = self.make_key(query)
+        metadata = await self._backend.get(f"meta:{key}")
+        return metadata
 
     async def invalidate_table(self, table_name: str) -> int:
         """Invalidate all cached queries involving a table.
@@ -409,6 +428,8 @@ class QueryCache:
         for key in list(keys_to_invalidate):
             if await self._backend.delete(key):
                 count += 1
+            # Also delete metadata
+            await self._backend.delete(f"meta:{key}")
 
         # Clear the tracking set
         self._table_keys[table_name].clear()
@@ -422,6 +443,8 @@ class QueryCache:
             Number of cache entries invalidated.
         """
         count = await self._backend.clear("query:*")
+        # Also clear all metadata
+        await self._backend.clear("meta:query:*")
         self._table_keys.clear()
         return count
 

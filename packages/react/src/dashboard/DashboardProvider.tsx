@@ -26,11 +26,9 @@ import type { FilterDefinition, QueryDefinition, QueryResult } from '../types';
 export const DashboardContext = createContext<DashboardContextValue | null>(null);
 
 /**
- * Generate a unique ID for tracking purposes.
+ * Default batch size for loading widgets.
  */
-function generateId(): string {
-  return Math.random().toString(36).substring(2, 11);
-}
+const DEFAULT_BATCH_SIZE = 4;
 
 /**
  * Apply dashboard filter values to a widget query.
@@ -205,7 +203,7 @@ function applyCrossFiltersToQuery(
  */
 export function DashboardProvider({
   dashboardId,
-  refreshInterval,
+  batchSize = DEFAULT_BATCH_SIZE,
   children,
 }: DashboardProviderProps): JSX.Element {
   const { client } = useAnalytics();
@@ -223,6 +221,10 @@ export function DashboardProvider({
   const [widgetResults, setWidgetResults] = useState<Record<string, QueryResult>>({});
   const [widgetErrors, setWidgetErrors] = useState<Record<string, Error>>({});
   const [widgetLoading, setWidgetLoading] = useState<Record<string, boolean>>({});
+
+  // Refresh state
+  const [widgetRefreshTimes, setWidgetRefreshTimes] = useState<Record<string, number>>({});
+  const [refreshingWidgets, setRefreshingWidgets] = useState<Set<string>>(new Set());
 
   // Track request IDs to avoid stale updates
   const requestIdRef = useRef<string>('');
@@ -256,20 +258,31 @@ export function DashboardProvider({
 
   /**
    * Execute a single widget query.
+   *
+   * @param widget - Widget to execute query for
+   * @param currentDashboard - Current dashboard
+   * @param currentFilters - Current filter values
+   * @param currentCrossFilters - Current cross-filter values
+   * @param bypassCache - If true, bypass cache and force fresh data
    */
   const executeWidgetQuery = useCallback(
     async (
       widget: Widget,
       currentDashboard: Dashboard,
       currentFilters: FilterValue[],
-      currentCrossFilters: CrossFilter[]
+      currentCrossFilters: CrossFilter[],
+      bypassCache: boolean = false
     ) => {
       if (!widget.query) {
         // Text widgets don't have queries
         return;
       }
 
+      // Mark widget as loading (and refreshing if bypassing cache)
       setWidgetLoading((prev) => ({ ...prev, [widget.id]: true }));
+      if (bypassCache) {
+        setRefreshingWidgets((prev) => new Set(prev).add(widget.id));
+      }
       setWidgetErrors((prev) => {
         const next = { ...prev };
         delete next[widget.id];
@@ -287,8 +300,12 @@ export function DashboardProvider({
         // Apply cross-filters from other widgets
         query = applyCrossFiltersToQuery(query, currentCrossFilters, widget.id);
 
-        const result = await client.executeQuery(query);
+        const result = await client.executeQuery(query, bypassCache);
         setWidgetResults((prev) => ({ ...prev, [widget.id]: result }));
+
+        // Update refresh time from cache metadata or current time
+        const refreshTime = result.cached_at ?? Date.now() / 1000;
+        setWidgetRefreshTimes((prev) => ({ ...prev, [widget.id]: refreshTime }));
       } catch (err) {
         setWidgetErrors((prev) => ({
           ...prev,
@@ -296,13 +313,56 @@ export function DashboardProvider({
         }));
       } finally {
         setWidgetLoading((prev) => ({ ...prev, [widget.id]: false }));
+        if (bypassCache) {
+          setRefreshingWidgets((prev) => {
+            const next = new Set(prev);
+            next.delete(widget.id);
+            return next;
+          });
+        }
       }
     },
     [client]
   );
 
   /**
-   * Execute all widget queries.
+   * Execute widget queries in batches.
+   */
+  const executeWidgetsInBatches = useCallback(
+    async (
+      widgets: Widget[],
+      currentDashboard: Dashboard,
+      currentFilters: FilterValue[],
+      currentCrossFilters: CrossFilter[],
+      bypassCache: boolean = false,
+      currentBatchSize: number = batchSize
+    ) => {
+      // Filter to widgets that have queries
+      const widgetsWithQueries = widgets.filter((w) => w.query !== null);
+
+      // Process in batches
+      for (let i = 0; i < widgetsWithQueries.length; i += currentBatchSize) {
+        const batch = widgetsWithQueries.slice(i, i + currentBatchSize);
+
+        // Execute batch in parallel
+        await Promise.all(
+          batch.map((widget) =>
+            executeWidgetQuery(
+              widget,
+              currentDashboard,
+              currentFilters,
+              currentCrossFilters,
+              bypassCache
+            )
+          )
+        );
+      }
+    },
+    [batchSize, executeWidgetQuery]
+  );
+
+  /**
+   * Execute all widget queries (initial load, uses batching).
    */
   const executeAllWidgets = useCallback(
     async (
@@ -310,30 +370,57 @@ export function DashboardProvider({
       currentFilters: FilterValue[],
       currentCrossFilters: CrossFilter[]
     ) => {
-      const requestId = generateId();
+      const requestId = Math.random().toString(36).substring(2, 11);
       requestIdRef.current = requestId;
 
-      // Execute all queries in parallel
-      await Promise.all(
-        currentDashboard.widgets.map((widget) =>
-          executeWidgetQuery(widget, currentDashboard, currentFilters, currentCrossFilters)
-        )
+      await executeWidgetsInBatches(
+        currentDashboard.widgets,
+        currentDashboard,
+        currentFilters,
+        currentCrossFilters,
+        false // Don't bypass cache on initial load
       );
     },
-    [executeWidgetQuery]
+    [executeWidgetsInBatches]
   );
 
   /**
-   * Refresh the entire dashboard.
+   * Refresh the entire dashboard (legacy method, calls refreshAll).
    */
   const refreshDashboard = useCallback(async () => {
     if (!dashboard) return;
     const crossFilters = crossFilterContext?.filters ?? [];
-    await executeAllWidgets(dashboard, filterValues, crossFilters);
-  }, [dashboard, filterValues, executeAllWidgets, crossFilterContext?.filters]);
+    await executeWidgetsInBatches(
+      dashboard.widgets,
+      dashboard,
+      filterValues,
+      crossFilters,
+      true, // Bypass cache
+      batchSize
+    );
+  }, [dashboard, filterValues, executeWidgetsInBatches, crossFilterContext?.filters, batchSize]);
 
   /**
-   * Refresh a single widget.
+   * Refresh all widgets with configurable batch size (bypasses cache).
+   */
+  const refreshAll = useCallback(
+    async (customBatchSize?: number) => {
+      if (!dashboard) return;
+      const crossFilters = crossFilterContext?.filters ?? [];
+      await executeWidgetsInBatches(
+        dashboard.widgets,
+        dashboard,
+        filterValues,
+        crossFilters,
+        true, // Bypass cache
+        customBatchSize ?? batchSize
+      );
+    },
+    [dashboard, filterValues, executeWidgetsInBatches, crossFilterContext?.filters, batchSize]
+  );
+
+  /**
+   * Refresh a single widget (bypasses cache).
    */
   const refreshWidget = useCallback(
     async (widgetId: string) => {
@@ -343,10 +430,25 @@ export function DashboardProvider({
       if (!widget) return;
 
       const crossFilters = crossFilterContext?.filters ?? [];
-      await executeWidgetQuery(widget, dashboard, filterValues, crossFilters);
+      await executeWidgetQuery(
+        widget,
+        dashboard,
+        filterValues,
+        crossFilters,
+        true // Bypass cache
+      );
     },
     [dashboard, filterValues, executeWidgetQuery, crossFilterContext?.filters]
   );
+
+  /**
+   * Get the oldest widget refresh timestamp.
+   */
+  const getOldestRefreshTime = useCallback((): number | null => {
+    const times = Object.values(widgetRefreshTimes);
+    if (times.length === 0) return null;
+    return Math.min(...times);
+  }, [widgetRefreshTimes]);
 
   /**
    * Set a filter value.
@@ -378,17 +480,6 @@ export function DashboardProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dashboard, filterValues, isLoading, executeAllWidgets, JSON.stringify(crossFilters)]);
 
-  // Auto-refresh interval
-  useEffect(() => {
-    if (!refreshInterval || !dashboard) return;
-
-    const intervalId = setInterval(() => {
-      refreshDashboard();
-    }, refreshInterval);
-
-    return () => clearInterval(intervalId);
-  }, [refreshInterval, dashboard, refreshDashboard]);
-
   // Context value
   const contextValue = useMemo<DashboardContextValue>(
     () => ({
@@ -399,9 +490,13 @@ export function DashboardProvider({
       widgetResults,
       widgetErrors,
       widgetLoading,
+      widgetRefreshTimes,
+      refreshingWidgets,
       setFilterValue,
       refreshDashboard,
       refreshWidget,
+      refreshAll,
+      getOldestRefreshTime,
     }),
     [
       dashboard,
@@ -411,9 +506,13 @@ export function DashboardProvider({
       widgetResults,
       widgetErrors,
       widgetLoading,
+      widgetRefreshTimes,
+      refreshingWidgets,
       setFilterValue,
       refreshDashboard,
       refreshWidget,
+      refreshAll,
+      getOldestRefreshTime,
     ]
   );
 

@@ -16,6 +16,9 @@ import type { WidgetProps } from '../types';
  *   widget={widget}
  *   result={queryResult}
  *   isLoading={false}
+ *   lastRefreshed={1706123456}
+ *   isRefreshing={false}
+ *   onRefresh={() => refreshWidget(widget.id)}
  * />
  * ```
  */
@@ -25,6 +28,9 @@ export function Widget({
   isLoading = false,
   error,
   className = '',
+  lastRefreshed,
+  isRefreshing = false,
+  onRefresh,
 }: WidgetProps): JSX.Element {
   const { theme } = useTheme();
 
@@ -41,12 +47,16 @@ export function Widget({
       <WidgetHeader
         title={widget.title}
         hyperlink={widget.hyperlink}
+        lastRefreshed={lastRefreshed}
+        isRefreshing={isRefreshing}
+        onRefresh={onRefresh}
       />
       <WidgetContent
         widget={widget}
         result={result}
         isLoading={isLoading}
         error={error}
+        isRefreshing={isRefreshing}
       />
     </div>
   );

@@ -23,7 +23,11 @@ export type {
 } from './accessibility';
 
 // Date formatting
-export { createDateFormatter, createDateFormatters } from './dateFormat';
+export {
+  createDateFormatter,
+  createDateFormatters,
+  formatRelativeTime,
+} from './dateFormat';
 
 // Pivot transformations
 export { pivotQueryResult } from './pivot';

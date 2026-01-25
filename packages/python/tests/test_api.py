@@ -72,6 +72,10 @@ def mock_engine(sample_schema: DatabaseSchema) -> MagicMock:
     # This prevents the health check from trying to check a mock cache
     engine.cache = None
 
+    # Explicitly set _query_cache to None to avoid MagicMock auto-attribute creation
+    # This prevents the execute_query endpoint from trying to access cache metadata
+    engine._query_cache = None
+
     # Mock async methods
     async def get_schema() -> DatabaseSchema:
         return sample_schema
@@ -82,7 +86,7 @@ def mock_engine(sample_schema: DatabaseSchema) -> MagicMock:
             raise TableNotFoundError(table_name)
         return table
 
-    async def execute_query(query: QueryDefinition) -> QueryResult:
+    async def execute_query(query: QueryDefinition, use_cache: bool = True) -> QueryResult:
         return QueryResult(
             columns=["id", "email"],
             column_types=["integer", "text"],
@@ -437,7 +441,7 @@ class TestExecuteQuery:
             "columns": [{"table_id": "t1", "column": "email"}],
         }
 
-        response = client.post("/api/analytics/query/execute", json=query)
+        response = client.post("/api/analytics/query/execute", json={"query": query})
 
         assert response.status_code == 200
         data = response.json()
@@ -445,13 +449,35 @@ class TestExecuteQuery:
         assert "rows" in data
         assert "row_count" in data
         assert "execution_time_ms" in data
+        # New cache metadata fields
+        assert "cached_at" in data
+        assert "is_from_cache" in data
+
+    def test_execute_query_with_bypass_cache(self, client: TestClient) -> None:
+        """Test that bypass_cache parameter works."""
+        query = {
+            "tables": [{"id": "t1", "name": "users"}],
+            "columns": [{"table_id": "t1", "column": "email"}],
+        }
+
+        response = client.post(
+            "/api/analytics/query/execute",
+            json={"query": query, "bypass_cache": True},
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "columns" in data
+        assert "is_from_cache" in data
+        # When bypass_cache is True, is_from_cache should be False
+        assert data["is_from_cache"] is False
 
     def test_execute_query_validation_error(
         self, client: TestClient, mock_engine: MagicMock
     ) -> None:
         """Test that validation errors return 400."""
 
-        async def raise_validation_error(query: Any) -> None:
+        async def raise_validation_error(query: Any, use_cache: bool = True) -> None:
             raise QueryValidationError("Invalid query", errors=["Table not found"])
 
         mock_engine.execute_query = raise_validation_error
@@ -461,7 +487,7 @@ class TestExecuteQuery:
             "columns": [{"table_id": "t1", "column": "email"}],
         }
 
-        response = client.post("/api/analytics/query/execute", json=query)
+        response = client.post("/api/analytics/query/execute", json={"query": query})
 
         assert response.status_code == 400
 
@@ -547,7 +573,7 @@ class TestErrorResponses:
     ) -> None:
         """Test that validation errors include errors list."""
 
-        async def raise_validation_error(query: Any) -> None:
+        async def raise_validation_error(query: Any, use_cache: bool = True) -> None:
             raise QueryValidationError("Validation failed", errors=["Error 1", "Error 2"])
 
         mock_engine.execute_query = raise_validation_error
@@ -557,7 +583,7 @@ class TestErrorResponses:
             "columns": [{"table_id": "t1", "column": "email"}],
         }
 
-        response = client.post("/api/analytics/query/execute", json=query)
+        response = client.post("/api/analytics/query/execute", json={"query": query})
 
         assert response.status_code == 400
         data = response.json()

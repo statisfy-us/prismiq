@@ -257,6 +257,10 @@ export interface QueryResult {
   truncated: boolean;
   /** Query execution time in milliseconds. */
   execution_time_ms: number;
+  /** Unix timestamp when result was cached (undefined if not from cache). */
+  cached_at?: number;
+  /** Whether this result came from cache. */
+  is_from_cache?: boolean;
 }
 
 // ============================================================================

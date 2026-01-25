@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 
 import pytest
 
@@ -492,6 +493,200 @@ class TestQueryCacheMultiTableQueries:
 
 
 # ============================================================================
+# QueryCache Metadata Tests
+# ============================================================================
+
+
+class TestQueryCacheMetadata:
+    """Tests for cache metadata retrieval."""
+
+    @pytest.fixture
+    def cache(self) -> QueryCache:
+        """Create a query cache with in-memory backend."""
+        return QueryCache(InMemoryCache())
+
+    @pytest.fixture
+    def sample_query(self) -> QueryDefinition:
+        """Create a sample query definition."""
+        return QueryDefinition(
+            tables=[QueryTable(id="t1", name="users")],
+            columns=[ColumnSelection(table_id="t1", column="name")],
+        )
+
+    @pytest.fixture
+    def sample_result(self) -> QueryResult:
+        """Create a sample query result."""
+        return QueryResult(
+            columns=["name"],
+            column_types=["text"],
+            rows=[["Alice"], ["Bob"]],
+            row_count=2,
+            execution_time_ms=10.0,
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_cache_metadata_returns_none_for_uncached(
+        self, cache: QueryCache, sample_query: QueryDefinition
+    ) -> None:
+        """Metadata returns None for queries that have not been cached."""
+        metadata = await cache.get_cache_metadata(sample_query)
+        assert metadata is None
+
+    @pytest.mark.asyncio
+    async def test_get_cache_metadata_returns_data_after_caching(
+        self,
+        cache: QueryCache,
+        sample_query: QueryDefinition,
+        sample_result: QueryResult,
+    ) -> None:
+        """Metadata contains cached_at and ttl after caching."""
+        await cache.cache_result(sample_query, sample_result)
+        metadata = await cache.get_cache_metadata(sample_query)
+
+        assert metadata is not None
+        assert "cached_at" in metadata
+        assert "ttl" in metadata
+        assert isinstance(metadata["cached_at"], float)
+        assert isinstance(metadata["ttl"], int)
+
+    @pytest.mark.asyncio
+    async def test_cache_result_returns_timestamp(
+        self,
+        cache: QueryCache,
+        sample_query: QueryDefinition,
+        sample_result: QueryResult,
+    ) -> None:
+        """cache_result returns the cached_at timestamp."""
+        before = time.time()
+        cached_at = await cache.cache_result(sample_query, sample_result)
+        after = time.time()
+
+        assert before <= cached_at <= after
+
+    @pytest.mark.asyncio
+    async def test_cache_result_returns_timestamp_for_oversized_result(
+        self, cache: QueryCache, sample_query: QueryDefinition
+    ) -> None:
+        """cache_result returns timestamp even when result is too large to cache."""
+        # Create a cache with a very small max_result_size
+        small_cache = QueryCache(
+            InMemoryCache(),
+            config=CacheConfig(max_result_size=10),  # Very small limit
+        )
+
+        # Create a result that exceeds the limit
+        large_result = QueryResult(
+            columns=["name"],
+            column_types=["text"],
+            rows=[["A very long string that exceeds the limit"] * 100],
+            row_count=100,
+            execution_time_ms=10.0,
+        )
+
+        before = time.time()
+        cached_at = await small_cache.cache_result(sample_query, large_result)
+        after = time.time()
+
+        # Should still return a timestamp
+        assert before <= cached_at <= after
+
+        # But the result should NOT be cached
+        result = await small_cache.get_result(sample_query)
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_metadata_timestamp_matches_cache_result_return(
+        self,
+        cache: QueryCache,
+        sample_query: QueryDefinition,
+        sample_result: QueryResult,
+    ) -> None:
+        """Metadata cached_at matches the value returned by cache_result."""
+        returned_timestamp = await cache.cache_result(sample_query, sample_result)
+        metadata = await cache.get_cache_metadata(sample_query)
+
+        assert metadata is not None
+        assert metadata["cached_at"] == returned_timestamp
+
+    @pytest.mark.asyncio
+    async def test_metadata_contains_correct_ttl(
+        self,
+        sample_query: QueryDefinition,
+        sample_result: QueryResult,
+    ) -> None:
+        """Metadata ttl matches the configured query_ttl."""
+        custom_ttl = 600  # 10 minutes
+        cache = QueryCache(
+            InMemoryCache(),
+            config=CacheConfig(query_ttl=custom_ttl),
+        )
+
+        await cache.cache_result(sample_query, sample_result)
+        metadata = await cache.get_cache_metadata(sample_query)
+
+        assert metadata is not None
+        assert metadata["ttl"] == custom_ttl
+
+    @pytest.mark.asyncio
+    async def test_metadata_with_custom_ttl_override(
+        self,
+        cache: QueryCache,
+        sample_query: QueryDefinition,
+        sample_result: QueryResult,
+    ) -> None:
+        """Metadata ttl matches custom ttl when provided to cache_result."""
+        custom_ttl = 120  # 2 minutes
+
+        await cache.cache_result(sample_query, sample_result, ttl=custom_ttl)
+        metadata = await cache.get_cache_metadata(sample_query)
+
+        assert metadata is not None
+        assert metadata["ttl"] == custom_ttl
+
+    @pytest.mark.asyncio
+    async def test_metadata_cleared_after_invalidate_table(
+        self,
+        cache: QueryCache,
+        sample_query: QueryDefinition,
+        sample_result: QueryResult,
+    ) -> None:
+        """Metadata is removed when table is invalidated."""
+        await cache.cache_result(sample_query, sample_result)
+
+        # Verify metadata exists before invalidation
+        metadata = await cache.get_cache_metadata(sample_query)
+        assert metadata is not None
+
+        # Invalidate the table
+        await cache.invalidate_table("users")
+
+        # Metadata should now be None
+        metadata = await cache.get_cache_metadata(sample_query)
+        assert metadata is None
+
+    @pytest.mark.asyncio
+    async def test_metadata_cleared_after_invalidate_all(
+        self,
+        cache: QueryCache,
+        sample_query: QueryDefinition,
+        sample_result: QueryResult,
+    ) -> None:
+        """Metadata is removed when all queries are invalidated."""
+        await cache.cache_result(sample_query, sample_result)
+
+        # Verify metadata exists before invalidation
+        metadata = await cache.get_cache_metadata(sample_query)
+        assert metadata is not None
+
+        # Invalidate all
+        await cache.invalidate_all()
+
+        # Metadata should now be None
+        metadata = await cache.get_cache_metadata(sample_query)
+        assert metadata is None
+
+
+# ============================================================================
 # SchemaCache Tests
 # ============================================================================
 
@@ -566,9 +761,9 @@ class TestCacheConfig:
         """Config has sensible defaults."""
         config = CacheConfig()
 
-        assert config.default_ttl == 300  # 5 minutes
+        assert config.default_ttl == 86400  # 24 hours
         assert config.schema_ttl == 3600  # 1 hour
-        assert config.query_ttl == 300  # 5 minutes
+        assert config.query_ttl == 86400  # 24 hours
         assert config.max_result_size == 1_000_000
 
     def test_custom_values(self) -> None:
