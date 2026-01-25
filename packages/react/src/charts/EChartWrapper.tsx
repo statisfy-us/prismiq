@@ -124,7 +124,7 @@ export function EChartWrapper({
         ref={chartRef}
         echarts={echarts}
         option={themedOption}
-        notMerge={true}
+        notMerge={false}
         lazyUpdate={true}
         theme={effectiveTheme === 'dark' ? 'dark' : undefined}
         onEvents={onEvents}
