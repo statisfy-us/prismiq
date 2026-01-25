@@ -299,6 +299,9 @@ class DashboardUpdate(BaseModel):
     allowed_viewers: list[str] | None = None
     """New list of allowed viewers."""
 
+    widgets: list[Widget] | None = None
+    """Full list of widgets to replace existing widgets."""
+
 
 class WidgetCreate(BaseModel):
     """DTO for creating a widget."""

@@ -79,10 +79,10 @@ function getDefaultConfig(type: WidgetType): WidgetConfig {
 }
 
 /**
- * Generate a unique ID.
+ * Generate a unique ID (UUID v4).
  */
 function generateId(): string {
-  return `widget_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  return crypto.randomUUID();
 }
 
 // ============================================================================

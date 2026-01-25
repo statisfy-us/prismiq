@@ -20,10 +20,10 @@ import type {
 import type { QueryResult } from '../../types';
 
 /**
- * Generate a unique ID for new widgets.
+ * Generate a unique ID (UUID v4).
  */
 function generateId(): string {
-  return `widget_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  return crypto.randomUUID();
 }
 
 /**
@@ -210,7 +210,7 @@ export function DashboardEditor({
     setIsSaving(true);
     try {
       if (dashboardId) {
-        await client.put(`/dashboards/${dashboardId}`, dashboard);
+        await client.patch(`/dashboards/${dashboardId}`, dashboard);
       } else {
         await client.post('/dashboards', dashboard);
       }

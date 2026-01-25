@@ -200,6 +200,20 @@ export class PrismiqClient {
   }
 
   /**
+   * Make a PATCH request to the API.
+   *
+   * @param path - API path (starting with /)
+   * @param body - Request body (will be JSON stringified)
+   * @returns Response data
+   */
+  async patch<T>(path: string, body?: unknown): Promise<T> {
+    return this.request<T>(path, {
+      method: 'PATCH',
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  }
+
+  /**
    * Make a DELETE request to the API.
    *
    * @param path - API path (starting with /)

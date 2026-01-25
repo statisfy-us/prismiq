@@ -223,22 +223,46 @@ class PostgresDashboardStore:
             params.append(update.allowed_viewers)
             param_num += 1
 
-        if not updates:
-            # No updates provided, just return current dashboard
-            return await self.get_dashboard(dashboard_id, tenant_id)
-
-        # Add dashboard_id and tenant_id as final params
-        params.extend([uuid.UUID(dashboard_id), tenant_id])
-
-        # Column names in `updates` are hardcoded above, not user input
-        query = f"""
-            UPDATE prismiq_dashboards
-            SET {", ".join(updates)}
-            WHERE id = ${param_num} AND tenant_id = ${param_num + 1}
-            RETURNING *
-        """  # noqa: S608
-
         async with self._pool.acquire() as conn:
+            # Handle widgets update if provided (replace all widgets)
+            if update.widgets is not None:
+                # Delete existing widgets
+                await conn.execute(
+                    "DELETE FROM prismiq_widgets WHERE dashboard_id = $1",
+                    uuid.UUID(dashboard_id),
+                )
+                # Insert new widgets
+                for widget in update.widgets:
+                    await conn.execute(
+                        """
+                        INSERT INTO prismiq_widgets (
+                            id, dashboard_id, title, type, query, config, position
+                        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+                        """,
+                        uuid.UUID(widget.id),
+                        uuid.UUID(dashboard_id),
+                        widget.title,
+                        widget.type.value,
+                        json.dumps(widget.query.model_dump()) if widget.query else None,
+                        json.dumps(widget.config.model_dump()) if widget.config else None,
+                        json.dumps(widget.position.model_dump()) if widget.position else None,
+                    )
+
+            if not updates:
+                # No dashboard metadata updates, just return current dashboard
+                return await self.get_dashboard(dashboard_id, tenant_id)
+
+            # Add dashboard_id and tenant_id as final params
+            params.extend([uuid.UUID(dashboard_id), tenant_id])
+
+            # Column names in `updates` are hardcoded above, not user input
+            query = f"""
+                UPDATE prismiq_dashboards
+                SET {", ".join(updates)}
+                WHERE id = ${param_num} AND tenant_id = ${param_num + 1}
+                RETURNING *
+            """  # noqa: S608
+
             row = await conn.fetchrow(query, *params)
             if not row:
                 return None
