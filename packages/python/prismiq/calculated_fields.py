@@ -559,10 +559,7 @@ def has_aggregation(expression: str) -> bool:
         "[min of ",
         "[max of ",
     ]
-    if any(pattern in expr_lower for pattern in revealbi_agg_patterns):
-        return True
-
-    return False
+    return any(pattern in expr_lower for pattern in revealbi_agg_patterns)
 
 
 def resolve_calculated_fields(

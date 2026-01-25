@@ -28,6 +28,9 @@ def mock_pool() -> MagicMock:
     mock_context.__aexit__.return_value = None
     pool.acquire.return_value = mock_context
 
+    # Mock fetchrow for row count queries (returns a record with row_count)
+    mock_connection.fetchrow.return_value = make_record({"row_count": 100})
+
     return pool
 
 
