@@ -75,10 +75,13 @@ function getDefaultPosition(
  * />
  * ```
  */
+const DEFAULT_BATCH_SIZE = 4;
+
 export function DashboardEditor({
   dashboardId,
   onSave,
   onCancel,
+  batchSize = DEFAULT_BATCH_SIZE,
   className = '',
 }: DashboardEditorProps): JSX.Element {
   const { theme } = useTheme();
@@ -141,11 +144,9 @@ export function DashboardEditor({
         // Execute queries for widgets in batches to reduce server load
         const widgetsWithQueries = data.widgets.filter((w) => w.query);
         if (widgetsWithQueries.length > 0) {
-          const BATCH_SIZE = 4;
-
           // Process widgets in batches
-          for (let i = 0; i < widgetsWithQueries.length; i += BATCH_SIZE) {
-            const batch = widgetsWithQueries.slice(i, i + BATCH_SIZE);
+          for (let i = 0; i < widgetsWithQueries.length; i += batchSize) {
+            const batch = widgetsWithQueries.slice(i, i + batchSize);
 
             // Set batch to loading
             setWidgetLoading((prev) => {
@@ -162,9 +163,10 @@ export function DashboardEditor({
                   setWidgetResults((prev) => ({ ...prev, [widget.id]: result }));
                   setWidgetRefreshTimes((prev) => ({ ...prev, [widget.id]: Math.floor(Date.now() / 1000) }));
                 } catch (err) {
+                  const errorMessage = err instanceof Error ? err.message : 'Query failed';
                   setWidgetErrors((prev) => ({
                     ...prev,
-                    [widget.id]: err instanceof Error ? err : new Error('Query failed'),
+                    [widget.id]: new Error(`${widget.title}: ${errorMessage}`),
                   }));
                 } finally {
                   setWidgetLoading((prev) => ({ ...prev, [widget.id]: false }));
@@ -275,8 +277,12 @@ export function DashboardEditor({
         setDashboard(savedDashboard);
         isInitialLayoutRef.current = true;
         onSave?.(savedDashboard);
-      } catch {
+      } catch (reloadErr) {
         // Reload failed but save succeeded - use local state
+        console.warn(
+          '[DashboardEditor] Failed to reload dashboard after save. Using local state.',
+          reloadErr instanceof Error ? reloadErr.message : reloadErr
+        );
         onSave?.(dashboard);
       }
       setIsDirty(false);
