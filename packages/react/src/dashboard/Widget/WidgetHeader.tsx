@@ -99,7 +99,7 @@ export function WidgetHeader({
             title={isRefreshing ? 'Refreshing...' : 'Refresh widget'}
           >
             <Icon
-              name="refresh"
+              name="sync"
               size={16}
               className={isRefreshing ? 'prismiq-spin' : undefined}
             />
