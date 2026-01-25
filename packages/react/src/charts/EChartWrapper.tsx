@@ -57,9 +57,24 @@ export function EChartWrapper({
 }: EChartWrapperProps): JSX.Element {
   const { theme, resolvedMode } = useTheme();
   const chartRef = useRef<ReactEChartsCore>(null);
+  const prevOptionRef = useRef<string>('');
 
   // Apply Prismiq theme to the chart option
   const themedOption = applyThemeToOption(option, theme);
+
+  // Only update chart when option actually changes
+  // This prevents tooltip flickering caused by React re-renders with same data
+  const shouldSetOption = useCallback(
+    (_prevProps: { option: Record<string, unknown> }, props: { option: Record<string, unknown> }) => {
+      const newOptionString = JSON.stringify(props.option);
+      if (prevOptionRef.current === newOptionString) {
+        return false; // Don't update - option hasn't changed
+      }
+      prevOptionRef.current = newOptionString;
+      return true; // Update - option has changed
+    },
+    []
+  );
 
   // Determine which theme to use
   const effectiveTheme = themeOverride || resolvedMode;
@@ -126,6 +141,7 @@ export function EChartWrapper({
         option={themedOption}
         notMerge={false}
         lazyUpdate={true}
+        shouldSetOption={shouldSetOption}
         theme={effectiveTheme === 'dark' ? 'dark' : undefined}
         onEvents={onEvents}
         style={{ width: '100%', height: '100%' }}

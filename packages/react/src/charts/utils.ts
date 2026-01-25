@@ -346,6 +346,9 @@ export function applyThemeToOption(
 
   return {
     ...option,
+    // Disable animations to prevent sizing issues with notMerge=false
+    // Charts will still look good but won't animate on data changes
+    animation: false,
     color: option.color || chartTheme.color,
     backgroundColor: chartTheme.backgroundColor,
     textStyle: {

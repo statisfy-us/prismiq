@@ -55,7 +55,8 @@ export function PieChart({
 }: PieChartProps): JSX.Element {
   const { theme } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState<number>(400);
+  // Start with 0 to indicate "not measured yet"
+  const [containerWidth, setContainerWidth] = useState<number>(0);
 
   // Measure container width on mount and resize
   useEffect(() => {
@@ -270,10 +271,9 @@ export function PieChart({
               shadowOffsetX: 0,
               shadowColor: 'rgba(0, 0, 0, 0.2)',
             },
+            // Disable emphasis label to avoid conflict with legend and tooltip
             label: {
-              show: true,
-              fontSize: 14,
-              fontWeight: 'bold',
+              show: false,
             },
           },
           // Enable cursor pointer when cross-filter is enabled
@@ -352,6 +352,14 @@ export function PieChart({
       >
         Error loading chart: {error.message}
       </div>
+    );
+  }
+
+  // Don't render chart until we have measured the container width
+  // This prevents the chart from rendering with wrong dimensions and then animating to correct size
+  if (containerWidth === 0) {
+    return (
+      <div ref={containerRef} style={{ height, width }} className={className} />
     );
   }
 
