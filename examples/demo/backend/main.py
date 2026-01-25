@@ -23,18 +23,20 @@ from fastapi.middleware.cors import CORSMiddleware
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../packages/python"))
 
 from prismiq import PrismiqEngine, create_router
+from prismiq.cache import RedisCache
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
 # Global engine
 engine: PrismiqEngine | None = None
+redis_cache: RedisCache | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan context manager."""
-    global engine
+    global engine, redis_cache
 
     # Startup
     database_url = os.getenv("DATABASE_URL")
@@ -45,12 +47,23 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
         sys.exit(1)
 
+    # Initialize Redis cache if available
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    try:
+        redis_cache = RedisCache(redis_url)
+        await redis_cache.connect()
+        print(f"Redis cache connected: {redis_url}")
+    except Exception as e:
+        print(f"Redis not available, running without cache: {e}")
+        redis_cache = None
+
     print("Connecting to database...")
     engine = PrismiqEngine(
         database_url=database_url,
         query_timeout=30.0,
         max_rows=10000,
         persist_dashboards=True,  # Use PostgreSQL for dashboard persistence
+        cache=redis_cache,  # Use Redis for caching (query=24h, schema=1h by default)
     )
     await engine.startup()
     print("Database connected!")
@@ -65,6 +78,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if engine:
         await engine.shutdown()
         print("Database connection closed.")
+    if redis_cache:
+        await redis_cache.disconnect()
+        print("Redis cache disconnected.")
 
 
 # Create FastAPI application

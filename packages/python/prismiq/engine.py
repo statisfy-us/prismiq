@@ -85,7 +85,8 @@ class PrismiqEngine:
         >>> engine = PrismiqEngine(
         ...     database_url="postgresql://...",
         ...     cache=cache,
-        ...     cache_ttl=300,  # 5 minutes
+        ...     query_cache_ttl=86400,  # 24 hours (default)
+        ...     schema_cache_ttl=3600,  # 1 hour (default)
         ... )
     """
 
@@ -98,7 +99,8 @@ class PrismiqEngine:
         schema_name: str = "public",
         schema_config: SchemaConfig | None = None,
         cache: CacheBackend | None = None,
-        cache_ttl: int = 300,
+        query_cache_ttl: int | None = None,
+        schema_cache_ttl: int | None = None,
         enable_metrics: bool = True,
         persist_dashboards: bool = False,
     ) -> None:
@@ -112,7 +114,8 @@ class PrismiqEngine:
             schema_name: PostgreSQL schema to use (default: "public").
             schema_config: Initial schema configuration for display names, hidden items, etc.
             cache: Optional cache backend for query result caching.
-            cache_ttl: Default cache TTL in seconds (default: 300).
+            query_cache_ttl: TTL for query result cache in seconds (default: 86400 = 24 hours).
+            schema_cache_ttl: TTL for schema cache in seconds (default: 3600 = 1 hour).
             enable_metrics: Whether to record Prometheus metrics (default: True).
             persist_dashboards: Store dashboards in PostgreSQL (default: False uses in-memory).
         """
@@ -121,7 +124,8 @@ class PrismiqEngine:
         self._query_timeout = query_timeout
         self._max_rows = max_rows
         self._schema_name = schema_name
-        self._cache_ttl = cache_ttl
+        self._query_cache_ttl = query_cache_ttl
+        self._schema_cache_ttl = schema_cache_ttl
         self._enable_metrics = enable_metrics
         self._persist_dashboards = persist_dashboards
 
@@ -132,11 +136,14 @@ class PrismiqEngine:
         self._cache: CacheBackend | None = cache
         self._query_cache: QueryCache | None = None
         if cache:
-            cache_config = CacheConfig(
-                default_ttl=cache_ttl,
-                query_ttl=cache_ttl,
-                schema_ttl=cache_ttl * 12,  # Schema cache lasts 12x longer
-            )
+            # Build CacheConfig with provided TTLs or use defaults
+            config_kwargs: dict[str, int] = {}
+            if query_cache_ttl is not None:
+                config_kwargs["query_ttl"] = query_cache_ttl
+                config_kwargs["default_ttl"] = query_cache_ttl
+            if schema_cache_ttl is not None:
+                config_kwargs["schema_ttl"] = schema_cache_ttl
+            cache_config = CacheConfig(**config_kwargs)
             self._query_cache = QueryCache(cache, config=cache_config)
 
         # These will be initialized in startup()
@@ -205,13 +212,14 @@ class PrismiqEngine:
         )
 
         # Create schema introspector with optional caching
-        self._introspector = SchemaIntrospector(
-            self._pool,
-            exposed_tables=self._exposed_tables,
-            schema_name=self._schema_name,
-            cache=self._cache,
-            cache_ttl=self._cache_ttl,
-        )
+        introspector_kwargs: dict[str, Any] = {
+            "exposed_tables": self._exposed_tables,
+            "schema_name": self._schema_name,
+            "cache": self._cache,
+        }
+        if self._schema_cache_ttl is not None:
+            introspector_kwargs["cache_ttl"] = self._schema_cache_ttl
+        self._introspector = SchemaIntrospector(self._pool, **introspector_kwargs)
 
         # Introspect schema
         self._schema = await self._introspector.get_schema()
