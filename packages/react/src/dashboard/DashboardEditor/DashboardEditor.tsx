@@ -103,7 +103,7 @@ export function DashboardEditor({
 
   const [isLoading, setIsLoading] = useState(!!dashboardId);
   const [isSaving, setIsSaving] = useState(false);
-  const [, setError] = useState<Error | null>(null);
+  const [error, setError] = useState<Error | null>(null);
 
   // Widget results (for preview)
   const [widgetResults, setWidgetResults] = useState<
@@ -130,25 +130,38 @@ export function DashboardEditor({
     const loadDashboard = async () => {
       try {
         setIsLoading(true);
+        setError(null);
         const data = await client.get<Dashboard>(`/dashboards/${dashboardId}`);
         setDashboard(data);
+        setIsDirty(false);
+        isInitialLayoutRef.current = true;
 
-        // Execute queries for all widgets with data
-        for (const widget of data.widgets) {
-          if (widget.query) {
-            setWidgetLoading((prev) => ({ ...prev, [widget.id]: true }));
-            try {
-              const result = await client.executeQuery(widget.query);
-              setWidgetResults((prev) => ({ ...prev, [widget.id]: result }));
-            } catch (err) {
-              setWidgetErrors((prev) => ({
-                ...prev,
-                [widget.id]: err instanceof Error ? err : new Error('Query failed'),
-              }));
-            } finally {
-              setWidgetLoading((prev) => ({ ...prev, [widget.id]: false }));
-            }
-          }
+        // Execute queries for all widgets in parallel
+        const widgetsWithQueries = data.widgets.filter((w) => w.query);
+        if (widgetsWithQueries.length > 0) {
+          // Set all to loading
+          setWidgetLoading((prev) => {
+            const next = { ...prev };
+            widgetsWithQueries.forEach((w) => { next[w.id] = true; });
+            return next;
+          });
+
+          // Execute all queries in parallel
+          await Promise.all(
+            widgetsWithQueries.map(async (widget) => {
+              try {
+                const result = await client.executeQuery(widget.query!);
+                setWidgetResults((prev) => ({ ...prev, [widget.id]: result }));
+              } catch (err) {
+                setWidgetErrors((prev) => ({
+                  ...prev,
+                  [widget.id]: err instanceof Error ? err : new Error('Query failed'),
+                }));
+              } finally {
+                setWidgetLoading((prev) => ({ ...prev, [widget.id]: false }));
+              }
+            })
+          );
         }
       } catch (err) {
         setError(err instanceof Error ? err : new Error('Failed to load dashboard'));
@@ -201,6 +214,7 @@ export function DashboardEditor({
         w.id === widgetId ? { ...w, ...updates } : w
       ),
     }));
+    setIsDirty(true);
   }, []);
 
   // Handle layout changes
@@ -229,6 +243,7 @@ export function DashboardEditor({
     if (!client) return;
 
     setIsSaving(true);
+    setError(null);
     try {
       const id = dashboardId || dashboard.id;
       if (dashboardId) {
@@ -236,11 +251,18 @@ export function DashboardEditor({
       } else {
         await client.post('/dashboards', dashboard);
       }
-      // Reload from server to get canonical state
-      const savedDashboard = await client.get<Dashboard>(`/dashboards/${id}`);
-      setDashboard(savedDashboard);
-      setIsDirty(false); // Reset dirty flag after successful save
-      onSave?.(savedDashboard);
+
+      // Reload from server to get canonical state (separate try-catch)
+      try {
+        const savedDashboard = await client.get<Dashboard>(`/dashboards/${id}`);
+        setDashboard(savedDashboard);
+        isInitialLayoutRef.current = true;
+        onSave?.(savedDashboard);
+      } catch {
+        // Reload failed but save succeeded - use local state
+        onSave?.(dashboard);
+      }
+      setIsDirty(false);
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to save dashboard'));
     } finally {
@@ -322,6 +344,27 @@ export function DashboardEditor({
     color: theme.colors.textMuted,
   };
 
+  const errorStyle: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+    gap: theme.spacing.md,
+    color: theme.colors.error || '#ef4444',
+  };
+
+  const errorBannerStyle: React.CSSProperties = {
+    padding: `${theme.spacing.sm} ${theme.spacing.md}`,
+    backgroundColor: theme.colors.error ? `${theme.colors.error}20` : '#fef2f2',
+    borderBottom: `1px solid ${theme.colors.error || '#ef4444'}`,
+    color: theme.colors.error || '#ef4444',
+    fontSize: theme.fontSizes.sm,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  };
+
   const emptyStyle: React.CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
@@ -336,6 +379,40 @@ export function DashboardEditor({
     return (
       <div className={`prismiq-dashboard-editor ${className}`} style={containerStyle}>
         <div style={loadingStyle}>Loading dashboard...</div>
+      </div>
+    );
+  }
+
+  // Show error state for load failures
+  if (error && !dashboard.widgets.length) {
+    return (
+      <div className={`prismiq-dashboard-editor ${className}`} style={containerStyle}>
+        <div style={errorStyle}>
+          <div style={{ fontSize: theme.fontSizes.lg, fontWeight: 500 }}>
+            Failed to load dashboard
+          </div>
+          <div style={{ color: theme.colors.textMuted }}>
+            {error.message}
+          </div>
+          <button
+            onClick={() => {
+              setError(null);
+              setIsLoading(true);
+              // Trigger reload by toggling a dependency
+              window.location.reload();
+            }}
+            style={{
+              padding: `${theme.spacing.sm} ${theme.spacing.md}`,
+              backgroundColor: theme.colors.primary,
+              color: '#fff',
+              border: 'none',
+              borderRadius: theme.radius.md,
+              cursor: 'pointer',
+            }}
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
@@ -362,6 +439,24 @@ export function DashboardEditor({
         onSave={handleSave}
         onCancel={handleCancel}
       />
+
+      {error && (
+        <div style={errorBannerStyle}>
+          <span>{error.message}</span>
+          <button
+            onClick={() => setError(null)}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: theme.spacing.xs,
+              color: 'inherit',
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <div style={contentStyle}>
         {dashboard.widgets.length === 0 ? (
