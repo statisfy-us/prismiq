@@ -12,8 +12,9 @@ from datetime import date, datetime, timedelta
 from enum import Enum
 from typing import Any
 
-from prismiq.types import QueryResult
 from pydantic import BaseModel, ConfigDict
+
+from prismiq.types import QueryResult
 
 
 class TrendDirection(str, Enum):
@@ -236,9 +237,7 @@ def calculate_period_comparison(
         raise ValueError(f"Column not found: {e}") from e
 
     # Calculate comparison period
-    prev_start, prev_end = _get_comparison_date_range(
-        current_start, current_end, comparison
-    )
+    prev_start, prev_end = _get_comparison_date_range(current_start, current_end, comparison)
 
     # Sum values for each period
     current_sum = 0.0
@@ -346,11 +345,7 @@ def add_trend_column(
             if previous != 0:
                 pct_change = (change / abs(previous)) * 100
             else:
-                pct_change = (
-                    100.0
-                    if current_float > 0
-                    else (-100.0 if current_float < 0 else 0.0)
-                )
+                pct_change = 100.0 if current_float > 0 else (-100.0 if current_float < 0 else 0.0)
         else:
             change = None
             pct_change = None

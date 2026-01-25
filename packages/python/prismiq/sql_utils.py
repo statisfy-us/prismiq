@@ -45,9 +45,7 @@ def validate_identifier(identifier: str, field_name: str) -> None:
     # - non-breaking space (\xa0): sometimes used in data imported from Excel/Word
     allowed_special = ("_", ".", " ", "(", ")", "/", "-", ":", "\xa0")
     if not all(c.isalnum() or c in allowed_special for c in identifier):
-        raise ValueError(
-            f"Invalid {field_name} '{identifier}': contains invalid characters"
-        )
+        raise ValueError(f"Invalid {field_name} '{identifier}': contains invalid characters")
 
 
 def quote_identifier(identifier: str) -> str:
@@ -108,9 +106,7 @@ def convert_revealbi_date_format_to_postgres(revealbi_format: str) -> str:
     result = revealbi_format
 
     # Replace patterns with numeric placeholders (longest first to avoid partial matches)
-    for reveal_pattern, pg_pattern in sorted(
-        format_map.items(), key=lambda x: -len(x[0])
-    ):
+    for reveal_pattern, pg_pattern in sorted(format_map.items(), key=lambda x: -len(x[0])):
         while reveal_pattern in result:
             placeholder_id = len(placeholders)
             placeholders.append(pg_pattern)
@@ -142,9 +138,7 @@ ALLOWED_OPERATORS = frozenset(
         "not_like",
     }
 )
-ALLOWED_AGGREGATIONS = frozenset(
-    {"none", "sum", "avg", "count", "count_distinct", "min", "max"}
-)
+ALLOWED_AGGREGATIONS = frozenset({"none", "sum", "avg", "count", "count_distinct", "min", "max"})
 ALLOWED_DATE_TRUNCS = frozenset(
     {"year", "quarter", "month", "week", "day", "hour", "minute", "second"}
 )

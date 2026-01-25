@@ -8,18 +8,22 @@ from __future__ import annotations
 
 import asyncio
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from datetime import time as time_type
-from datetime import timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from prismiq.query import QueryBuilder
 from prismiq.sql_validator import SQLValidationError, SQLValidator
-from prismiq.types import (DatabaseSchema, QueryDefinition,
-                           QueryExecutionError, QueryResult, QueryTimeoutError,
-                           QueryValidationError)
+from prismiq.types import (
+    DatabaseSchema,
+    QueryDefinition,
+    QueryExecutionError,
+    QueryResult,
+    QueryTimeoutError,
+    QueryValidationError,
+)
 
 if TYPE_CHECKING:
     from asyncpg import Pool  # type: ignore[import-not-found]
@@ -223,9 +227,7 @@ class QueryExecutor:
         assert safe_sql is not None  # Guaranteed by valid=True
 
         # Apply row limit using a CTE wrapper
-        limited_sql = (
-            f"WITH _cte AS ({safe_sql}) SELECT * FROM _cte LIMIT {self._max_rows + 1}"
-        )
+        limited_sql = f"WITH _cte AS ({safe_sql}) SELECT * FROM _cte LIMIT {self._max_rows + 1}"
 
         # Convert named params to positional for asyncpg
         # asyncpg uses $1, $2, etc. for positional params
@@ -245,9 +247,7 @@ class QueryExecutor:
                     param_index += 1
                 return f"${param_mapping[name]}"
 
-            limited_sql = re.sub(
-                r":([a-zA-Z_][a-zA-Z0-9_]*)", replace_param, limited_sql
-            )
+            limited_sql = re.sub(r":([a-zA-Z_][a-zA-Z0-9_]*)", replace_param, limited_sql)
 
             # Build param list in order
             param_list = [None] * len(param_mapping)
@@ -257,9 +257,7 @@ class QueryExecutor:
                 else:
                     raise SQLValidationError(
                         f"Missing parameter: {name}",
-                        errors=[
-                            f"Parameter '{name}' referenced in SQL but not provided"
-                        ],
+                        errors=[f"Parameter '{name}' referenced in SQL but not provided"],
                     )
 
         # Execute with timeout

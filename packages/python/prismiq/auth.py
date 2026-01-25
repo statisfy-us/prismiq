@@ -81,9 +81,7 @@ def create_header_auth_dependency():
     async def get_auth_context(request: Request) -> SimpleAuthContext:
         tenant_id = request.headers.get("X-Tenant-ID")
         if not tenant_id:
-            raise HTTPException(
-                status_code=400, detail="X-Tenant-ID header is required"
-            )
+            raise HTTPException(status_code=400, detail="X-Tenant-ID header is required")
 
         user_id = request.headers.get("X-User-ID")
 

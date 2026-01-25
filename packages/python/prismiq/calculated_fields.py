@@ -29,9 +29,7 @@ from typing import Any
 class ExprNode:
     """Base class for expression AST nodes."""
 
-    def to_sql(
-        self, field_mapping: dict[str, str], use_window_functions: bool = False
-    ) -> str:
+    def to_sql(self, field_mapping: dict[str, str], use_window_functions: bool = False) -> str:
         """Convert to PostgreSQL SQL.
 
         Args:
@@ -48,7 +46,7 @@ class FieldRef(ExprNode):
     """Field reference: [field_name] or [Table.field]"""
 
     # Patterns for RevealBI aggregation references like [Sum of X], [Count Distinct of Y]
-    AGG_PATTERNS = {
+    AGG_PATTERNS = {  # noqa: RUF012
         "Sum of ": "SUM",
         "Average of ": "AVG",
         "Count of ": "COUNT",
@@ -60,9 +58,7 @@ class FieldRef(ExprNode):
     def __init__(self, name: str):
         self.name = name
 
-    def to_sql(
-        self, field_mapping: dict[str, str], use_window_functions: bool = False
-    ) -> str:
+    def to_sql(self, field_mapping: dict[str, str], use_window_functions: bool = False) -> str:
         # Check if it's a calculated field that needs substitution
         if self.name in field_mapping:
             return f"({field_mapping[self.name]})"
@@ -102,9 +98,7 @@ class FunctionCall(ExprNode):
         self.name = name
         self.args = args
 
-    def to_sql(
-        self, field_mapping: dict[str, str], use_window_functions: bool = False
-    ) -> str:
+    def to_sql(self, field_mapping: dict[str, str], use_window_functions: bool = False) -> str:
         if self.name == "if":
             # if(condition, true_val, false_val) -> CASE WHEN condition THEN true_val ELSE false_val END
             cond = self.args[0].to_sql(field_mapping, use_window_functions)
@@ -170,9 +164,7 @@ class FunctionCall(ExprNode):
 
         elif self.name == "date":
             # date(year, month, day, hour, min, sec) -> MAKE_TIMESTAMP
-            args_sql = [
-                arg.to_sql(field_mapping, use_window_functions) for arg in self.args
-            ]
+            args_sql = [arg.to_sql(field_mapping, use_window_functions) for arg in self.args]
             # MAKE_TIMESTAMP expects: year, month, day, hour, minute, second (all as INTEGER)
             # Cast each arg to INTEGER since EXTRACT() returns NUMERIC
             args_cast = [f"({a})::INTEGER" for a in args_sql]
@@ -180,9 +172,7 @@ class FunctionCall(ExprNode):
 
         elif self.name == "concatenate":
             # Concatenate all arguments with ||
-            args_sql = [
-                arg.to_sql(field_mapping, use_window_functions) for arg in self.args
-            ]
+            args_sql = [arg.to_sql(field_mapping, use_window_functions) for arg in self.args]
             return " || ".join(args_sql)
 
         elif self.name == "datediff":
@@ -217,24 +207,18 @@ class FunctionCall(ExprNode):
                     return f"EXTRACT(EPOCH FROM ({date2}::timestamp - {date1}::timestamp)) / 60"
                 elif interval in ("s", "second", "seconds"):
                     # Second difference (end - start)
-                    return (
-                        f"EXTRACT(EPOCH FROM ({date2}::timestamp - {date1}::timestamp))"
-                    )
+                    return f"EXTRACT(EPOCH FROM ({date2}::timestamp - {date1}::timestamp))"
                 else:
                     # Default to days (end - start)
                     return f"(({date2})::date - ({date1})::date)"
             else:
                 # Not enough arguments, return raw
-                args_sql = [
-                    arg.to_sql(field_mapping, use_window_functions) for arg in self.args
-                ]
+                args_sql = [arg.to_sql(field_mapping, use_window_functions) for arg in self.args]
                 return f"DATEDIFF({', '.join(args_sql)})"
 
         else:
             # Unknown function - pass through
-            args_sql = [
-                arg.to_sql(field_mapping, use_window_functions) for arg in self.args
-            ]
+            args_sql = [arg.to_sql(field_mapping, use_window_functions) for arg in self.args]
             return f"{self.name.upper()}({', '.join(args_sql)})"
 
 
@@ -246,9 +230,7 @@ class MethodCall(ExprNode):
         self.method = method
         self.args = args
 
-    def to_sql(
-        self, field_mapping: dict[str, str], use_window_functions: bool = False
-    ) -> str:
+    def to_sql(self, field_mapping: dict[str, str], use_window_functions: bool = False) -> str:
         obj_sql = self.obj.to_sql(field_mapping, use_window_functions)
 
         if self.method == "concatenate":
@@ -269,9 +251,7 @@ class BinaryOp(ExprNode):
         self.left = left
         self.right = right
 
-    def to_sql(
-        self, field_mapping: dict[str, str], use_window_functions: bool = False
-    ) -> str:
+    def to_sql(self, field_mapping: dict[str, str], use_window_functions: bool = False) -> str:
         left_sql = self.left.to_sql(field_mapping, use_window_functions)
         right_sql = self.right.to_sql(field_mapping, use_window_functions)
 
@@ -285,7 +265,7 @@ class BinaryOp(ExprNode):
             if self.right.value in (0, 1) and isinstance(self.left, FieldRef):
                 # Cast the field to integer for comparison
                 left_sql = f"({left_sql})::int"
-        elif sql_op in ["=", "<>"] and isinstance(self.left, Literal):
+        elif sql_op in ["=", "<>"] and isinstance(self.left, Literal):  # noqa: SIM102
             if self.left.value in (0, 1) and isinstance(self.right, FieldRef):
                 # Cast the field to integer for comparison
                 right_sql = f"({right_sql})::int"
@@ -299,9 +279,7 @@ class Literal(ExprNode):
     def __init__(self, value: Any):
         self.value = value
 
-    def to_sql(
-        self, field_mapping: dict[str, str], use_window_functions: bool = False
-    ) -> str:
+    def to_sql(self, field_mapping: dict[str, str], use_window_functions: bool = False) -> str:
         if isinstance(self.value, str):
             # Escape single quotes by doubling them
             escaped = self.value.replace("'", "''")
@@ -449,9 +427,7 @@ class ExpressionParser:
 
         return left, pos
 
-    def _parse_multiplicative(
-        self, tokens: list[str], pos: int
-    ) -> tuple[ExprNode, int]:
+    def _parse_multiplicative(self, tokens: list[str], pos: int) -> tuple[ExprNode, int]:
         """Parse multiplicative operators: *, /"""
         left, pos = self._parse_primary(tokens, pos)
 
@@ -529,9 +505,7 @@ class ExpressionParser:
                         pos += 1  # Skip ','
 
                 if pos >= len(tokens):
-                    raise ValueError(
-                        f"Expected ')' after function arguments for '{func_name}'"
-                    )
+                    raise ValueError(f"Expected ')' after function arguments for '{func_name}'")
 
                 pos += 1  # Skip ')'
 
@@ -542,7 +516,7 @@ class ExpressionParser:
                 raise ValueError(f"Unexpected identifier: {func_name}")
 
         # Parenthesized expression
-        elif token == "(":
+        elif token == "(":  # noqa: S105
             pos += 1
             expr, pos = self._parse_expr(tokens, pos)
 
@@ -632,9 +606,7 @@ def resolve_calculated_fields(
             raise ValueError(f"Failed to parse calculated field '{name}': {e}") from e
 
     # Topological sort to resolve dependencies
-    resolved: dict[
-        str, tuple[str, bool]
-    ] = {}  # name -> (SQL expression, has_aggregation)
+    resolved: dict[str, tuple[str, bool]] = {}  # name -> (SQL expression, has_aggregation)
     visiting: set[str] = set()  # For cycle detection
 
     def resolve(name: str) -> tuple[str, bool]:
@@ -647,9 +619,7 @@ def resolve_calculated_fields(
             return (f'"{name}"', False)
 
         if name in visiting:
-            raise ValueError(
-                f"Circular dependency detected in calculated field: {name}"
-            )
+            raise ValueError(f"Circular dependency detected in calculated field: {name}")
 
         visiting.add(name)
 

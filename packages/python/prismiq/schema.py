@@ -8,11 +8,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from prismiq.types import (ColumnSchema, DatabaseSchema, Relationship,
-                           TableNotFoundError, TableSchema)
+from prismiq.types import (
+    ColumnSchema,
+    DatabaseSchema,
+    Relationship,
+    TableNotFoundError,
+    TableSchema,
+)
 
 if TYPE_CHECKING:
     from asyncpg import Pool, Record  # type: ignore[import-not-found]
+
     from prismiq.cache import CacheBackend
 
 
@@ -101,9 +107,7 @@ class SchemaIntrospector:
 
         return DatabaseSchema(tables=tables, relationships=relationships)
 
-    async def get_table(
-        self, table_name: str, force_refresh: bool = False
-    ) -> TableSchema:
+    async def get_table(self, table_name: str, force_refresh: bool = False) -> TableSchema:
         """Get schema information for a single table.
 
         Args:

@@ -409,9 +409,7 @@ metrics.register_counter("queries_total", "Total number of queries executed")
 metrics.register_counter("cache_total", "Cache hit/miss counts")
 metrics.register_counter("requests_total", "Total HTTP requests")
 metrics.register_histogram("query_duration_ms", "Query execution time in milliseconds")
-metrics.register_histogram(
-    "request_duration_ms", "HTTP request duration in milliseconds"
-)
+metrics.register_histogram("request_duration_ms", "HTTP request duration in milliseconds")
 metrics.register_gauge("active_connections", "Number of active database connections")
 
 

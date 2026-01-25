@@ -10,8 +10,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from prismiq.types import DatabaseSchema
 from pydantic import BaseModel, ConfigDict
+
+from prismiq.types import DatabaseSchema
 
 
 class ColumnConfig(BaseModel):
@@ -239,9 +240,7 @@ class SchemaConfigManager:
         new_tables[table_name] = config
         self._config = SchemaConfig(tables=new_tables)
 
-    def update_column_config(
-        self, table_name: str, column_name: str, config: ColumnConfig
-    ) -> None:
+    def update_column_config(self, table_name: str, column_name: str, config: ColumnConfig) -> None:
         """Update configuration for a column.
 
         Creates a new config with the updated column (immutable operation).
@@ -324,8 +323,7 @@ class SchemaConfigManager:
         visible_relationships = [
             rel
             for rel in schema.relationships
-            if rel.from_table in visible_table_names
-            and rel.to_table in visible_table_names
+            if rel.from_table in visible_table_names and rel.to_table in visible_table_names
         ]
 
         return EnhancedDatabaseSchema(

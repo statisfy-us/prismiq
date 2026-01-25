@@ -9,13 +9,18 @@ Use this when working with SQLAlchemy's `text()` function.
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
-from .sql_utils import (ALLOWED_AGGREGATIONS, ALLOWED_DATE_TRUNCS,
-                        ALLOWED_JOIN_TYPES, ALLOWED_OPERATORS,
-                        ALLOWED_ORDER_DIRECTIONS,
-                        convert_revealbi_date_format_to_postgres,
-                        validate_identifier)
+from .sql_utils import (
+    ALLOWED_AGGREGATIONS,
+    ALLOWED_DATE_TRUNCS,
+    ALLOWED_JOIN_TYPES,
+    ALLOWED_OPERATORS,
+    ALLOWED_ORDER_DIRECTIONS,
+    convert_revealbi_date_format_to_postgres,
+    validate_identifier,
+)
 
 if TYPE_CHECKING:
     pass
@@ -77,7 +82,7 @@ def _postprocess_scalar_subqueries(sql: str) -> str:
     # Replace each placeholder with a scalar subquery
     for column_name in matches:
         # Build scalar subquery: (SELECT SUM("column") FROM table WHERE filters)
-        subquery = f'(SELECT SUM(("{column_name}")::numeric) FROM {from_clause}'
+        subquery = f'(SELECT SUM(("{column_name}")::numeric) FROM {from_clause}'  # noqa: S608
         if where_clause:
             subquery += f" WHERE {where_clause}"
         subquery += ")"
@@ -143,8 +148,9 @@ def build_sql_from_dict(
     """
     # Preprocess calculated fields if present and not already processed
     if preprocess_calculated_fields and query.get("calculated_fields"):
-        from .calculated_field_processor import \
-            preprocess_calculated_fields as preprocess_calc_fields
+        from .calculated_field_processor import (
+            preprocess_calculated_fields as preprocess_calc_fields,
+        )
 
         query = preprocess_calc_fields(query)
 
@@ -195,8 +201,7 @@ def build_sql_from_dict(
         join_type = join.get("join_type", "INNER").upper()
         if join_type not in ALLOWED_JOIN_TYPES:
             raise ValueError(
-                f"Invalid JOIN type: '{join_type}'. "
-                f"Allowed types: {sorted(ALLOWED_JOIN_TYPES)}"
+                f"Invalid JOIN type: '{join_type}'. Allowed types: {sorted(ALLOWED_JOIN_TYPES)}"
             )
 
     # Build table_id -> table reference mapping
@@ -280,7 +285,7 @@ def build_sql_from_dict(
                         col_ref = f"({col_ref})::{cast_type}"
                     expr = f"{agg.upper()}({col_ref})"
         else:
-            if column_name == "*":
+            if column_name == "*":  # noqa: SIM108
                 expr = "*"
             else:
                 expr = f'{table_ref}."{column_name}"'
@@ -323,8 +328,7 @@ def build_sql_from_dict(
             table_sql += f' AS "{to_table["alias"]}"'
 
         from_clause += (
-            f" {join_type} JOIN {table_sql} ON "
-            f'{from_ref}."{from_column}" = {to_ref}."{to_column}"'
+            f' {join_type} JOIN {table_sql} ON {from_ref}."{from_column}" = {to_ref}."{to_column}"'
         )
 
     # Build WHERE clause
@@ -415,7 +419,7 @@ def build_sql_from_dict(
                 param_names.append(f":{param_name}")
                 params[param_name] = val
                 param_counter += 1
-            where_parts.append(f'{col_ref} IN ({", ".join(param_names)})')
+            where_parts.append(f"{col_ref} IN ({', '.join(param_names)})")
         elif operator == "in_or_null":
             # Handle mixed selection of concrete values AND NULL
             # Generates: (col IN (...) OR col IS NULL)
@@ -430,9 +434,7 @@ def build_sql_from_dict(
                 param_names.append(f":{param_name}")
                 params[param_name] = val
                 param_counter += 1
-            where_parts.append(
-                f'({col_ref} IN ({", ".join(param_names)}) OR {col_ref} IS NULL)'
-            )
+            where_parts.append(f"({col_ref} IN ({', '.join(param_names)}) OR {col_ref} IS NULL)")
         elif operator == "in_subquery":
             # For subquery filters (used in RLS filtering)
             subquery_sql = value.get("sql", "").strip()
@@ -449,8 +451,8 @@ def build_sql_from_dict(
             params[param_name] = f"%{value}%"
             param_counter += 1
 
-    # Build SQL
-    sql = f"SELECT {', '.join(select_parts)} FROM {from_clause}"
+    # Build SQL (identifiers are quoted, values use params)
+    sql = f"SELECT {', '.join(select_parts)} FROM {from_clause}"  # noqa: S608
 
     if where_parts:
         sql += f" WHERE {' AND '.join(where_parts)}"
@@ -461,11 +463,7 @@ def build_sql_from_dict(
         for col_name in group_by:
             # Find the corresponding column definition first
             col_def = next(
-                (
-                    c
-                    for c in columns
-                    if c.get("column") == col_name or c.get("alias") == col_name
-                ),
+                (c for c in columns if c.get("column") == col_name or c.get("alias") == col_name),
                 None,
             )
             if col_def:
