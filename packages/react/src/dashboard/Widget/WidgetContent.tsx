@@ -31,6 +31,8 @@ export interface WidgetContentProps {
   isLoading?: boolean;
   /** Error if query failed. */
   error?: Error | null;
+  /** Whether widget is being force-refreshed (shows spinner overlay). */
+  isRefreshing?: boolean;
 }
 
 /**
@@ -196,6 +198,46 @@ function resultToDataPoints(result: QueryResult): ChartDataPoint[] {
 }
 
 /**
+ * Spinner overlay shown during refresh.
+ */
+function RefreshOverlay(): JSX.Element {
+  const { theme } = useTheme();
+
+  const overlayStyle: React.CSSProperties = {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  };
+
+  const spinnerStyle: React.CSSProperties = {
+    width: '32px',
+    height: '32px',
+    border: `3px solid ${theme.colors.border}`,
+    borderTopColor: theme.colors.primary,
+    borderRadius: '50%',
+    animation: 'prismiq-widget-spin 1s linear infinite',
+  };
+
+  return (
+    <div style={overlayStyle}>
+      <div style={spinnerStyle} />
+      <style>{`
+        @keyframes prismiq-widget-spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+/**
  * Widget content renderer.
  *
  * Renders the appropriate visualization based on widget type.
@@ -205,6 +247,7 @@ export function WidgetContent({
   result,
   isLoading = false,
   error,
+  isRefreshing = false,
 }: WidgetContentProps): JSX.Element {
   const { theme } = useTheme();
 
@@ -276,14 +319,27 @@ export function WidgetContent({
     position: 'relative',
   };
 
-  // Handle loading state
-  if (isLoading && !result) {
+  // Handle loading state (initial load only, not refresh)
+  if (isLoading && !result && !isRefreshing) {
     return (
       <div style={containerStyle}>
         <LoadingState />
       </div>
     );
   }
+
+  // Wrapper to add refresh overlay on top of content
+  const wrapWithRefreshOverlay = (content: JSX.Element): JSX.Element => {
+    if (isRefreshing && result) {
+      return (
+        <div style={containerStyle}>
+          <RefreshOverlay />
+          {content}
+        </div>
+      );
+    }
+    return <div style={containerStyle}>{content}</div>;
+  };
 
   // Handle error state
   if (error) {
@@ -328,128 +384,116 @@ export function WidgetContent({
         ? result.rows[0]?.[result.columns.indexOf(widget.config.trend_comparison)]
         : undefined;
 
-      return (
-        <div style={containerStyle}>
-          <MetricCard
-            title=""
-            value={typeof value === 'number' ? value : Number(value) || 0}
-            format={widget.config.format ?? 'number'}
-            currencySymbol={widget.config.currencySymbol}
-            decimals={widget.config.decimalDigits}
-            compactNotation={widget.config.compactNotation}
-            centered={true}
-            trend={
-              comparisonValue !== undefined
-                ? {
-                    value: Number(comparisonValue) || 0,
-                    direction:
-                      Number(comparisonValue) > 0
-                        ? 'up'
-                        : Number(comparisonValue) < 0
-                          ? 'down'
-                          : 'flat',
-                  }
-                : undefined
-            }
-          />
-        </div>
+      return wrapWithRefreshOverlay(
+        <MetricCard
+          title=""
+          value={typeof value === 'number' ? value : Number(value) || 0}
+          format={widget.config.format ?? 'number'}
+          currencySymbol={widget.config.currencySymbol}
+          decimals={widget.config.decimalDigits}
+          compactNotation={widget.config.compactNotation}
+          centered={true}
+          trend={
+            comparisonValue !== undefined
+              ? {
+                  value: Number(comparisonValue) || 0,
+                  direction:
+                    Number(comparisonValue) > 0
+                      ? 'up'
+                      : Number(comparisonValue) < 0
+                        ? 'down'
+                        : 'flat',
+                }
+              : undefined
+          }
+        />
       );
     }
 
     case 'bar_chart':
-      return (
-        <div style={containerStyle}>
-          <BarChart
-            data={data}
-            xAxis={xAxis}
-            yAxis={yAxis}
-            orientation={widget.config.orientation ?? 'vertical'}
-            stacked={widget.config.stacked}
-            showLegend={showLegend}
-            showDataLabels={showDataLabels}
-            colors={colors}
-            xAxisFormat={widget.config.dateFormats?.[xAxis]}
-            yAxisFormat={widget.config.valueFormat ?? 'number'}
-            currencySymbol={widget.config.currencySymbol}
-            compactNotation={widget.config.compactNotation}
-            decimalDigits={widget.config.decimalDigits}
-            height="100%"
-            crossFilter={crossFilterConfig}
-            selectedValue={selectedValue}
-            onDataPointClick={crossFilterEnabled ? handleChartClick : undefined}
-          />
-        </div>
+      return wrapWithRefreshOverlay(
+        <BarChart
+          data={data}
+          xAxis={xAxis}
+          yAxis={yAxis}
+          orientation={widget.config.orientation ?? 'vertical'}
+          stacked={widget.config.stacked}
+          showLegend={showLegend}
+          showDataLabels={showDataLabels}
+          colors={colors}
+          xAxisFormat={widget.config.dateFormats?.[xAxis]}
+          yAxisFormat={widget.config.valueFormat ?? 'number'}
+          currencySymbol={widget.config.currencySymbol}
+          compactNotation={widget.config.compactNotation}
+          decimalDigits={widget.config.decimalDigits}
+          height="100%"
+          crossFilter={crossFilterConfig}
+          selectedValue={selectedValue}
+          onDataPointClick={crossFilterEnabled ? handleChartClick : undefined}
+        />
       );
 
     case 'line_chart':
-      return (
-        <div style={containerStyle}>
-          <LineChart
-            data={data}
-            xAxis={xAxis}
-            yAxis={yAxis}
-            seriesColumn={widget.config.series_column}
-            maxSeries={widget.config.max_series}
-            showLegend={showLegend}
-            showDataLabels={showDataLabels}
-            colors={colors}
-            xAxisFormat={widget.config.dateFormats?.[xAxis]}
-            height="100%"
-            crossFilter={crossFilterConfig}
-            selectedValue={selectedValue}
-            onDataPointClick={crossFilterEnabled ? handleChartClick : undefined}
-          />
-        </div>
+      return wrapWithRefreshOverlay(
+        <LineChart
+          data={data}
+          xAxis={xAxis}
+          yAxis={yAxis}
+          seriesColumn={widget.config.series_column}
+          maxSeries={widget.config.max_series}
+          showLegend={showLegend}
+          showDataLabels={showDataLabels}
+          colors={colors}
+          xAxisFormat={widget.config.dateFormats?.[xAxis]}
+          height="100%"
+          crossFilter={crossFilterConfig}
+          selectedValue={selectedValue}
+          onDataPointClick={crossFilterEnabled ? handleChartClick : undefined}
+        />
       );
 
     case 'area_chart':
-      return (
-        <div style={containerStyle}>
-          <AreaChart
-            data={data}
-            xAxis={xAxis}
-            yAxis={yAxis}
-            stacked={widget.config.stacked}
-            showLegend={showLegend}
-            colors={colors}
-            xAxisFormat={widget.config.dateFormats?.[xAxis]}
-            height="100%"
-            crossFilter={crossFilterConfig}
-            selectedValue={selectedValue}
-            onDataPointClick={crossFilterEnabled ? handleChartClick : undefined}
-          />
-        </div>
+      return wrapWithRefreshOverlay(
+        <AreaChart
+          data={data}
+          xAxis={xAxis}
+          yAxis={yAxis}
+          stacked={widget.config.stacked}
+          showLegend={showLegend}
+          colors={colors}
+          xAxisFormat={widget.config.dateFormats?.[xAxis]}
+          height="100%"
+          crossFilter={crossFilterConfig}
+          selectedValue={selectedValue}
+          onDataPointClick={crossFilterEnabled ? handleChartClick : undefined}
+        />
       );
 
     case 'pie_chart':
-      return (
-        <div style={containerStyle}>
-          <PieChart
-            data={data}
-            labelColumn={xAxis}
-            valueColumn={yAxis[0] ?? ''}
-            showLegend={showLegend}
-            showLabels={showDataLabels}
-            colors={colors}
-            labelFormat={widget.config.dateFormats?.[xAxis]}
-            height="100%"
-            crossFilter={crossFilterConfig}
-            selectedValue={selectedValue}
-            onDataPointClick={crossFilterEnabled ? handleChartClick : undefined}
-          />
-        </div>
+      return wrapWithRefreshOverlay(
+        <PieChart
+          data={data}
+          labelColumn={xAxis}
+          valueColumn={yAxis[0] ?? ''}
+          showLegend={showLegend}
+          showLabels={showDataLabels}
+          colors={colors}
+          labelFormat={widget.config.dateFormats?.[xAxis]}
+          height="100%"
+          crossFilter={crossFilterConfig}
+          selectedValue={selectedValue}
+          onDataPointClick={crossFilterEnabled ? handleChartClick : undefined}
+        />
       );
 
     case 'scatter_chart':
-      return (
-        <div style={containerStyle}>
-          <ScatterChart
-            data={data}
-            xAxis={xAxis}
-            yAxis={yAxis[0] ?? ''}
-            height="100%"
-          />
-        </div>
+      return wrapWithRefreshOverlay(
+        <ScatterChart
+          data={data}
+          xAxis={xAxis}
+          yAxis={yAxis[0] ?? ''}
+          height="100%"
+        />
       );
 
     case 'table': {
@@ -480,23 +524,29 @@ export function WidgetContent({
         position: 'relative',
       };
 
-      return (
-        <div style={tableContainerStyle}>
-          <ResultsTable
-            result={tableResult}
-            pageSize={widget.config.page_size ?? 10}
-            sortable={widget.config.sortable ?? true}
-            formatters={dateFormatters}
-          />
-        </div>
+      const tableContent = (
+        <ResultsTable
+          result={tableResult}
+          pageSize={widget.config.page_size ?? 10}
+          sortable={widget.config.sortable ?? true}
+          formatters={dateFormatters}
+        />
       );
+
+      // Handle refresh overlay for tables
+      if (isRefreshing) {
+        return (
+          <div style={tableContainerStyle}>
+            <RefreshOverlay />
+            {tableContent}
+          </div>
+        );
+      }
+
+      return <div style={tableContainerStyle}>{tableContent}</div>;
     }
 
     default:
-      return (
-        <div style={containerStyle}>
-          <EmptyState />
-        </div>
-      );
+      return wrapWithRefreshOverlay(<EmptyState />);
   }
 }

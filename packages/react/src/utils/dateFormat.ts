@@ -125,3 +125,39 @@ export function createDateFormatters(
 
   return formatters;
 }
+
+/**
+ * Format a Unix timestamp as relative time (e.g., "5 min ago").
+ *
+ * @param timestamp Unix timestamp in seconds
+ * @returns Relative time string
+ */
+export function formatRelativeTime(timestamp: number | null | undefined): string {
+  if (timestamp === null || timestamp === undefined) {
+    return 'Never';
+  }
+
+  const now = Date.now() / 1000; // Convert to seconds
+  const seconds = Math.floor(now - timestamp);
+
+  if (seconds < 60) {
+    return 'Just now';
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) {
+    return `${minutes} min ago`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return `${hours} hr ago`;
+  }
+
+  const days = Math.floor(hours / 24);
+  if (days === 1) {
+    return '1 day ago';
+  }
+
+  return `${days} days ago`;
+}

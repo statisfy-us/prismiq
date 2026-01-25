@@ -294,12 +294,16 @@ export class PrismiqClient {
    * Execute a query and return the full result.
    *
    * @param query - The query definition to execute.
-   * @returns The query result with all rows.
+   * @param bypassCache - If true, bypass cache and re-execute query.
+   * @returns The query result with all rows and cache metadata.
    */
-  async executeQuery(query: QueryDefinition): Promise<QueryResult> {
+  async executeQuery(
+    query: QueryDefinition,
+    bypassCache: boolean = false
+  ): Promise<QueryResult> {
     return this.request<QueryResult>('/query/execute', {
       method: 'POST',
-      body: JSON.stringify(query),
+      body: JSON.stringify({ query, bypass_cache: bypassCache }),
     });
   }
 

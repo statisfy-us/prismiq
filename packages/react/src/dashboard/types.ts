@@ -298,14 +298,22 @@ export interface DashboardContextValue {
   widgetErrors: Record<string, Error>;
   /** Loading state keyed by widget ID. */
   widgetLoading: Record<string, boolean>;
+  /** Unix timestamps when each widget was last refreshed. */
+  widgetRefreshTimes: Record<string, number>;
+  /** Set of widget IDs currently being refreshed (force refresh). */
+  refreshingWidgets: Set<string>;
 
   // Actions
   /** Set a filter value. */
   setFilterValue: (filterId: string, value: unknown) => void;
-  /** Refresh all widgets. */
+  /** Refresh all widgets (with batching). */
   refreshDashboard: () => Promise<void>;
-  /** Refresh a single widget. */
+  /** Refresh a single widget (bypasses cache). */
   refreshWidget: (widgetId: string) => Promise<void>;
+  /** Refresh all widgets with configurable batch size. */
+  refreshAll: (batchSize?: number) => Promise<void>;
+  /** Get oldest widget refresh timestamp (for dashboard-level indicator). */
+  getOldestRefreshTime: () => number | null;
 }
 
 /**
@@ -345,8 +353,12 @@ export interface DashboardEditorContextValue extends DashboardContextValue {
 export interface DashboardProviderProps {
   /** Dashboard ID to load. */
   dashboardId: string;
-  /** Auto-refresh interval in milliseconds (optional). */
+  /**
+   * @deprecated Auto-refresh is no longer supported. Use manual refresh via refreshAll().
+   */
   refreshInterval?: number;
+  /** Number of widgets to load in each batch (default: 4). */
+  batchSize?: number;
   /** Children to render. */
   children: React.ReactNode;
 }
@@ -415,6 +427,12 @@ export interface WidgetProps {
   error?: Error | null;
   /** Additional CSS class. */
   className?: string;
+  /** Unix timestamp when widget was last refreshed. */
+  lastRefreshed?: number;
+  /** Whether the widget is currently being refreshed (force refresh). */
+  isRefreshing?: boolean;
+  /** Callback to trigger widget refresh. */
+  onRefresh?: () => void;
 }
 
 /**
@@ -425,6 +443,12 @@ export interface WidgetHeaderProps {
   title: string;
   /** Optional hyperlink for the widget (shows link icon in header). */
   hyperlink?: WidgetHyperlink;
+  /** Unix timestamp when widget was last refreshed. */
+  lastRefreshed?: number;
+  /** Whether the widget is currently being refreshed (force refresh). */
+  isRefreshing?: boolean;
+  /** Callback to trigger widget refresh. */
+  onRefresh?: () => void;
 }
 
 /**
