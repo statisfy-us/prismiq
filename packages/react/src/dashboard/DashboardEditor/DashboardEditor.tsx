@@ -113,6 +113,8 @@ export function DashboardEditor({
     {}
   );
   const [widgetErrors, setWidgetErrors] = useState<Record<string, Error>>({});
+  const [widgetRefreshTimes, setWidgetRefreshTimes] = useState<Record<string, number>>({});
+  const [refreshingWidgets, setRefreshingWidgets] = useState<Set<string>>(new Set());
 
   // UI state - editingWidget can be 'new' for new widget, a Widget for editing, or null
   const [editingWidget, setEditingWidget] = useState<WidgetType | 'new' | null>(null);
@@ -152,6 +154,7 @@ export function DashboardEditor({
               try {
                 const result = await client.executeQuery(widget.query!);
                 setWidgetResults((prev) => ({ ...prev, [widget.id]: result }));
+                setWidgetRefreshTimes((prev) => ({ ...prev, [widget.id]: Math.floor(Date.now() / 1000) }));
               } catch (err) {
                 setWidgetErrors((prev) => ({
                   ...prev,
@@ -180,10 +183,12 @@ export function DashboardEditor({
       if (!widget?.query || !client) return;
 
       setWidgetLoading((prev) => ({ ...prev, [widgetId]: true }));
+      setRefreshingWidgets((prev) => new Set(prev).add(widgetId));
 
       try {
         const result = await client.executeQuery(widget.query);
         setWidgetResults((prev) => ({ ...prev, [widgetId]: result }));
+        setWidgetRefreshTimes((prev) => ({ ...prev, [widgetId]: Math.floor(Date.now() / 1000) }));
         setWidgetErrors((prev) => {
           const next = { ...prev };
           delete next[widgetId];
@@ -196,6 +201,11 @@ export function DashboardEditor({
         }));
       } finally {
         setWidgetLoading((prev) => ({ ...prev, [widgetId]: false }));
+        setRefreshingWidgets((prev) => {
+          const next = new Set(prev);
+          next.delete(widgetId);
+          return next;
+        });
       }
     },
     [dashboard.widgets, client]
@@ -316,9 +326,12 @@ export function DashboardEditor({
         result={widgetResults[widget.id] ?? null}
         isLoading={widgetLoading[widget.id] ?? false}
         error={widgetErrors[widget.id]}
+        lastRefreshed={widgetRefreshTimes[widget.id]}
+        isRefreshing={refreshingWidgets.has(widget.id)}
+        onRefresh={() => refreshWidget(widget.id)}
       />
     ),
-    [widgetResults, widgetLoading, widgetErrors]
+    [widgetResults, widgetLoading, widgetErrors, widgetRefreshTimes, refreshingWidgets, refreshWidget]
   );
 
   // Styles
