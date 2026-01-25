@@ -805,3 +805,195 @@ class TestCacheBackendInterface:
         await cache.exists("key")
         await cache.delete("key")
         await cache.clear()
+
+
+# ============================================================================
+# Multi-Tenant QueryCache Tests
+# ============================================================================
+
+
+class TestQueryCacheMultiTenancy:
+    """Tests for multi-tenant query cache isolation."""
+
+    @pytest.fixture
+    def sample_query(self) -> QueryDefinition:
+        """Create a sample query."""
+        return QueryDefinition(
+            tables=[QueryTable(id="t1", name="users")],
+            columns=[ColumnSelection(table_id="t1", column="name")],
+        )
+
+    @pytest.fixture
+    def sample_result(self) -> QueryResult:
+        """Create a sample query result."""
+        return QueryResult(
+            columns=["name"],
+            column_types=["text"],
+            rows=[["Alice"]],
+            row_count=1,
+            execution_time_ms=10.0,
+        )
+
+    def test_default_schema_name_is_public(self) -> None:
+        """QueryCache defaults to 'public' schema."""
+        cache = QueryCache(InMemoryCache())
+        assert cache._schema_name == "public"
+
+    def test_custom_schema_name(self) -> None:
+        """QueryCache accepts custom schema name."""
+        cache = QueryCache(InMemoryCache(), schema_name="org_123")
+        assert cache._schema_name == "org_123"
+
+    def test_make_key_includes_schema_name(self, sample_query: QueryDefinition) -> None:
+        """Cache keys include the schema name."""
+        cache = QueryCache(InMemoryCache(), schema_name="tenant_abc")
+        key = cache.make_key(sample_query)
+        assert key.startswith("query:tenant_abc:")
+
+    def test_different_schemas_produce_different_keys(self, sample_query: QueryDefinition) -> None:
+        """Same query in different schemas produces different keys."""
+        cache1 = QueryCache(InMemoryCache(), schema_name="org_1")
+        cache2 = QueryCache(InMemoryCache(), schema_name="org_2")
+
+        key1 = cache1.make_key(sample_query)
+        key2 = cache2.make_key(sample_query)
+
+        assert key1 != key2
+        assert "org_1" in key1
+        assert "org_2" in key2
+
+    @pytest.mark.asyncio
+    async def test_tenant_isolation_shared_backend(
+        self, sample_query: QueryDefinition, sample_result: QueryResult
+    ) -> None:
+        """Different tenants have isolated caches even with shared backend."""
+        # Shared backend simulates shared Redis instance
+        shared_backend = InMemoryCache()
+
+        cache_tenant_a = QueryCache(shared_backend, schema_name="tenant_a")
+        cache_tenant_b = QueryCache(shared_backend, schema_name="tenant_b")
+
+        # Tenant A caches a result
+        await cache_tenant_a.cache_result(sample_query, sample_result)
+
+        # Tenant A can retrieve it
+        result_a = await cache_tenant_a.get_result(sample_query)
+        assert result_a is not None
+
+        # Tenant B cannot see Tenant A's cached result
+        result_b = await cache_tenant_b.get_result(sample_query)
+        assert result_b is None
+
+    @pytest.mark.asyncio
+    async def test_invalidate_all_only_affects_own_schema(
+        self, sample_query: QueryDefinition, sample_result: QueryResult
+    ) -> None:
+        """invalidate_all only clears cache for the specific schema."""
+        shared_backend = InMemoryCache()
+
+        cache_tenant_a = QueryCache(shared_backend, schema_name="tenant_a")
+        cache_tenant_b = QueryCache(shared_backend, schema_name="tenant_b")
+
+        # Both tenants cache the same query
+        await cache_tenant_a.cache_result(sample_query, sample_result)
+        await cache_tenant_b.cache_result(sample_query, sample_result)
+
+        # Tenant A invalidates all
+        await cache_tenant_a.invalidate_all()
+
+        # Tenant A's cache is cleared
+        assert await cache_tenant_a.get_result(sample_query) is None
+
+        # Tenant B's cache is untouched
+        assert await cache_tenant_b.get_result(sample_query) is not None
+
+
+# ============================================================================
+# Multi-Tenant SchemaCache Tests
+# ============================================================================
+
+
+class TestSchemaCacheMultiTenancy:
+    """Tests for multi-tenant schema cache isolation."""
+
+    def test_default_schema_name_is_public(self) -> None:
+        """SchemaCache defaults to 'public' schema."""
+        cache = SchemaCache(InMemoryCache())
+        assert cache._schema_name == "public"
+
+    def test_custom_schema_name(self) -> None:
+        """SchemaCache accepts custom schema name."""
+        cache = SchemaCache(InMemoryCache(), schema_name="org_456")
+        assert cache._schema_name == "org_456"
+
+    def test_make_key_includes_schema_name(self) -> None:
+        """Internal keys include the schema name."""
+        cache = SchemaCache(InMemoryCache(), schema_name="tenant_xyz")
+        key = cache._make_key("full")
+        assert key == "schema:tenant_xyz:full"
+
+        table_key = cache._make_key("table:users")
+        assert table_key == "schema:tenant_xyz:table:users"
+
+    @pytest.mark.asyncio
+    async def test_tenant_isolation_schema_cache(self) -> None:
+        """Different tenants have isolated schema caches."""
+        shared_backend = InMemoryCache()
+
+        cache_tenant_a = SchemaCache(shared_backend, schema_name="tenant_a")
+        cache_tenant_b = SchemaCache(shared_backend, schema_name="tenant_b")
+
+        schema_a = {"tables": [{"name": "users_a"}]}
+        schema_b = {"tables": [{"name": "users_b"}]}
+
+        # Each tenant caches different schema
+        await cache_tenant_a.set_schema(schema_a)
+        await cache_tenant_b.set_schema(schema_b)
+
+        # Each tenant sees only their own schema
+        assert await cache_tenant_a.get_schema() == schema_a
+        assert await cache_tenant_b.get_schema() == schema_b
+
+    @pytest.mark.asyncio
+    async def test_tenant_isolation_table_cache(self) -> None:
+        """Different tenants have isolated table caches."""
+        shared_backend = InMemoryCache()
+
+        cache_tenant_a = SchemaCache(shared_backend, schema_name="tenant_a")
+        cache_tenant_b = SchemaCache(shared_backend, schema_name="tenant_b")
+
+        table_a = {"name": "users", "columns": [{"name": "id_a"}]}
+        table_b = {"name": "users", "columns": [{"name": "id_b"}]}
+
+        # Same table name, different tenants
+        await cache_tenant_a.set_table("users", table_a)
+        await cache_tenant_b.set_table("users", table_b)
+
+        # Each tenant sees their own version
+        assert await cache_tenant_a.get_table("users") == table_a
+        assert await cache_tenant_b.get_table("users") == table_b
+
+    @pytest.mark.asyncio
+    async def test_invalidate_only_affects_own_schema(self) -> None:
+        """invalidate only clears cache for the specific schema."""
+        shared_backend = InMemoryCache()
+
+        cache_tenant_a = SchemaCache(shared_backend, schema_name="tenant_a")
+        cache_tenant_b = SchemaCache(shared_backend, schema_name="tenant_b")
+
+        # Both tenants cache schema
+        await cache_tenant_a.set_schema({"tables": []})
+        await cache_tenant_a.set_table("users", {"name": "users"})
+        await cache_tenant_b.set_schema({"tables": []})
+        await cache_tenant_b.set_table("users", {"name": "users"})
+
+        # Tenant A invalidates
+        await cache_tenant_a.invalidate()
+
+        # Tenant A's cache is cleared
+        assert await cache_tenant_a.get_schema() is None
+        assert await cache_tenant_a.get_table("users") is None
+
+        # Tenant B's cache is untouched
+        assert await cache_tenant_b.get_schema() is not None
+        assert await cache_tenant_b.get_table("users") is not None
