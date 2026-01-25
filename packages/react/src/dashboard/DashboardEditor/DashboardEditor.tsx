@@ -138,33 +138,40 @@ export function DashboardEditor({
         setIsDirty(false);
         isInitialLayoutRef.current = true;
 
-        // Execute queries for all widgets in parallel
+        // Execute queries for widgets in batches to reduce server load
         const widgetsWithQueries = data.widgets.filter((w) => w.query);
         if (widgetsWithQueries.length > 0) {
-          // Set all to loading
-          setWidgetLoading((prev) => {
-            const next = { ...prev };
-            widgetsWithQueries.forEach((w) => { next[w.id] = true; });
-            return next;
-          });
+          const BATCH_SIZE = 4;
 
-          // Execute all queries in parallel
-          await Promise.all(
-            widgetsWithQueries.map(async (widget) => {
-              try {
-                const result = await client.executeQuery(widget.query!);
-                setWidgetResults((prev) => ({ ...prev, [widget.id]: result }));
-                setWidgetRefreshTimes((prev) => ({ ...prev, [widget.id]: Math.floor(Date.now() / 1000) }));
-              } catch (err) {
-                setWidgetErrors((prev) => ({
-                  ...prev,
-                  [widget.id]: err instanceof Error ? err : new Error('Query failed'),
-                }));
-              } finally {
-                setWidgetLoading((prev) => ({ ...prev, [widget.id]: false }));
-              }
-            })
-          );
+          // Process widgets in batches
+          for (let i = 0; i < widgetsWithQueries.length; i += BATCH_SIZE) {
+            const batch = widgetsWithQueries.slice(i, i + BATCH_SIZE);
+
+            // Set batch to loading
+            setWidgetLoading((prev) => {
+              const next = { ...prev };
+              batch.forEach((w) => { next[w.id] = true; });
+              return next;
+            });
+
+            // Execute batch in parallel
+            await Promise.all(
+              batch.map(async (widget) => {
+                try {
+                  const result = await client.executeQuery(widget.query!);
+                  setWidgetResults((prev) => ({ ...prev, [widget.id]: result }));
+                  setWidgetRefreshTimes((prev) => ({ ...prev, [widget.id]: Math.floor(Date.now() / 1000) }));
+                } catch (err) {
+                  setWidgetErrors((prev) => ({
+                    ...prev,
+                    [widget.id]: err instanceof Error ? err : new Error('Query failed'),
+                  }));
+                } finally {
+                  setWidgetLoading((prev) => ({ ...prev, [widget.id]: false }));
+                }
+              })
+            );
+          }
         }
       } catch (err) {
         setError(err instanceof Error ? err : new Error('Failed to load dashboard'));
