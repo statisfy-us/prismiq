@@ -24,9 +24,7 @@ if TYPE_CHECKING:
     from starlette.responses import Response
 
 # Context variable for request ID (available across async calls)
-_request_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "request_id", default=None
-)
+_request_id: contextvars.ContextVar[str | None] = contextvars.ContextVar("request_id", default=None)
 
 
 def get_request_id() -> str | None:
@@ -307,9 +305,7 @@ def configure_logging(config: LogConfig | None = None) -> None:
 
     # Set formatter based on config
     formatter: logging.Formatter = (
-        StructuredFormatter(config)
-        if config.format == "json"
-        else TextFormatter(config)
+        StructuredFormatter(config) if config.format == "json" else TextFormatter(config)
     )
 
     handler.setFormatter(formatter)
@@ -357,9 +353,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         self._log_response_body = log_response_body
         self._exclude_paths = set(exclude_paths or [])
 
-    async def dispatch(
-        self, request: Request, call_next: Callable[..., Any]
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: Callable[..., Any]) -> Response:
         """Process request through logging middleware."""
         # Skip excluded paths
         if request.url.path in self._exclude_paths:

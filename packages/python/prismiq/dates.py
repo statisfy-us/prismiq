@@ -29,9 +29,7 @@ class DatePreset(str, Enum):
     ALL_TIME = "all_time"
 
 
-def resolve_date_preset(
-    preset: DatePreset, reference: date | None = None
-) -> tuple[date, date]:
+def resolve_date_preset(preset: DatePreset, reference: date | None = None) -> tuple[date, date]:
     """Convert a date preset to a concrete (start_date, end_date) tuple.
 
     Args:

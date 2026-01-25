@@ -7,10 +7,19 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
-from prismiq.dashboards import (Dashboard, DashboardCreate, DashboardFilter,
-                                DashboardLayout, DashboardUpdate, Widget,
-                                WidgetConfig, WidgetCreate, WidgetPosition,
-                                WidgetType, WidgetUpdate)
+from prismiq.dashboards import (
+    Dashboard,
+    DashboardCreate,
+    DashboardFilter,
+    DashboardLayout,
+    DashboardUpdate,
+    Widget,
+    WidgetConfig,
+    WidgetCreate,
+    WidgetPosition,
+    WidgetType,
+    WidgetUpdate,
+)
 from prismiq.types import QueryDefinition
 
 if TYPE_CHECKING:

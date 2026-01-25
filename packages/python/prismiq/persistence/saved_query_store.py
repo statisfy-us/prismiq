@@ -7,8 +7,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
-from prismiq.types import (QueryDefinition, SavedQuery, SavedQueryCreate,
-                           SavedQueryUpdate)
+from prismiq.types import QueryDefinition, SavedQuery, SavedQueryCreate, SavedQueryUpdate
 
 if TYPE_CHECKING:
     from asyncpg import Pool  # type: ignore[import-not-found]

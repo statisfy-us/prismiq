@@ -225,9 +225,7 @@ class RateLimiter:
                 "limit": self._config.requests_per_minute,
                 "remaining": window.remaining(),
                 "reset": window.reset_time(),
-                "retry_after": bucket.time_until_available()
-                if not bucket_allowed
-                else 0,
+                "retry_after": bucket.time_until_available() if not bucket_allowed else 0,
             }
 
             return bucket_allowed and window_allowed, info

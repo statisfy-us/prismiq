@@ -10,11 +10,11 @@ import copy
 from datetime import date
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict
+
 from prismiq.dashboards import DashboardFilter, DashboardFilterType
 from prismiq.dates import DatePreset, resolve_date_preset
-from prismiq.types import (DatabaseSchema, FilterDefinition, FilterOperator,
-                           QueryDefinition)
-from pydantic import BaseModel, ConfigDict
+from prismiq.types import DatabaseSchema, FilterDefinition, FilterOperator, QueryDefinition
 
 
 class FilterValue(BaseModel):
@@ -87,9 +87,7 @@ def merge_filters(
                 continue
 
         # Convert to query filter(s)
-        query_filters = filter_to_query_filters(
-            dash_filter, filter_value, query, schema
-        )
+        query_filters = filter_to_query_filters(dash_filter, filter_value, query, schema)
         new_filters.extend(query_filters)
 
     if not new_filters:
@@ -183,9 +181,7 @@ def filter_to_query_filters(
         List of FilterDefinition objects (may be empty, one, or two).
     """
     # Find the table containing this column
-    table_id = _find_table_for_column(
-        query, dashboard_filter.field, dashboard_filter.table, schema
-    )
+    table_id = _find_table_for_column(query, dashboard_filter.field, dashboard_filter.table, schema)
     if table_id is None:
         return []
 
@@ -294,9 +290,7 @@ def get_applicable_filters(
     applicable: list[DashboardFilter] = []
 
     for dash_filter in dashboard_filters:
-        table_id = _find_table_for_column(
-            query, dash_filter.field, dash_filter.table, schema
-        )
+        table_id = _find_table_for_column(query, dash_filter.field, dash_filter.table, schema)
         if table_id is not None:
             applicable.append(dash_filter)
 

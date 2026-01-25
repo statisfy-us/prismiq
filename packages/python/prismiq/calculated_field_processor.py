@@ -97,9 +97,7 @@ def _apply_calculated_fields_to_columns(
                 col_copy["_has_aggregation"] = True
                 col_copy["aggregation"] = "none"
             elif aggregation == "count_distinct":
-                col_copy[
-                    "sql_expression"
-                ] = f'COUNT(DISTINCT "{safe_column_name}") OVER ()'
+                col_copy["sql_expression"] = f'COUNT(DISTINCT "{safe_column_name}") OVER ()'
                 col_copy["_has_aggregation"] = True
                 col_copy["aggregation"] = "none"
             elif aggregation == "sum":

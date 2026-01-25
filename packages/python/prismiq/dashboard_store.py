@@ -12,9 +12,17 @@ import uuid
 from datetime import datetime, timezone
 from typing import Protocol
 
-from prismiq.dashboards import (Dashboard, DashboardCreate, DashboardLayout,
-                                DashboardUpdate, Widget, WidgetConfig,
-                                WidgetCreate, WidgetPosition, WidgetUpdate)
+from prismiq.dashboards import (
+    Dashboard,
+    DashboardCreate,
+    DashboardLayout,
+    DashboardUpdate,
+    Widget,
+    WidgetConfig,
+    WidgetCreate,
+    WidgetPosition,
+    WidgetUpdate,
+)
 
 
 def _utc_now() -> datetime:
@@ -31,9 +39,7 @@ class DashboardStore(Protocol):
     isolation.
     """
 
-    async def list_dashboards(
-        self, tenant_id: str, owner_id: str | None = None
-    ) -> list[Dashboard]:
+    async def list_dashboards(self, tenant_id: str, owner_id: str | None = None) -> list[Dashboard]:
         """List all dashboards for a tenant, optionally filtered by owner.
 
         Args:
@@ -45,9 +51,7 @@ class DashboardStore(Protocol):
         """
         ...
 
-    async def get_dashboard(
-        self, dashboard_id: str, tenant_id: str
-    ) -> Dashboard | None:
+    async def get_dashboard(self, dashboard_id: str, tenant_id: str) -> Dashboard | None:
         """Get a dashboard by ID.
 
         Args:
@@ -214,9 +218,7 @@ class InMemoryDashboardStore:
         self._widget_to_dashboard: dict[str, str] = {}
         self._lock = asyncio.Lock()
 
-    async def list_dashboards(
-        self, tenant_id: str, owner_id: str | None = None
-    ) -> list[Dashboard]:
+    async def list_dashboards(self, tenant_id: str, owner_id: str | None = None) -> list[Dashboard]:
         """List all dashboards for a tenant, optionally filtered by owner.
 
         Args:
@@ -237,16 +239,12 @@ class InMemoryDashboardStore:
                 dashboards = [
                     d
                     for d in dashboards
-                    if d.owner_id == owner_id
-                    or d.is_public
-                    or owner_id in d.allowed_viewers
+                    if d.owner_id == owner_id or d.is_public or owner_id in d.allowed_viewers
                 ]
             # Return deep copies to prevent external mutation
             return [self._copy_dashboard(d) for d in dashboards]
 
-    async def get_dashboard(
-        self, dashboard_id: str, tenant_id: str
-    ) -> Dashboard | None:
+    async def get_dashboard(self, dashboard_id: str, tenant_id: str) -> Dashboard | None:
         """Get a dashboard by ID with tenant check.
 
         Args:
@@ -570,9 +568,7 @@ class InMemoryDashboardStore:
                 id=str(uuid.uuid4()),
                 type=original_widget.type,
                 title=f"{original_widget.title} (Copy)",
-                query=copy.deepcopy(original_widget.query)
-                if original_widget.query
-                else None,
+                query=copy.deepcopy(original_widget.query) if original_widget.query else None,
                 position=original_widget.position.model_copy(
                     update={"x": original_widget.position.x + 1}
                 ),

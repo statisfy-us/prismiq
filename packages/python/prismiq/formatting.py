@@ -67,15 +67,11 @@ def format_number(
 
     if format_type == NumberFormat.COMPACT:
         if abs(num) < compact_threshold:
-            return _format_with_separators(
-                num, 0 if num == int(num) else decimals, locale
-            )
+            return _format_with_separators(num, 0 if num == int(num) else decimals, locale)
         return format_compact(num, decimals=1)
 
     if format_type == NumberFormat.CURRENCY:
-        return format_currency(
-            num, symbol=currency_symbol, decimals=decimals, locale=locale
-        )
+        return format_currency(num, symbol=currency_symbol, decimals=decimals, locale=locale)
 
     if format_type == NumberFormat.PERCENT:
         return format_percent(num, decimals=decimals)
