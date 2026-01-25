@@ -2,7 +2,7 @@
  * Dashboard editor component for creating and editing dashboards.
  */
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useTheme } from '../../theme';
 import { useAnalytics } from '../../context';
 import { useSchema } from '../../hooks';
@@ -101,9 +101,6 @@ export function DashboardEditor({
     is_public: false,
   });
 
-  const [originalDashboard, setOriginalDashboard] = useState<Dashboard | null>(
-    null
-  );
   const [isLoading, setIsLoading] = useState(!!dashboardId);
   const [isSaving, setIsSaving] = useState(false);
   const [, setError] = useState<Error | null>(null);
@@ -120,11 +117,11 @@ export function DashboardEditor({
   // UI state - editingWidget can be 'new' for new widget, a Widget for editing, or null
   const [editingWidget, setEditingWidget] = useState<WidgetType | 'new' | null>(null);
 
-  // Track changes
-  const hasChanges = useMemo(() => {
-    if (!originalDashboard) return dashboard.widgets.length > 0;
-    return JSON.stringify(dashboard) !== JSON.stringify(originalDashboard);
-  }, [dashboard, originalDashboard]);
+  // Track changes explicitly with a dirty flag (more reliable than JSON comparison)
+  const [isDirty, setIsDirty] = useState(false);
+
+  // Track if initial layout has been set (react-grid-layout fires onLayoutChange on mount)
+  const isInitialLayoutRef = useRef(true);
 
   // Load existing dashboard
   useEffect(() => {
@@ -135,7 +132,24 @@ export function DashboardEditor({
         setIsLoading(true);
         const data = await client.get<Dashboard>(`/dashboards/${dashboardId}`);
         setDashboard(data);
-        setOriginalDashboard(data);
+
+        // Execute queries for all widgets with data
+        for (const widget of data.widgets) {
+          if (widget.query) {
+            setWidgetLoading((prev) => ({ ...prev, [widget.id]: true }));
+            try {
+              const result = await client.executeQuery(widget.query);
+              setWidgetResults((prev) => ({ ...prev, [widget.id]: result }));
+            } catch (err) {
+              setWidgetErrors((prev) => ({
+                ...prev,
+                [widget.id]: err instanceof Error ? err : new Error('Query failed'),
+              }));
+            } finally {
+              setWidgetLoading((prev) => ({ ...prev, [widget.id]: false }));
+            }
+          }
+        }
       } catch (err) {
         setError(err instanceof Error ? err : new Error('Failed to load dashboard'));
       } finally {
@@ -192,6 +206,12 @@ export function DashboardEditor({
   // Handle layout changes
   const handleLayoutChange = useCallback(
     (positions: Record<string, WidgetPosition>) => {
+      // Skip the initial layout change fired by react-grid-layout on mount
+      if (isInitialLayoutRef.current) {
+        isInitialLayoutRef.current = false;
+        return;
+      }
+
       setDashboard((prev) => ({
         ...prev,
         widgets: prev.widgets.map((widget) => ({
@@ -199,6 +219,7 @@ export function DashboardEditor({
           position: positions[widget.id] || widget.position,
         })),
       }));
+      setIsDirty(true);
     },
     []
   );
@@ -209,13 +230,17 @@ export function DashboardEditor({
 
     setIsSaving(true);
     try {
+      const id = dashboardId || dashboard.id;
       if (dashboardId) {
         await client.patch(`/dashboards/${dashboardId}`, dashboard);
       } else {
         await client.post('/dashboards', dashboard);
       }
-      setOriginalDashboard(dashboard);
-      onSave?.(dashboard);
+      // Reload from server to get canonical state
+      const savedDashboard = await client.get<Dashboard>(`/dashboards/${id}`);
+      setDashboard(savedDashboard);
+      setIsDirty(false); // Reset dirty flag after successful save
+      onSave?.(savedDashboard);
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to save dashboard'));
     } finally {
@@ -225,14 +250,14 @@ export function DashboardEditor({
 
   // Handle cancel
   const handleCancel = useCallback(() => {
-    if (hasChanges) {
+    if (isDirty) {
       const confirmed = window.confirm(
         'You have unsaved changes. Are you sure you want to cancel?'
       );
       if (!confirmed) return;
     }
     onCancel?.();
-  }, [hasChanges, onCancel]);
+  }, [isDirty, onCancel]);
 
   // Handle widget save from editor (new or existing)
   const handleWidgetSave = useCallback((widget: WidgetType) => {
@@ -252,6 +277,7 @@ export function DashboardEditor({
       }));
     }
 
+    setIsDirty(true); // Mark as dirty when widget is added/edited
     setEditingWidget(null);
 
     // Refresh widget data if it has a query
@@ -330,7 +356,7 @@ export function DashboardEditor({
     <div className={`prismiq-dashboard-editor ${className}`} style={containerStyle}>
       <EditorToolbar
         dashboardName={dashboard.name}
-        hasChanges={hasChanges}
+        hasChanges={isDirty}
         isSaving={isSaving}
         onAddWidget={handleAddWidget}
         onSave={handleSave}

@@ -154,6 +154,10 @@ export interface Widget {
   config: WidgetConfig;
   /** Optional hyperlink to external URL (displayed as link icon in header). */
   hyperlink?: WidgetHyperlink;
+  /** Creation timestamp (ISO string). */
+  created_at?: string;
+  /** Last update timestamp (ISO string). */
+  updated_at?: string;
 }
 
 // ============================================================================
@@ -274,6 +278,14 @@ export interface Dashboard {
   filters: DashboardFilter[];
   /** Whether the dashboard is publicly accessible. */
   is_public: boolean;
+  /** Owner user ID. */
+  owner_id?: string | null;
+  /** List of user IDs with view access. */
+  allowed_viewers?: string[];
+  /** Creation timestamp (ISO string). */
+  created_at?: string;
+  /** Last update timestamp (ISO string). */
+  updated_at?: string;
 }
 
 // ============================================================================
