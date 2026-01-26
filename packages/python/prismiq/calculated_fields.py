@@ -648,7 +648,7 @@ def resolve_calculated_fields(
     for name, expr in calc_field_map.items():
         try:
             parsed[name] = parser.parse(expr)
-        except Exception as e:
+        except ValueError as e:
             raise ValueError(f"Failed to parse calculated field '{name}': {e}") from e
 
     # Topological sort to resolve dependencies

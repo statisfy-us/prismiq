@@ -579,6 +579,8 @@ class QueryBuilder:
             # Use pre-computed SQL if available (handles inter-field dependencies)
             # Note: sql_expression should already be fully qualified for JOINs
             if cf.sql_expression:
+                if not cf.sql_expression.strip():
+                    raise ValueError(f"Calculated field '{cf.name}' has empty sql_expression")
                 calc_sql_map[cf.name] = cf.sql_expression
             elif cf.expression:
                 # Fall back to parsing (won't resolve inter-field refs correctly)
