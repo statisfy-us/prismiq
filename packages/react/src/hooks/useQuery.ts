@@ -176,10 +176,16 @@ export function useQuery(
     }
   }, [client, query, enabled, preview, previewLimit]);
 
+  // Store executeQuery in a ref to avoid circular dependency in useEffect
+  const executeQueryRef = useRef(executeQuery);
+  useEffect(() => {
+    executeQueryRef.current = executeQuery;
+  });
+
   // Refetch function (exposed to consumers)
   const refetch = useCallback(async () => {
-    await executeQuery();
-  }, [executeQuery]);
+    await executeQueryRef.current();
+  }, []);
 
   // Execute query when dependencies change
   useEffect(() => {
@@ -203,8 +209,8 @@ export function useQuery(
       return;
     }
 
-    void executeQuery();
-  }, [query, enabled, executeQuery]);
+    void executeQueryRef.current();
+  }, [query, enabled]);
 
   // Cleanup on unmount
   useEffect(() => {

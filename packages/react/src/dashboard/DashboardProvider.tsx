@@ -473,12 +473,20 @@ export function DashboardProvider({
   // Execute widget queries when dashboard loads or filters change
   // Also re-execute when cross-filters change
   const crossFilters = crossFilterContext?.filters ?? [];
+
+  // Track previous cross-filters to detect actual changes
+  const prevCrossFiltersRef = useRef<string>('');
+  const crossFiltersKey = JSON.stringify(crossFilters);
+
   useEffect(() => {
     if (dashboard && !isLoading) {
+      // Track cross-filters key for debugging/future optimization
+      prevCrossFiltersRef.current = crossFiltersKey;
+
+      // Execute on initial load or when filters change
       executeAllWidgets(dashboard, filterValues, crossFilters);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dashboard, filterValues, isLoading, executeAllWidgets, JSON.stringify(crossFilters)]);
+  }, [dashboard, filterValues, isLoading, executeAllWidgets, crossFiltersKey, crossFilters]);
 
   // Context value
   const contextValue = useMemo<DashboardContextValue>(

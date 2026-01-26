@@ -239,24 +239,36 @@ export function QueryBuilder({
     void generatePreview();
   }, [client, query, canExecute]);
 
+  // Store latest callbacks in refs to avoid including in useEffect dependencies
+  const onQueryChangeRef = useRef(onQueryChange);
+  const onExecuteRef = useRef(onExecute);
+  const onErrorRef = useRef(onError);
+
+  // Keep refs up to date
+  useEffect(() => {
+    onQueryChangeRef.current = onQueryChange;
+    onExecuteRef.current = onExecute;
+    onErrorRef.current = onError;
+  });
+
   // Notify parent of query changes
   useEffect(() => {
-    onQueryChange?.(query);
-  }, [query, onQueryChange]);
+    onQueryChangeRef.current?.(query);
+  }, [query]);
 
   // Handle execution results
   useEffect(() => {
     if (result) {
-      onExecute?.(result);
+      onExecuteRef.current?.(result);
     }
-  }, [result, onExecute]);
+  }, [result]);
 
   // Handle errors
   useEffect(() => {
     if (error) {
-      onError?.(error);
+      onErrorRef.current?.(error);
     }
-  }, [error, onError]);
+  }, [error]);
 
   // Auto-execute with debounce
   useEffect(() => {
