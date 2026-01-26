@@ -1,4 +1,4 @@
-import { useState, CSSProperties } from 'react'
+import { useState, useCallback, CSSProperties } from 'react'
 import { useTheme, QueryBuilder, ResultsTable, useQuery, SavedQueryPicker } from '@prismiq/react'
 import type { QueryDefinition, SavedQuery } from '@prismiq/react'
 
@@ -6,7 +6,7 @@ export function ExplorePage() {
   const { resolvedMode } = useTheme()
   const [query, setQuery] = useState<QueryDefinition | null>(null)
   // Only execute when query has tables AND columns (a valid query)
-  const canExecute = query && query.tables.length > 0 && query.columns.length > 0
+  const canExecute = !!(query && query.tables.length > 0 && query.columns.length > 0)
   const { data, isLoading, error } = useQuery(query, { enabled: canExecute })
 
   const containerStyle: CSSProperties = {
@@ -45,13 +45,13 @@ export function ExplorePage() {
     marginBottom: '16px',
   }
 
-  const handleSelectSavedQuery = (savedQuery: SavedQuery) => {
+  const handleSelectSavedQuery = useCallback((savedQuery: SavedQuery) => {
     setQuery(savedQuery.query)
-  }
+  }, [])
 
-  const handleSaveQuery = (savedQuery: SavedQuery) => {
+  const handleSaveQuery = useCallback((savedQuery: SavedQuery) => {
     console.log('Query saved:', savedQuery.name)
-  }
+  }, [])
 
   const resultContainerStyle: CSSProperties = {
     backgroundColor: resolvedMode === 'dark' ? '#18181b' : '#ffffff',
