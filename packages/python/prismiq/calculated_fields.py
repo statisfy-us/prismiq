@@ -29,12 +29,20 @@ from typing import Any
 class ExprNode:
     """Base class for expression AST nodes."""
 
-    def to_sql(self, field_mapping: dict[str, str], use_window_functions: bool = False) -> str:
+    def to_sql(
+        self,
+        field_mapping: dict[str, str],
+        use_window_functions: bool = False,
+        default_table_ref: str | None = None,
+    ) -> str:
         """Convert to PostgreSQL SQL.
 
         Args:
             field_mapping: Map of calculated field names to their SQL expressions
             use_window_functions: If True, use window functions (OVER ()) for aggregations
+            default_table_ref: Optional table reference to qualify unqualified column names.
+                When there are JOINs, this prevents "ambiguous column" errors.
+                Example: "account_view" -> "account_view"."column_name"
 
         Returns:
             PostgreSQL SQL expression
@@ -58,7 +66,12 @@ class FieldRef(ExprNode):
     def __init__(self, name: str):
         self.name = name
 
-    def to_sql(self, field_mapping: dict[str, str], use_window_functions: bool = False) -> str:
+    def to_sql(
+        self,
+        field_mapping: dict[str, str],
+        use_window_functions: bool = False,
+        default_table_ref: str | None = None,
+    ) -> str:
         # Check if it's a calculated field that needs substitution
         if self.name in field_mapping:
             return f"({field_mapping[self.name]})"
@@ -71,6 +84,8 @@ class FieldRef(ExprNode):
                 # Check if the inner field is also a calculated field
                 if inner_field in field_mapping:
                     inner_sql = f"({field_mapping[inner_field]})"
+                elif default_table_ref:
+                    inner_sql = f'"{default_table_ref}"."{inner_field}"'
                 else:
                     inner_sql = f'"{inner_field}"'
                 # Generate the aggregation SQL
@@ -87,7 +102,9 @@ class FieldRef(ExprNode):
                 alias, column = parts
                 return f'"{alias}"."{column}"'
 
-        # Regular column reference
+        # Regular column reference - qualify with default_table_ref if provided
+        if default_table_ref:
+            return f'"{default_table_ref}"."{self.name}"'
         return f'"{self.name}"'
 
 
@@ -98,16 +115,21 @@ class FunctionCall(ExprNode):
         self.name = name
         self.args = args
 
-    def to_sql(self, field_mapping: dict[str, str], use_window_functions: bool = False) -> str:
+    def to_sql(
+        self,
+        field_mapping: dict[str, str],
+        use_window_functions: bool = False,
+        default_table_ref: str | None = None,
+    ) -> str:
         if self.name == "if":
             # if(condition, true_val, false_val) -> CASE WHEN condition THEN true_val ELSE false_val END
-            cond = self.args[0].to_sql(field_mapping, use_window_functions)
-            true_val = self.args[1].to_sql(field_mapping, use_window_functions)
-            false_val = self.args[2].to_sql(field_mapping, use_window_functions)
+            cond = self.args[0].to_sql(field_mapping, use_window_functions, default_table_ref)
+            true_val = self.args[1].to_sql(field_mapping, use_window_functions, default_table_ref)
+            false_val = self.args[2].to_sql(field_mapping, use_window_functions, default_table_ref)
             return f"CASE WHEN {cond} THEN {true_val} ELSE {false_val} END"
 
         elif self.name == "sum":
-            arg = self.args[0].to_sql(field_mapping, use_window_functions)
+            arg = self.args[0].to_sql(field_mapping, use_window_functions, default_table_ref)
             if use_window_functions:
                 # Use a scalar subquery placeholder instead of OVER ()
                 # main.py will replace __SCALAR_SUM_<column>__ with actual subquery
@@ -118,53 +140,56 @@ class FunctionCall(ExprNode):
             return f"SUM({arg})"
 
         elif self.name == "avg":
-            arg = self.args[0].to_sql(field_mapping, use_window_functions)
+            arg = self.args[0].to_sql(field_mapping, use_window_functions, default_table_ref)
             if use_window_functions:
                 return f"AVG({arg}) OVER ()"
             return f"AVG({arg})"
 
         elif self.name == "count":
-            arg = self.args[0].to_sql(field_mapping, use_window_functions)
+            arg = self.args[0].to_sql(field_mapping, use_window_functions, default_table_ref)
             if use_window_functions:
                 return f"COUNT({arg}) OVER ()"
             return f"COUNT({arg})"
 
         elif self.name == "min":
-            arg = self.args[0].to_sql(field_mapping, use_window_functions)
+            arg = self.args[0].to_sql(field_mapping, use_window_functions, default_table_ref)
             if use_window_functions:
                 return f"MIN({arg}) OVER ()"
             return f"MIN({arg})"
 
         elif self.name == "max":
-            arg = self.args[0].to_sql(field_mapping, use_window_functions)
+            arg = self.args[0].to_sql(field_mapping, use_window_functions, default_table_ref)
             if use_window_functions:
                 return f"MAX({arg}) OVER ()"
             return f"MAX({arg})"
 
         elif self.name == "find":
             # find(substring, text) -> POSITION(substring IN text)
-            substring = self.args[0].to_sql(field_mapping, use_window_functions)
-            text = self.args[1].to_sql(field_mapping, use_window_functions)
+            substring = self.args[0].to_sql(field_mapping, use_window_functions, default_table_ref)
+            text = self.args[1].to_sql(field_mapping, use_window_functions, default_table_ref)
             return f"POSITION({substring} IN {text})"
 
         elif self.name == "today":
             return "CURRENT_DATE"
 
         elif self.name == "year":
-            arg = self.args[0].to_sql(field_mapping, use_window_functions)
+            arg = self.args[0].to_sql(field_mapping, use_window_functions, default_table_ref)
             return f"EXTRACT(YEAR FROM {arg})"
 
         elif self.name == "month":
-            arg = self.args[0].to_sql(field_mapping, use_window_functions)
+            arg = self.args[0].to_sql(field_mapping, use_window_functions, default_table_ref)
             return f"EXTRACT(MONTH FROM {arg})"
 
         elif self.name == "day":
-            arg = self.args[0].to_sql(field_mapping, use_window_functions)
+            arg = self.args[0].to_sql(field_mapping, use_window_functions, default_table_ref)
             return f"EXTRACT(DAY FROM {arg})"
 
         elif self.name == "date":
             # date(year, month, day, hour, min, sec) -> MAKE_TIMESTAMP
-            args_sql = [arg.to_sql(field_mapping, use_window_functions) for arg in self.args]
+            args_sql = [
+                arg.to_sql(field_mapping, use_window_functions, default_table_ref)
+                for arg in self.args
+            ]
             # MAKE_TIMESTAMP expects: year, month, day, hour, minute, second (all as INTEGER)
             # Cast each arg to INTEGER since EXTRACT() returns NUMERIC
             args_cast = [f"({a})::INTEGER" for a in args_sql]
@@ -172,7 +197,10 @@ class FunctionCall(ExprNode):
 
         elif self.name == "concatenate":
             # Concatenate all arguments with ||
-            args_sql = [arg.to_sql(field_mapping, use_window_functions) for arg in self.args]
+            args_sql = [
+                arg.to_sql(field_mapping, use_window_functions, default_table_ref)
+                for arg in self.args
+            ]
             return " || ".join(args_sql)
 
         elif self.name == "datediff":
@@ -182,8 +210,8 @@ class FunctionCall(ExprNode):
             #   If date is Jan 17 and today is Jan 18, result = -1 (yesterday is -1 day from today)
             # PostgreSQL equivalent: (date2 - date1) to match expected semantics
             if len(self.args) >= 2:
-                date1 = self.args[0].to_sql(field_mapping, use_window_functions)
-                date2 = self.args[1].to_sql(field_mapping, use_window_functions)
+                date1 = self.args[0].to_sql(field_mapping, use_window_functions, default_table_ref)
+                date2 = self.args[1].to_sql(field_mapping, use_window_functions, default_table_ref)
                 # Get interval type if specified (3rd arg)
                 interval = "d"  # default to days
                 if len(self.args) >= 3 and isinstance(self.args[2], Literal):
@@ -213,12 +241,18 @@ class FunctionCall(ExprNode):
                     return f"(({date2})::date - ({date1})::date)"
             else:
                 # Not enough arguments, return raw
-                args_sql = [arg.to_sql(field_mapping, use_window_functions) for arg in self.args]
+                args_sql = [
+                    arg.to_sql(field_mapping, use_window_functions, default_table_ref)
+                    for arg in self.args
+                ]
                 return f"DATEDIFF({', '.join(args_sql)})"
 
         else:
             # Unknown function - pass through
-            args_sql = [arg.to_sql(field_mapping, use_window_functions) for arg in self.args]
+            args_sql = [
+                arg.to_sql(field_mapping, use_window_functions, default_table_ref)
+                for arg in self.args
+            ]
             return f"{self.name.upper()}({', '.join(args_sql)})"
 
 
@@ -230,8 +264,13 @@ class MethodCall(ExprNode):
         self.method = method
         self.args = args
 
-    def to_sql(self, field_mapping: dict[str, str], use_window_functions: bool = False) -> str:
-        obj_sql = self.obj.to_sql(field_mapping, use_window_functions)
+    def to_sql(
+        self,
+        field_mapping: dict[str, str],
+        use_window_functions: bool = False,
+        default_table_ref: str | None = None,
+    ) -> str:
+        obj_sql = self.obj.to_sql(field_mapping, use_window_functions, default_table_ref)
 
         if self.method == "concatenate":
             # [field].concatenate() -> COALESCE([field], '')
@@ -251,9 +290,14 @@ class BinaryOp(ExprNode):
         self.left = left
         self.right = right
 
-    def to_sql(self, field_mapping: dict[str, str], use_window_functions: bool = False) -> str:
-        left_sql = self.left.to_sql(field_mapping, use_window_functions)
-        right_sql = self.right.to_sql(field_mapping, use_window_functions)
+    def to_sql(
+        self,
+        field_mapping: dict[str, str],
+        use_window_functions: bool = False,
+        default_table_ref: str | None = None,
+    ) -> str:
+        left_sql = self.left.to_sql(field_mapping, use_window_functions, default_table_ref)
+        right_sql = self.right.to_sql(field_mapping, use_window_functions, default_table_ref)
 
         # Map expression operators to SQL
         op_map = {"==": "=", "!=": "<>"}
@@ -279,7 +323,12 @@ class Literal(ExprNode):
     def __init__(self, value: Any):
         self.value = value
 
-    def to_sql(self, field_mapping: dict[str, str], use_window_functions: bool = False) -> str:
+    def to_sql(
+        self,
+        field_mapping: dict[str, str],
+        use_window_functions: bool = False,
+        default_table_ref: str | None = None,
+    ) -> str:
         if isinstance(self.value, str):
             # Escape single quotes by doubling them
             escaped = self.value.replace("'", "''")
@@ -713,7 +762,12 @@ def resolve_calculated_fields(
         # 1. This calculated field has aggregation in its expression
         # 2. AND an outer aggregation will be applied (from VisualizationDataSpec)
         use_window_functions = has_agg and will_have_outer_agg
-        sql = ast.to_sql(dep_sql_map, use_window_functions=use_window_functions)
+        # Pass base_table_name as default_table_ref to qualify unqualified columns
+        sql = ast.to_sql(
+            dep_sql_map,
+            use_window_functions=use_window_functions,
+            default_table_ref=base_table_name,
+        )
 
         resolved[name] = (sql, has_agg)
 

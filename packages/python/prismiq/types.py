@@ -292,6 +292,13 @@ class CalculatedField(BaseModel):
     - Field references: [field_name]
     """
 
+    sql_expression: str | None = None
+    """
+    Pre-computed SQL expression with all field references resolved.
+    When provided, this is used directly instead of parsing `expression`.
+    This allows the caller to handle inter-field dependency resolution.
+    """
+
     data_type: str = "number"
     """Data type of the result: 'number', 'string', 'date', 'boolean'."""
 
