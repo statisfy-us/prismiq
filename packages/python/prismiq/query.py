@@ -571,25 +571,34 @@ class QueryBuilder:
         """
         calc_sql_map: dict[str, str] = {}
 
-        # Get base table name for qualifying unqualified column references
-        # This prevents "ambiguous column" errors in multi-table queries
-        base_table_name = query.tables[0].name if query.tables else None
+        # Get base table reference for qualifying unqualified column references.
+        # Prefer alias over name since FROM clause uses alias when present.
+        # This prevents "ambiguous column" errors in multi-table queries.
+        if query.tables:
+            base_table = query.tables[0]
+            base_table_ref = base_table.alias or base_table.name
+        else:
+            base_table_ref = None
 
         for cf in query.calculated_fields:
-            # Use pre-computed SQL if available (handles inter-field dependencies)
-            # Note: sql_expression should already be fully qualified for JOINs
+            # Use pre-computed SQL if available (handles inter-field dependencies).
+            # IMPORTANT: sql_expression must be pre-validated and use parameterized
+            # values. It should have all column references fully qualified with the
+            # correct table alias/name to match the FROM clause.
             if cf.sql_expression:
                 if not cf.sql_expression.strip():
                     raise ValueError(f"Calculated field '{cf.name}' has empty sql_expression")
                 calc_sql_map[cf.name] = cf.sql_expression
             elif cf.expression:
-                # Fall back to parsing (won't resolve inter-field refs correctly)
+                # Fall back to parsing on-demand. This is a secondary code path
+                # that won't resolve inter-field references correctly. Prefer
+                # providing sql_expression from resolve_calculated_fields().
                 try:
                     parser = ExpressionParser()
                     ast = parser.parse(cf.expression)
-                    calc_sql_map[cf.name] = ast.to_sql({}, default_table_ref=base_table_name)
+                    calc_sql_map[cf.name] = ast.to_sql({}, default_table_ref=base_table_ref)
                 except ValueError as e:
-                    # Raise a clear, actionable error instead of silently falling back
+                    # Fail closed: raise a clear error instead of injecting raw text
                     raise ValueError(
                         f"Failed to parse calculated field '{cf.name}': {e}. "
                         f"Expression: {cf.expression!r}"
