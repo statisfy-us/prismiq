@@ -37,11 +37,8 @@ from prismiq.permissions import (
 )
 from prismiq.query import ValidationResult
 from prismiq.schema_config import (
-    ColumnConfig,
     EnhancedDatabaseSchema,
     EnhancedTableSchema,
-    SchemaConfig,
-    TableConfig,
 )
 from prismiq.sql_validator import SQLValidationError
 from prismiq.timeseries import TimeInterval
@@ -1052,59 +1049,6 @@ def create_router(
             raise HTTPException(status_code=400, detail=str(e)) from e
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
-
-    # ========================================================================
-    # Schema Config Endpoints (Read-Only)
-    # ========================================================================
-    # NOTE: Schema configuration should be set at engine initialization time
-    # via the schema_config parameter. These endpoints are read-only for
-    # introspection purposes. To configure schema display names, hidden
-    # tables/columns, etc., pass a SchemaConfig when creating the engine:
-    #
-    #   engine = PrismiqEngine(
-    #       database_url="...",
-    #       schema_config=SchemaConfig(tables={...})
-    #   )
-
-    @router.get("/config", response_model=SchemaConfig)
-    async def get_schema_config() -> SchemaConfig:
-        """Get the current schema configuration.
-
-        Returns:
-            Current SchemaConfig with all table and column settings.
-
-        Note:
-            This endpoint is read-only. Schema configuration should be
-            set at engine initialization time via the schema_config parameter.
-        """
-        return engine.get_schema_config()
-
-    @router.get("/config/tables/{table_name}", response_model=TableConfig)
-    async def get_table_config(table_name: str) -> TableConfig:
-        """Get configuration for a specific table.
-
-        Args:
-            table_name: Name of the table.
-
-        Returns:
-            TableConfig for the table (may be default if not configured).
-        """
-        config = engine.get_schema_config()
-        return config.get_table_config(table_name)
-
-    @router.get("/config/tables/{table_name}/columns/{column_name}", response_model=ColumnConfig)
-    async def get_column_config(table_name: str, column_name: str) -> ColumnConfig:
-        """Get configuration for a specific column.
-
-        Args:
-            table_name: Name of the table.
-            column_name: Name of the column.
-
-        Returns:
-            ColumnConfig for the column (may be default if not configured).
-        """
-        config = engine.get_schema_config()
-        return config.get_column_config(table_name, column_name)
 
     # ========================================================================
     # Dashboard Endpoints
