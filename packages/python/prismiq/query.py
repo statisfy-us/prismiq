@@ -78,15 +78,27 @@ class QueryBuilder:
         >>> sql, params = builder.build(query_definition)
         >>> # sql: 'SELECT "users"."email" FROM "users" WHERE "users"."id" = $1'
         >>> # params: [42]
+
+    With schema qualification:
+        >>> builder = QueryBuilder(schema, schema_name="org_123")
+        >>> sql, params = builder.build(query_definition)
+        >>> # sql: 'SELECT "org_123"."users"."email" FROM "org_123"."users" ...'
     """
 
-    def __init__(self, schema: DatabaseSchema) -> None:
+    def __init__(
+        self,
+        schema: DatabaseSchema,
+        schema_name: str | None = None,
+    ) -> None:
         """Initialize the query builder.
 
         Args:
             schema: Database schema for validation.
+            schema_name: PostgreSQL schema name for schema-qualified table references.
+                If None, tables are referenced without schema prefix (uses search_path).
         """
         self._schema = schema
+        self._schema_name = schema_name
 
     def validate(self, query: QueryDefinition) -> list[str]:
         """Validate a query definition against the schema.
@@ -580,7 +592,10 @@ class QueryBuilder:
         return col_ref
 
     def _build_from(self, query: QueryDefinition, table_refs: dict[str, str]) -> str:
-        """Build the FROM clause including JOINs."""
+        """Build the FROM clause including JOINs.
+
+        Uses schema-qualified table names if schema_name is set.
+        """
         if not query.tables:
             return ""
 
@@ -589,7 +604,7 @@ class QueryBuilder:
 
         # First table
         first_table = query.tables[0]
-        sql = self._quote_identifier(first_table.name)
+        sql = self._quote_table(first_table.name)
         if first_table.alias:
             sql += f" AS {self._quote_identifier(first_table.alias)}"
         tables_in_from.add(first_table.id)
@@ -605,7 +620,7 @@ class QueryBuilder:
             from_ref = table_refs[join.from_table_id]
             to_ref = table_refs[join.to_table_id]
 
-            table_sql = self._quote_identifier(to_table.name)
+            table_sql = self._quote_table(to_table.name)
             if to_table.alias:
                 table_sql += f" AS {self._quote_identifier(to_table.alias)}"
 
@@ -620,7 +635,7 @@ class QueryBuilder:
         # This handles cases where columns are selected from multiple tables without explicit joins
         for qt in query.tables[1:]:
             if qt.id not in tables_in_from:
-                table_sql = self._quote_identifier(qt.name)
+                table_sql = self._quote_table(qt.name)
                 if qt.alias:
                     table_sql += f" AS {self._quote_identifier(qt.alias)}"
                 sql += f", {table_sql}"
@@ -722,8 +737,15 @@ class QueryBuilder:
                 params.append(f.value[1])
                 p2 = len(params)
                 return f"{col_ref} BETWEEN ${p1} AND ${p2}", params
-            # Fallback for invalid between value
-            return "1=1", params
+            # Invalid BETWEEN value - raise error instead of silent fallback
+            value_desc = (
+                f"{len(f.value)} values"
+                if isinstance(f.value, list | tuple)
+                else type(f.value).__name__
+            )
+            raise ValueError(
+                f"BETWEEN filter on column '{f.column}' requires exactly 2 values, got {value_desc}"
+            )
 
         if op == FilterOperator.IS_NULL:
             return f"{col_ref} IS NULL", params
@@ -731,8 +753,8 @@ class QueryBuilder:
         if op == FilterOperator.IS_NOT_NULL:
             return f"{col_ref} IS NOT NULL", params
 
-        # Unknown operator - return tautology
-        return "1=1", params
+        # Unknown operator - raise error instead of silent fallback
+        raise ValueError(f"Unknown filter operator: {op}")
 
     def _build_group_by(self, query: QueryDefinition, table_refs: dict[str, str]) -> str:
         """Build the GROUP BY clause, including time series bucket if
@@ -792,3 +814,19 @@ class QueryBuilder:
         # Escape any existing double quotes
         escaped = identifier.replace('"', '""')
         return f'"{escaped}"'
+
+    def _quote_table(self, table_name: str) -> str:
+        """Quote a table name with optional schema qualification.
+
+        Args:
+            table_name: Name of the table.
+
+        Returns:
+            Schema-qualified table name if schema_name is set,
+            otherwise just the quoted table name.
+            E.g., "org_123"."users" or just "users"
+        """
+        quoted_table = self._quote_identifier(table_name)
+        if self._schema_name:
+            return f"{self._quote_identifier(self._schema_name)}.{quoted_table}"
+        return quoted_table

@@ -6,6 +6,7 @@ analytics platform.
 
 from __future__ import annotations
 
+import logging
 import time
 from datetime import date, timedelta
 from typing import TYPE_CHECKING, Any
@@ -42,6 +43,8 @@ from prismiq.types import (
 
 if TYPE_CHECKING:
     from asyncpg import Pool
+
+_logger = logging.getLogger(__name__)
 
 
 class PrismiqEngine:
@@ -299,10 +302,33 @@ class PrismiqEngine:
     # Schema Methods
     # ========================================================================
 
-    async def get_schema(self, force_refresh: bool = False) -> DatabaseSchema:
+    async def _validate_schema_exists(self, schema_name: str) -> bool:
+        """Verify that a PostgreSQL schema exists.
+
+        Args:
+            schema_name: Name of the schema to check.
+
+        Returns:
+            True if the schema exists, False otherwise.
+        """
+        assert self._pool is not None
+        async with self._pool.acquire() as conn:
+            result = await conn.fetchval(
+                "SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name = $1)",
+                schema_name,
+            )
+            return bool(result)
+
+    async def get_schema(
+        self,
+        schema_name: str | None = None,
+        force_refresh: bool = False,
+    ) -> DatabaseSchema:
         """Get the complete database schema (raw, without config applied).
 
         Args:
+            schema_name: PostgreSQL schema to introspect. If None, uses the engine's
+                default schema. Used for multi-tenant schema isolation.
             force_refresh: If True, bypass cache and introspect fresh.
 
         Returns:
@@ -310,32 +336,72 @@ class PrismiqEngine:
 
         Raises:
             RuntimeError: If the engine has not been started.
+            ValueError: If the specified schema does not exist.
         """
         self._ensure_started()
-        assert self._introspector is not None
-        return await self._introspector.get_schema(force_refresh=force_refresh)
+        assert self._pool is not None
 
-    async def get_enhanced_schema(self) -> EnhancedDatabaseSchema:
+        effective_schema = schema_name or self._schema_name
+
+        # If using the default schema, use the cached introspector
+        if effective_schema == self._schema_name:
+            assert self._introspector is not None
+            return await self._introspector.get_schema(force_refresh=force_refresh)
+
+        # For non-default schemas, validate existence first
+        if not await self._validate_schema_exists(effective_schema):
+            raise ValueError(
+                f"PostgreSQL schema '{effective_schema}' does not exist. "
+                f'Verify the schema name or create it with: CREATE SCHEMA "{effective_schema}"'
+            )
+
+        # For non-default schemas, create introspector on-demand
+        # Uses existing cache with schema-based keys
+        introspector_kwargs: dict[str, Any] = {
+            "exposed_tables": self._exposed_tables,
+            "schema_name": effective_schema,
+            "cache": self._cache,
+        }
+        if self._schema_cache_ttl is not None:
+            introspector_kwargs["cache_ttl"] = self._schema_cache_ttl
+
+        introspector = SchemaIntrospector(self._pool, **introspector_kwargs)
+        return await introspector.get_schema(force_refresh=force_refresh)
+
+    async def get_enhanced_schema(
+        self,
+        schema_name: str | None = None,
+    ) -> EnhancedDatabaseSchema:
         """Get the database schema with configuration applied.
 
         Returns schema with display names, descriptions, and hidden
         tables/columns filtered out.
+
+        Args:
+            schema_name: PostgreSQL schema to introspect. If None, uses the engine's
+                default schema. Used for multi-tenant schema isolation.
 
         Returns:
             EnhancedDatabaseSchema with configuration applied.
 
         Raises:
             RuntimeError: If the engine has not been started.
+            ValueError: If the specified schema does not exist.
         """
         self._ensure_started()
-        schema = await self.get_schema()
+        schema = await self.get_schema(schema_name=schema_name)
         return self._schema_config_manager.apply_to_schema(schema)
 
-    async def get_table(self, table_name: str) -> TableSchema:
+    async def get_table(
+        self,
+        table_name: str,
+        schema_name: str | None = None,
+    ) -> TableSchema:
         """Get schema information for a single table.
 
         Args:
             table_name: Name of the table to retrieve.
+            schema_name: PostgreSQL schema to introspect.
 
         Returns:
             TableSchema for the requested table.
@@ -343,10 +409,36 @@ class PrismiqEngine:
         Raises:
             RuntimeError: If the engine has not been started.
             TableNotFoundError: If the table is not found.
+            ValueError: If the specified schema does not exist (for non-default schemas).
         """
         self._ensure_started()
-        assert self._introspector is not None
-        return await self._introspector.get_table(table_name)
+        assert self._pool is not None
+
+        effective_schema = schema_name or self._schema_name
+
+        # If using the default schema, use the cached introspector
+        if effective_schema == self._schema_name:
+            assert self._introspector is not None
+            return await self._introspector.get_table(table_name)
+
+        # For non-default schemas, validate existence first
+        if not await self._validate_schema_exists(effective_schema):
+            raise ValueError(
+                f"PostgreSQL schema '{effective_schema}' does not exist. "
+                f'Verify the schema name or create it with: CREATE SCHEMA "{effective_schema}"'
+            )
+
+        # For non-default schemas, create introspector on-demand
+        introspector_kwargs: dict[str, Any] = {
+            "exposed_tables": self._exposed_tables,
+            "schema_name": effective_schema,
+            "cache": self._cache,
+        }
+        if self._schema_cache_ttl is not None:
+            introspector_kwargs["cache_ttl"] = self._schema_cache_ttl
+
+        introspector = SchemaIntrospector(self._pool, **introspector_kwargs)
+        return await introspector.get_table(table_name)
 
     # ========================================================================
     # Query Methods
@@ -355,12 +447,15 @@ class PrismiqEngine:
     async def execute_query(
         self,
         query: QueryDefinition,
+        schema_name: str | None = None,
         use_cache: bool = True,
     ) -> QueryResult:
         """Execute a query and return results.
 
         Args:
             query: Query definition to execute.
+            schema_name: PostgreSQL schema for table resolution. If None, uses the
+                engine's default schema. Used for multi-tenant schema isolation.
             use_cache: Whether to use cached results if available.
 
         Returns:
@@ -373,13 +468,29 @@ class PrismiqEngine:
             QueryExecutionError: If the query execution fails.
         """
         self._ensure_started()
-        assert self._executor is not None
+        assert self._pool is not None
 
+        effective_schema = schema_name or self._schema_name
         start = time.perf_counter()
 
+        # Create schema-specific cache for non-default schemas
+        query_cache = self._query_cache
+        if use_cache and self._cache and effective_schema != self._schema_name:
+            # Build CacheConfig with provided TTLs or use defaults
+            config_kwargs: dict[str, int] = {}
+            if self._query_cache_ttl is not None:
+                config_kwargs["query_ttl"] = self._query_cache_ttl
+                config_kwargs["default_ttl"] = self._query_cache_ttl
+            cache_config = CacheConfig(**config_kwargs) if config_kwargs else None
+            query_cache = QueryCache(
+                self._cache,
+                config=cache_config,
+                schema_name=effective_schema,
+            )
+
         # Check cache first
-        if use_cache and self._query_cache:
-            cached = await self._query_cache.get_result(query)
+        if use_cache and query_cache:
+            cached = await query_cache.get_result(query)
             if cached:
                 if self._enable_metrics:
                     record_cache_hit(True)
@@ -387,13 +498,32 @@ class PrismiqEngine:
             if self._enable_metrics:
                 record_cache_hit(False)
 
+        # Get schema for the target schema
+        db_schema = await self.get_schema(schema_name=effective_schema)
+
+        # Create executor for this schema
+        executor = QueryExecutor(
+            self._pool,
+            db_schema,
+            query_timeout=self._query_timeout,
+            max_rows=self._max_rows,
+            schema_name=effective_schema,
+        )
+
         # Execute query
         try:
-            result = await self._executor.execute(query)
+            result = await executor.execute(query)
 
-            # Cache the result
-            if use_cache and self._query_cache:
-                await self._query_cache.cache_result(query, result)
+            # Cache the result (non-critical, log failures but don't fail the request)
+            if use_cache and query_cache:
+                try:
+                    await query_cache.cache_result(query, result)
+                except Exception as cache_err:
+                    _logger.warning(
+                        "Failed to cache query result: %s (%s)",
+                        cache_err,
+                        type(cache_err).__name__,
+                    )
 
             # Record metrics
             if self._enable_metrics:
@@ -408,12 +538,18 @@ class PrismiqEngine:
                 record_query_execution(duration, "error")
             raise
 
-    async def preview_query(self, query: QueryDefinition, limit: int = 100) -> QueryResult:
+    async def preview_query(
+        self,
+        query: QueryDefinition,
+        limit: int = 100,
+        schema_name: str | None = None,
+    ) -> QueryResult:
         """Execute a query with a limited number of rows.
 
         Args:
             query: Query definition to execute.
             limit: Maximum number of rows to return.
+            schema_name: PostgreSQL schema for table resolution.
 
         Returns:
             QueryResult with limited rows.
@@ -423,14 +559,28 @@ class PrismiqEngine:
             QueryValidationError: If the query fails validation.
         """
         self._ensure_started()
-        assert self._executor is not None
-        return await self._executor.preview(query, limit=limit)
+        assert self._pool is not None
+
+        effective_schema = schema_name or self._schema_name
+
+        # Get schema and create executor for this schema
+        db_schema = await self.get_schema(schema_name=effective_schema)
+
+        executor = QueryExecutor(
+            self._pool,
+            db_schema,
+            query_timeout=self._query_timeout,
+            max_rows=self._max_rows,
+            schema_name=effective_schema,
+        )
+        return await executor.preview(query, limit=limit)
 
     async def sample_column_values(
         self,
         table_name: str,
         column_name: str,
         limit: int = 5,
+        schema_name: str | None = None,
     ) -> list[Any]:
         """Get sample values from a column for data preview.
 
@@ -438,6 +588,7 @@ class PrismiqEngine:
             table_name: Name of the table.
             column_name: Name of the column.
             limit: Maximum number of distinct values to return.
+            schema_name: PostgreSQL schema to query.
 
         Returns:
             List of sample values from the column.
@@ -448,10 +599,14 @@ class PrismiqEngine:
         """
         self._ensure_started()
         assert self._pool is not None
-        assert self._schema is not None
+
+        effective_schema = schema_name or self._schema_name
+
+        # Get the schema for validation
+        db_schema = await self.get_schema(schema_name=effective_schema)
 
         # Validate table exists
-        table = self._schema.get_table(table_name)
+        table = db_schema.get_table(table_name)
         if table is None:
             raise ValueError(f"Table '{table_name}' not found")
 
@@ -460,14 +615,20 @@ class PrismiqEngine:
         if not column_exists:
             raise ValueError(f"Column '{column_name}' not found in table '{table_name}'")
 
-        # Query distinct values with limit
+        # Build schema-qualified table reference
         # Note: table_name and column_name are validated against the schema above,
         # so this is safe from SQL injection despite string interpolation
+        escaped_col = column_name.replace('"', '""')
+        escaped_table = table_name.replace('"', '""')
+        escaped_schema = effective_schema.replace('"', '""')
+
+        table_ref = f'"{escaped_schema}"."{escaped_table}"'
+
         sql = f"""
-            SELECT DISTINCT "{column_name}"
-            FROM "{table_name}"
-            WHERE "{column_name}" IS NOT NULL
-            ORDER BY "{column_name}"
+            SELECT DISTINCT "{escaped_col}"
+            FROM {table_ref}
+            WHERE "{escaped_col}" IS NOT NULL
+            ORDER BY "{escaped_col}"
             LIMIT {limit}
         """  # noqa: S608
 
@@ -480,7 +641,7 @@ class PrismiqEngine:
         return [serialize_value(row[0]) for row in rows]
 
     def validate_query(self, query: QueryDefinition) -> list[str]:
-        """Validate a query without executing it.
+        """Validate a query without executing it (uses default schema).
 
         Args:
             query: Query definition to validate.
@@ -490,13 +651,50 @@ class PrismiqEngine:
 
         Raises:
             RuntimeError: If the engine has not been started.
+
+        Note:
+            This method validates against the default schema. For multi-tenant
+            schema support, use validate_query_async() instead.
         """
         self._ensure_started()
         assert self._builder is not None
         return self._builder.validate(query)
 
+    async def validate_query_async(
+        self,
+        query: QueryDefinition,
+        schema_name: str | None = None,
+    ) -> list[str]:
+        """Validate a query without executing it (with schema support).
+
+        Args:
+            query: Query definition to validate.
+            schema_name: PostgreSQL schema to validate against. If None, uses
+                the engine's default schema.
+
+        Returns:
+            List of validation error messages (empty if valid).
+
+        Raises:
+            RuntimeError: If the engine has not been started.
+            ValueError: If the specified schema does not exist.
+        """
+        self._ensure_started()
+
+        effective_schema = schema_name or self._schema_name
+
+        # Use default builder for default schema
+        if effective_schema == self._schema_name:
+            assert self._builder is not None
+            return self._builder.validate(query)
+
+        # For non-default schemas, get schema and create builder
+        db_schema = await self.get_schema(schema_name=effective_schema)
+        builder = QueryBuilder(db_schema, schema_name=effective_schema)
+        return builder.validate(query)
+
     def validate_query_detailed(self, query: QueryDefinition) -> ValidationResult:
-        """Validate a query with detailed error information.
+        """Validate a query with detailed error information (uses default schema).
 
         Args:
             query: Query definition to validate.
@@ -506,13 +704,50 @@ class PrismiqEngine:
 
         Raises:
             RuntimeError: If the engine has not been started.
+
+        Note:
+            This method validates against the default schema. For multi-tenant
+            schema support, use validate_query_detailed_async() instead.
         """
         self._ensure_started()
         assert self._builder is not None
         return self._builder.validate_detailed(query)
 
+    async def validate_query_detailed_async(
+        self,
+        query: QueryDefinition,
+        schema_name: str | None = None,
+    ) -> ValidationResult:
+        """Validate a query with detailed error information (with schema support).
+
+        Args:
+            query: Query definition to validate.
+            schema_name: PostgreSQL schema to validate against. If None, uses
+                the engine's default schema.
+
+        Returns:
+            ValidationResult with detailed errors including suggestions.
+
+        Raises:
+            RuntimeError: If the engine has not been started.
+            ValueError: If the specified schema does not exist.
+        """
+        self._ensure_started()
+
+        effective_schema = schema_name or self._schema_name
+
+        # Use default builder for default schema
+        if effective_schema == self._schema_name:
+            assert self._builder is not None
+            return self._builder.validate_detailed(query)
+
+        # For non-default schemas, get schema and create builder
+        db_schema = await self.get_schema(schema_name=effective_schema)
+        builder = QueryBuilder(db_schema, schema_name=effective_schema)
+        return builder.validate_detailed(query)
+
     def generate_sql(self, query: QueryDefinition) -> str:
-        """Generate SQL from a query definition without executing.
+        """Generate SQL from a query definition without executing (uses default schema).
 
         Useful for previewing the SQL that will be executed.
 
@@ -525,6 +760,10 @@ class PrismiqEngine:
         Raises:
             RuntimeError: If the engine has not been started.
             QueryValidationError: If the query is invalid.
+
+        Note:
+            This method uses the default schema. For multi-tenant schema support,
+            use generate_sql_async() instead.
         """
         self._ensure_started()
         assert self._builder is not None
@@ -537,6 +776,56 @@ class PrismiqEngine:
             raise QueryValidationError("; ".join(errors), errors)
 
         sql, _ = self._builder.build(query)
+        return sql
+
+    async def generate_sql_async(
+        self,
+        query: QueryDefinition,
+        schema_name: str | None = None,
+    ) -> str:
+        """Generate SQL from a query definition without executing (with schema support).
+
+        Useful for previewing the SQL that will be executed.
+
+        Args:
+            query: Query definition to generate SQL for.
+            schema_name: PostgreSQL schema for table resolution. If None, uses
+                the engine's default schema.
+
+        Returns:
+            The generated SQL string.
+
+        Raises:
+            RuntimeError: If the engine has not been started.
+            QueryValidationError: If the query is invalid.
+            ValueError: If the specified schema does not exist.
+        """
+        self._ensure_started()
+
+        effective_schema = schema_name or self._schema_name
+
+        # Use default builder for default schema
+        if effective_schema == self._schema_name:
+            assert self._builder is not None
+            errors = self._builder.validate(query)
+            if errors:
+                from .types import QueryValidationError
+
+                raise QueryValidationError("; ".join(errors), errors)
+            sql, _ = self._builder.build(query)
+            return sql
+
+        # For non-default schemas, get schema and create builder
+        db_schema = await self.get_schema(schema_name=effective_schema)
+        builder = QueryBuilder(db_schema, schema_name=effective_schema)
+
+        errors = builder.validate(query)
+        if errors:
+            from .types import QueryValidationError
+
+            raise QueryValidationError("; ".join(errors), errors)
+
+        sql, _ = builder.build(query)
         return sql
 
     # ========================================================================

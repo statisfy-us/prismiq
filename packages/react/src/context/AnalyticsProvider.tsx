@@ -39,6 +39,8 @@ export interface AnalyticsContextValue {
   tenantId: string;
   /** Current user ID for ownership and permissions. */
   userId?: string;
+  /** PostgreSQL schema name for per-tenant schema isolation. */
+  schemaName?: string;
 }
 
 /**
@@ -59,6 +61,12 @@ export interface AnalyticsProviderProps {
    * Used for dashboard ownership and access control.
    */
   userId?: string;
+  /**
+   * PostgreSQL schema name for per-tenant schema isolation.
+   * Included in X-Schema-Name header when provided.
+   * Used when each tenant has their own PostgreSQL schema (e.g., "org_123").
+   */
+  schemaName?: string;
   /** Callback when a query is executed successfully. */
   onQueryExecute?: (query: QueryDefinition, result: QueryResult) => void;
   /** Callback when a query execution fails. */
@@ -124,6 +132,7 @@ export function AnalyticsProvider({
   config,
   tenantId,
   userId,
+  schemaName,
   onQueryExecute,
   onQueryError,
   onSchemaLoad,
@@ -131,15 +140,16 @@ export function AnalyticsProvider({
   children,
 }: AnalyticsProviderProps): JSX.Element {
   // Create client instance - memoize to prevent recreation on re-renders
-  // Include tenantId and userId in the client config
+  // Include tenantId, userId, and schemaName in the client config
   const client = useMemo(
     () =>
       new PrismiqClient({
         ...config,
         tenantId,
         userId,
+        schemaName,
       }),
-    [config, tenantId, userId]
+    [config, tenantId, userId, schemaName]
   );
 
   // Schema state
@@ -185,8 +195,9 @@ export function AnalyticsProvider({
       refetchSchema,
       tenantId,
       userId,
+      schemaName,
     }),
-    [client, schema, isLoading, error, refetchSchema, tenantId, userId]
+    [client, schema, isLoading, error, refetchSchema, tenantId, userId, schemaName]
   );
 
   // Memoize callbacks
@@ -251,12 +262,12 @@ export function useAnalytics(): AnalyticsContextValue {
  * @example
  * ```tsx
  * function UserInfo() {
- *   const { tenantId, userId } = useTenant();
+ *   const { tenantId, userId, schemaName } = useTenant();
  *   return <span>Tenant: {tenantId}, User: {userId ?? 'anonymous'}</span>;
  * }
  * ```
  */
-export function useTenant(): { tenantId: string; userId?: string } {
-  const { tenantId, userId } = useAnalytics();
-  return { tenantId, userId };
+export function useTenant(): { tenantId: string; userId?: string; schemaName?: string } {
+  const { tenantId, userId, schemaName } = useAnalytics();
+  return { tenantId, userId, schemaName };
 }
