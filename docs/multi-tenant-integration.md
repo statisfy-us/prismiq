@@ -54,36 +54,34 @@ The generated migration will include all Prismiq tables with proper indexes and 
 For applications that create tenant schemas programmatically (e.g., during tenant provisioning), use `ensure_tables_sync`:
 
 ```python
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from prismiq import ensure_tables_sync, TableCreationError
 
 engine = create_engine("postgresql://user:pass@localhost/db")
 
-def create_tenant_schema(tenant_id: str):
-    """Create a new tenant schema with all required tables.
+def provision_tenant_tables(schema_name: str):
+    """Create Prismiq tables in an existing tenant schema.
+
+    The schema must already exist. This function only creates the Prismiq
+    tables within the specified schema.
 
     Args:
-        tenant_id: Alphanumeric tenant identifier (validated by ensure_tables_sync)
+        schema_name: Name of existing PostgreSQL schema (e.g., "tenant_123")
 
     Raises:
-        ValueError: If tenant_id contains invalid characters
-        TableCreationError: If table creation fails
+        ValueError: If schema_name is invalid (empty, special chars, reserved)
+        TableCreationError: If schema doesn't exist or table creation fails
     """
-    schema_name = f"tenant_{tenant_id}"
-
     with engine.connect() as conn:
-        # Create the schema (schema_name is validated by ensure_tables_sync)
-        conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema_name}"'))
-
-        # Create your application tables...
-        # YourBase.metadata.create_all(conn, schema=schema_name)
-
         # Create Prismiq tables in the tenant schema
-        # This validates schema_name and raises ValueError if invalid
+        # Raises TableCreationError if schema doesn't exist
         ensure_tables_sync(conn, schema_name=schema_name)
-
         conn.commit()
 ```
+
+> **Important:** The schema must exist before calling `ensure_tables_sync`. If the schema
+> doesn't exist, a `TableCreationError` is raised. Create schemas as part of your tenant
+> provisioning process before calling this function.
 
 > **Note:** `ensure_tables_sync` validates the schema name and rejects:
 > - Empty strings
@@ -98,30 +96,34 @@ For async applications using asyncpg directly, you need to execute the schema SQ
 import asyncpg
 from pathlib import Path
 
-async def setup_tenant(pool: asyncpg.Pool, schema_name: str):
-    """Create Prismiq tables in tenant schema using raw SQL.
+async def setup_tenant_tables(pool: asyncpg.Pool, schema_name: str):
+    """Create Prismiq tables in an existing tenant schema using raw SQL.
 
-    Note: This reads schema.sql directly because ensure_tables() acquires
-    a new connection that wouldn't inherit the search_path setting.
+    The schema must already exist. This reads schema.sql directly because
+    ensure_tables() acquires a new connection that wouldn't inherit the
+    search_path setting.
+
+    Args:
+        pool: asyncpg connection pool
+        schema_name: Name of existing PostgreSQL schema
+
+    Raises:
+        asyncpg.InvalidSchemaNameError: If schema doesn't exist
     """
-    # Read the schema SQL
-    schema_sql = (Path(__file__).parent / "schema.sql").read_text()
-    # Or if using prismiq package:
-    # from prismiq.persistence.setup import _get_schema_sql
-    # schema_sql = _get_schema_sql()
+    # Read the schema SQL from prismiq package
+    from prismiq.persistence.setup import _get_schema_sql
+    schema_sql = _get_schema_sql()
 
     async with pool.acquire() as conn:
-        # Create schema if needed
-        await conn.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema_name}"')
-
-        # Set search path and create tables in same connection
+        # Set search path to existing schema and create tables
         await conn.execute(f'SET search_path TO "{schema_name}"')
         await conn.execute(schema_sql)
 ```
 
-> **Important:** The `ensure_tables(pool)` function creates tables in the default schema
-> because it acquires a fresh connection. For schema-based multi-tenancy with asyncpg,
-> either use **Option 2** with SQLAlchemy, or execute the schema SQL directly as shown above.
+> **Important:** The schema must exist before calling this function. The `ensure_tables(pool)`
+> function creates tables in the default schema because it acquires a fresh connection.
+> For schema-based multi-tenancy with asyncpg, either use **Option 2** with SQLAlchemy,
+> or execute the schema SQL directly as shown above.
 
 ## SQLAlchemy Declarative Models
 
@@ -251,17 +253,23 @@ done
 
 ## Troubleshooting
 
-### Tables Not Created
+### Schema Does Not Exist
 
-Ensure the schema exists before calling `ensure_tables_sync`:
+`ensure_tables_sync` requires the schema to exist beforehand. If you get a `TableCreationError`
+about the schema not existing, create the schema first as part of your tenant provisioning:
 
 ```python
 from sqlalchemy import text
 
+# Create schema in your tenant provisioning code (separate from Prismiq)
 with engine.connect() as conn:
     conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema_name}"'))
+    conn.commit()
+
+# Then create Prismiq tables
+with engine.connect() as conn:
     ensure_tables_sync(conn, schema_name=schema_name)
-    conn.commit()  # Don't forget to commit!
+    conn.commit()
 ```
 
 ### Invalid Schema Name Error
@@ -291,6 +299,7 @@ def run_migrations_online():
 ### TableCreationError
 
 If you get a `TableCreationError`, check:
-1. The schema exists (create it first if needed)
-2. The database user has CREATE TABLE permissions
-3. The database connection is valid
+1. **Schema doesn't exist** - The specified schema must exist before calling `ensure_tables_sync`.
+   Create schemas as part of your tenant provisioning process.
+2. **Permission denied** - The database user needs CREATE TABLE permissions in the schema.
+3. **Connection issues** - Verify the database connection is valid and active.
