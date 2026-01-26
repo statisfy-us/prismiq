@@ -6,6 +6,7 @@ parameterized SQL queries from QueryDefinition objects.
 
 from __future__ import annotations
 
+from datetime import date, datetime
 from difflib import get_close_matches
 from typing import Any
 
@@ -497,6 +498,11 @@ class QueryBuilder:
         """
         params: list[Any] = []
 
+        # Build table_id -> table_name mapping for schema lookup
+        table_map: dict[str, str] = {}
+        for qt in query.tables:
+            table_map[qt.id] = qt.name
+
         # Build table_id -> table reference mapping
         table_refs = self._build_table_refs(query)
 
@@ -507,7 +513,7 @@ class QueryBuilder:
         from_clause = self._build_from(query, table_refs)
 
         # WHERE clause
-        where_clause, params = self._build_where(query.filters, table_refs, params)
+        where_clause, params = self._build_where(query.filters, table_refs, table_map, params)
 
         # GROUP BY clause - with time series support
         group_by_clause = self._build_group_by(query, table_refs)
@@ -700,6 +706,7 @@ class QueryBuilder:
         self,
         filters: list[FilterDefinition],
         table_refs: dict[str, str],
+        table_map: dict[str, str],
         params: list[Any],
     ) -> tuple[str, list[Any]]:
         """Build the WHERE clause."""
@@ -711,81 +718,94 @@ class QueryBuilder:
             table_ref = table_refs[f.table_id]
             col_ref = f"{table_ref}.{self._quote_identifier(f.column)}"
 
-            condition, params = self._build_condition(col_ref, f, params)
+            # Get column data type for value coercion
+            table_name = table_map.get(f.table_id)
+            data_type = None
+            if table_name:
+                table = self._schema.get_table(table_name)
+                if table:
+                    column = table.get_column(f.column)
+                    if column:
+                        data_type = column.data_type
+
+            condition, params = self._build_condition(col_ref, f, data_type, params)
             conditions.append(condition)
 
         return " AND ".join(conditions), params
 
     def _build_condition(
-        self, col_ref: str, f: FilterDefinition, params: list[Any]
+        self, col_ref: str, f: FilterDefinition, data_type: str | None, params: list[Any]
     ) -> tuple[str, list[Any]]:
         """Build a single filter condition."""
         op = f.operator
 
+        # Coerce the filter value to the appropriate Python type
+        coerced_value = self._coerce_value(f.value, data_type)
+
         if op == FilterOperator.EQ:
-            params.append(f.value)
+            params.append(coerced_value)
             return f"{col_ref} = ${len(params)}", params
 
         if op == FilterOperator.NEQ:
-            params.append(f.value)
+            params.append(coerced_value)
             return f"{col_ref} <> ${len(params)}", params
 
         if op == FilterOperator.GT:
-            params.append(f.value)
+            params.append(coerced_value)
             return f"{col_ref} > ${len(params)}", params
 
         if op == FilterOperator.GTE:
-            params.append(f.value)
+            params.append(coerced_value)
             return f"{col_ref} >= ${len(params)}", params
 
         if op == FilterOperator.LT:
-            params.append(f.value)
+            params.append(coerced_value)
             return f"{col_ref} < ${len(params)}", params
 
         if op == FilterOperator.LTE:
-            params.append(f.value)
+            params.append(coerced_value)
             return f"{col_ref} <= ${len(params)}", params
 
         if op == FilterOperator.IN:
-            if isinstance(f.value, list):
+            if isinstance(coerced_value, list):
                 placeholders: list[str] = []
-                for v in f.value:
+                for v in coerced_value:
                     params.append(v)
                     placeholders.append(f"${len(params)}")
                 return f"{col_ref} IN ({', '.join(placeholders)})", params
-            params.append(f.value)
+            params.append(coerced_value)
             return f"{col_ref} IN (${len(params)})", params
 
         if op == FilterOperator.NOT_IN:
-            if isinstance(f.value, list):
+            if isinstance(coerced_value, list):
                 placeholders = []
-                for v in f.value:
+                for v in coerced_value:
                     params.append(v)
                     placeholders.append(f"${len(params)}")
                 return f"{col_ref} NOT IN ({', '.join(placeholders)})", params
-            params.append(f.value)
+            params.append(coerced_value)
             return f"{col_ref} NOT IN (${len(params)})", params
 
         if op == FilterOperator.LIKE:
-            params.append(f.value)
+            params.append(coerced_value)
             return f"{col_ref} LIKE ${len(params)}", params
 
         if op == FilterOperator.ILIKE:
-            params.append(f.value)
+            params.append(coerced_value)
             return f"{col_ref} ILIKE ${len(params)}", params
 
         if op == FilterOperator.BETWEEN:
-            if isinstance(f.value, list | tuple) and len(f.value) == 2:
-                params.append(f.value[0])
+            if isinstance(coerced_value, list | tuple) and len(coerced_value) == 2:
+                params.append(coerced_value[0])
                 p1 = len(params)
-                params.append(f.value[1])
+                params.append(coerced_value[1])
                 p2 = len(params)
                 return f"{col_ref} BETWEEN ${p1} AND ${p2}", params
             # Invalid BETWEEN value - raise error instead of silent fallback
             value_desc = (
-                f"{len(f.value)} values"
-                if isinstance(f.value, list | tuple)
-                else type(f.value).__name__
+                f"{len(coerced_value)} values"
+                if isinstance(coerced_value, list | tuple)
+                else type(coerced_value).__name__
             )
             raise ValueError(
                 f"BETWEEN filter on column '{f.column}' requires exactly 2 values, got {value_desc}"
@@ -845,6 +865,90 @@ class QueryBuilder:
                 parts.append(f"{table_ref}.{self._quote_identifier(o.column)} {o.direction.value}")
 
         return ", ".join(parts)
+
+    def _coerce_value(self, value: Any, data_type: str | None) -> Any:
+        """Coerce a filter value to the appropriate Python type for asyncpg.
+
+        asyncpg requires Python date/datetime objects for date/timestamp columns,
+        not strings. This method converts string values to appropriate Python types
+        based on the column's data type.
+
+        Args:
+            value: The filter value (may be a string, list, or other type).
+            data_type: The PostgreSQL data type of the column (e.g., 'date', 'timestamp').
+
+        Returns:
+            The value coerced to the appropriate Python type.
+        """
+        if value is None or data_type is None:
+            return value
+
+        data_type_lower = data_type.lower()
+
+        # Check if this is a date/timestamp column
+        date_types = {"date"}
+        timestamp_types = {
+            "timestamp",
+            "timestamp without time zone",
+            "timestamp with time zone",
+            "timestamptz",
+        }
+
+        is_date = (
+            any(dt in data_type_lower for dt in date_types) and "timestamp" not in data_type_lower
+        )
+        is_timestamp = any(dt in data_type_lower for dt in timestamp_types)
+
+        if not is_date and not is_timestamp:
+            return value
+
+        # Handle list values (for IN, NOT_IN, BETWEEN)
+        if isinstance(value, list):
+            return [self._coerce_single_date_value(v, is_date) for v in value]
+
+        if isinstance(value, tuple):
+            return tuple(self._coerce_single_date_value(v, is_date) for v in value)
+
+        return self._coerce_single_date_value(value, is_date)
+
+    def _coerce_single_date_value(self, value: Any, is_date: bool) -> Any:
+        """Coerce a single value to date or datetime.
+
+        Args:
+            value: The value to coerce.
+            is_date: True for date columns, False for timestamp columns.
+
+        Returns:
+            Python date or datetime object, or original value if not a string/date type.
+
+        Raises:
+            ValueError: If a string value cannot be parsed as a valid date/datetime.
+        """
+        # Already the correct type
+        if isinstance(value, datetime):
+            return value.date() if is_date else value
+        if isinstance(value, date):
+            return value if is_date else datetime.combine(value, datetime.min.time())
+
+        # Try to parse string values
+        if isinstance(value, str):
+            expected_type = "date" if is_date else "datetime"
+            try:
+                # Try ISO format with time first (e.g., "2026-01-01T00:00:00")
+                if "T" in value or " " in value:
+                    # Handle both 'T' separator and space separator
+                    dt = datetime.fromisoformat(value.replace(" ", "T"))
+                    return dt.date() if is_date else dt
+                # Date only format (e.g., "2026-01-01")
+                dt = datetime.strptime(value, "%Y-%m-%d")
+                return dt.date() if is_date else dt
+            except ValueError as e:
+                raise ValueError(
+                    f"Invalid {expected_type} value: {value!r}. "
+                    f"Expected ISO format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)."
+                ) from e
+
+        return value
 
     def _quote_identifier(self, identifier: str) -> str:
         """Quote a SQL identifier to prevent injection.
