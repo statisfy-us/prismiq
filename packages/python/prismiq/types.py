@@ -207,7 +207,14 @@ class ColumnSelection(BaseModel):
 
 
 class FilterOperator(str, Enum):
-    """SQL filter operators."""
+    """SQL filter operators.
+
+    SECURITY NOTE for IN_SUBQUERY:
+    The IN_SUBQUERY operator interpolates SQL directly without parameterization.
+    This is by design since subqueries cannot be parameterized. Callers MUST
+    ensure the SQL is generated from trusted internal code (e.g., RLS rules),
+    never from user input. The SQL should reference only allowed tables/schemas.
+    """
 
     EQ = "eq"
     NEQ = "neq"
@@ -246,7 +253,8 @@ class FilterDefinition(BaseModel):
     - List for in_, not_in
     - Tuple of (min, max) for between
     - None for is_null, is_not_null
-    - Dict with 'sql' key for in_subquery
+    - Dict with 'sql' key for in_subquery: {"sql": "SELECT id FROM ..."}
+      SECURITY: The SQL is interpolated directly. Must be from trusted code only.
     """
 
     sql_expression: str | None = None

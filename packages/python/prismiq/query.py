@@ -894,14 +894,27 @@ class QueryBuilder:
             return f"{col_ref} IS NOT NULL", params
 
         if op == FilterOperator.IN_SUBQUERY:
-            # For subquery filters (used in RLS filtering)
-            # value should be a dict with 'sql' key containing the subquery
-            if isinstance(f.value, dict) and "sql" in f.value:
-                subquery_sql = f.value["sql"].strip()
-                if subquery_sql:
-                    return f"{col_ref} IN ({subquery_sql})", params
-            # Invalid in_subquery value - return no-op condition
-            return "1=1", params
+            # For subquery filters (used in RLS filtering).
+            # SECURITY: The SQL in value["sql"] is interpolated directly without
+            # parameterization. Callers MUST ensure the SQL is safely generated
+            # (e.g., from trusted internal code, not user input). This is by design
+            # since subqueries cannot be parameterized.
+            if not isinstance(f.value, dict):
+                raise ValueError(
+                    f"IN_SUBQUERY filter on column '{f.column}' requires "
+                    f"value={{'sql': '...'}}, got {type(f.value).__name__}"
+                )
+            if "sql" not in f.value:
+                raise ValueError(
+                    f"IN_SUBQUERY filter on column '{f.column}' requires "
+                    f"value={{'sql': '...'}}, missing 'sql' key"
+                )
+            subquery_sql = f.value["sql"].strip()
+            if not subquery_sql:
+                raise ValueError(
+                    f"IN_SUBQUERY filter on column '{f.column}' has empty SQL"
+                )
+            return f"{col_ref} IN ({subquery_sql})", params
 
         # Unknown operator - raise error instead of silent fallback
         raise ValueError(f"Unknown filter operator: {op}")
