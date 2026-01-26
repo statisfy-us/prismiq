@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from asyncpg import Pool  # type: ignore[import-not-found]
 
-# Load SQL from adjacent schema.sql file
-SCHEMA_SQL = (Path(__file__).parent / "schema.sql").read_text()
+
+@cache
+def _get_schema_sql() -> str:
+    """Load SQL from adjacent schema.sql file (lazy, cached)."""
+    return (Path(__file__).parent / "schema.sql").read_text()
 
 
 async def ensure_tables(pool: Pool) -> None:
@@ -22,7 +26,7 @@ async def ensure_tables(pool: Pool) -> None:
         pool: asyncpg connection pool
     """
     async with pool.acquire() as conn:
-        await conn.execute(SCHEMA_SQL)
+        await conn.execute(_get_schema_sql())
 
 
 async def drop_tables(pool: Pool) -> None:
