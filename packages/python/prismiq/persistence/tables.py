@@ -58,17 +58,6 @@ widgets_table = Table(
     Index("idx_widgets_dashboard_id", "dashboard_id"),
 )
 
-# Schema configuration table
-schema_config_table = Table(
-    "prismiq_schema_config",
-    metadata,
-    Column("id", UUID(as_uuid=True), primary_key=True),
-    Column("tenant_id", String(255), nullable=False, unique=True),
-    Column("config", JSONB, nullable=False),
-    Column("updated_at", TIMESTAMP(timezone=True), nullable=False),
-    Index("idx_schema_config_tenant", "tenant_id"),
-)
-
 # Saved queries table
 saved_queries_table = Table(
     "prismiq_saved_queries",

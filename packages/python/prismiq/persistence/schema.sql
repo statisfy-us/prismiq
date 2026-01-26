@@ -36,16 +36,6 @@ CREATE TABLE IF NOT EXISTS prismiq_widgets (
 
 CREATE INDEX IF NOT EXISTS idx_widgets_dashboard_id ON prismiq_widgets(dashboard_id);
 
--- Schema configuration per tenant
-CREATE TABLE IF NOT EXISTS prismiq_schema_config (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id VARCHAR(255) NOT NULL UNIQUE,
-    config JSONB NOT NULL DEFAULT '{}',
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_schema_config_tenant ON prismiq_schema_config(tenant_id);
-
 -- Saved queries for reuse
 CREATE TABLE IF NOT EXISTS prismiq_saved_queries (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -81,11 +71,6 @@ CREATE TRIGGER prismiq_dashboards_updated
 DROP TRIGGER IF EXISTS prismiq_widgets_updated ON prismiq_widgets;
 CREATE TRIGGER prismiq_widgets_updated
     BEFORE UPDATE ON prismiq_widgets
-    FOR EACH ROW EXECUTE FUNCTION prismiq_update_timestamp();
-
-DROP TRIGGER IF EXISTS prismiq_schema_config_updated ON prismiq_schema_config;
-CREATE TRIGGER prismiq_schema_config_updated
-    BEFORE UPDATE ON prismiq_schema_config
     FOR EACH ROW EXECUTE FUNCTION prismiq_update_timestamp();
 
 DROP TRIGGER IF EXISTS prismiq_saved_queries_updated ON prismiq_saved_queries;
