@@ -292,6 +292,25 @@ class CalculatedField(BaseModel):
     - Field references: [field_name]
     """
 
+    sql_expression: str | None = None
+    """
+    Pre-computed SQL expression with all field references resolved.
+    When provided, this is used directly instead of parsing `expression`.
+    This allows the caller to handle inter-field dependency resolution.
+
+    IMPORTANT: This is an internal field for SQL generation. The SQL should:
+    - Have all column references fully qualified (e.g., "table"."column")
+    - Have all inter-field dependencies already resolved
+    - Be valid PostgreSQL syntax
+    """
+
+    has_internal_aggregation: bool = False
+    """
+    Whether this calculated field's expression contains aggregation functions.
+    When True, this field should NOT be included in GROUP BY clauses.
+    The caller (e.g., converter) should set this based on expression analysis.
+    """
+
     data_type: str = "number"
     """Data type of the result: 'number', 'string', 'date', 'boolean'."""
 

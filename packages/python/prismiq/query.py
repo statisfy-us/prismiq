@@ -529,7 +529,7 @@ class QueryBuilder:
         )
 
         # GROUP BY clause - with time series support
-        group_by_clause = self._build_group_by(query, table_refs)
+        group_by_clause = self._build_group_by(query, table_refs, calc_sql_map)
 
         # ORDER BY clause - with time series support
         order_by_clause = self._build_order_by(query, table_refs, calc_sql_map)
@@ -560,8 +560,8 @@ class QueryBuilder:
     def _build_calc_sql_map(self, query: QueryDefinition) -> dict[str, str]:
         """Build mapping from calculated field names to their SQL expressions.
 
-        Parses bracket notation expressions (e.g., [field_name]) and converts
-        them to PostgreSQL SQL. Used by SELECT, WHERE, and ORDER BY builders.
+        Uses pre-computed sql_expression if available (recommended for inter-field
+        dependency resolution). Otherwise parses the expression on-demand.
 
         Args:
             query: Query definition containing calculated_fields.
@@ -569,21 +569,40 @@ class QueryBuilder:
         Returns:
             Dict mapping calculated field name to SQL expression.
         """
-        calc_field_map = {cf.name: cf.expression for cf in query.calculated_fields}
-
         calc_sql_map: dict[str, str] = {}
-        if calc_field_map:
-            parser = ExpressionParser()
-            # Build a field mapping for references within expressions
-            # Initially empty - will resolve field refs as column names
-            field_mapping: dict[str, str] = {}
-            for name, expr in calc_field_map.items():
+
+        # Get base table reference for qualifying unqualified column references.
+        # Prefer alias over name since FROM clause uses alias when present.
+        # This prevents "ambiguous column" errors in multi-table queries.
+        if query.tables:
+            base_table = query.tables[0]
+            base_table_ref = base_table.alias or base_table.name
+        else:
+            base_table_ref = None
+
+        for cf in query.calculated_fields:
+            # Use pre-computed SQL if available (handles inter-field dependencies).
+            # IMPORTANT: sql_expression must be pre-validated and use parameterized
+            # values. It should have all column references fully qualified with the
+            # correct table alias/name to match the FROM clause.
+            if cf.sql_expression:
+                if not cf.sql_expression.strip():
+                    raise ValueError(f"Calculated field '{cf.name}' has empty sql_expression")
+                calc_sql_map[cf.name] = cf.sql_expression
+            elif cf.expression:
+                # Fall back to parsing on-demand. This is a secondary code path
+                # that won't resolve inter-field references correctly. Prefer
+                # providing sql_expression from resolve_calculated_fields().
                 try:
-                    ast = parser.parse(expr)
-                    calc_sql_map[name] = ast.to_sql(field_mapping)
-                except Exception:
-                    # If parsing fails, use the raw expression (might be plain SQL)
-                    calc_sql_map[name] = expr
+                    parser = ExpressionParser()
+                    ast = parser.parse(cf.expression)
+                    calc_sql_map[cf.name] = ast.to_sql({}, default_table_ref=base_table_ref)
+                except ValueError as e:
+                    # Fail closed: raise a clear error instead of injecting raw text
+                    raise ValueError(
+                        f"Failed to parse calculated field '{cf.name}': {e}. "
+                        f"Expression: {cf.expression!r}"
+                    ) from e
 
         return calc_sql_map
 
@@ -770,7 +789,11 @@ class QueryBuilder:
         return " AND ".join(conditions), params
 
     def _build_condition(
-        self, col_ref: str, f: FilterDefinition, data_type: str | None, params: list[Any]
+        self,
+        col_ref: str,
+        f: FilterDefinition,
+        data_type: str | None,
+        params: list[Any],
     ) -> tuple[str, list[Any]]:
         """Build a single filter condition."""
         op = f.operator
@@ -856,7 +879,12 @@ class QueryBuilder:
         # Unknown operator - raise error instead of silent fallback
         raise ValueError(f"Unknown filter operator: {op}")
 
-    def _build_group_by(self, query: QueryDefinition, table_refs: dict[str, str]) -> str:
+    def _build_group_by(
+        self,
+        query: QueryDefinition,
+        table_refs: dict[str, str],
+        calc_sql_map: dict[str, str],
+    ) -> str:
         """Build the GROUP BY clause, including time series bucket if
         configured."""
         group_by_parts: list[str] = []
@@ -868,11 +896,25 @@ class QueryBuilder:
             date_col = f"{table_ref}.{self._quote_identifier(ts.date_column)}"
             group_by_parts.append(f"date_trunc('{ts.interval}', {date_col})")
 
+        # Build set of calculated fields that have internal aggregation
+        calc_fields_with_agg = {
+            cf.name for cf in query.calculated_fields if cf.has_internal_aggregation
+        }
+
         # Add regular GROUP BY columns
         group_by_cols = query.derive_group_by()
         for g in group_by_cols:
-            table_ref = table_refs[g.table_id]
-            group_by_parts.append(f"{table_ref}.{self._quote_identifier(g.column)}")
+            # Skip calculated fields that have internal aggregation
+            # These fields contain SUM, COUNT, etc. and should NOT be in GROUP BY
+            if g.column in calc_fields_with_agg:
+                continue
+
+            # Handle calculated field references - expand to SQL expression
+            if g.column in calc_sql_map:
+                group_by_parts.append(f"({calc_sql_map[g.column]})")
+            else:
+                table_ref = table_refs[g.table_id]
+                group_by_parts.append(f"{table_ref}.{self._quote_identifier(g.column)}")
 
         # If time series is present and there are aggregations, we need GROUP BY
         if query.time_series and query.has_aggregations() and not group_by_cols:
