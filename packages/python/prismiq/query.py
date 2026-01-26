@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict
 from prismiq.calculated_fields import ExpressionParser
 from prismiq.types import (
     AggregationType,
+    ColumnSelection,
     DatabaseSchema,
     FilterDefinition,
     FilterOperator,
@@ -646,6 +647,13 @@ class QueryBuilder:
             # Handle COUNT(*) specially - don't quote the asterisk
             if col.column == "*" and col.aggregation == AggregationType.COUNT:
                 col_ref = "COUNT(*)"
+            # Handle column with inline sql_expression (e.g., calculated field)
+            elif col.sql_expression:
+                col_ref = f"({col.sql_expression})"
+
+                # Apply aggregation if specified
+                if col.aggregation != AggregationType.NONE:
+                    col_ref = self._apply_aggregation(col_ref, col.aggregation)
             # Handle calculated field references - expand to SQL expression
             elif col.column in calc_sql_map:
                 # Use the converted SQL expression
@@ -656,6 +664,10 @@ class QueryBuilder:
                     col_ref = self._apply_aggregation(col_ref, col.aggregation)
             else:
                 col_ref = f"{table_ref}.{self._quote_identifier(col.column)}"
+
+                # Apply date_trunc if specified (for date columns)
+                if col.date_trunc:
+                    col_ref = f"date_trunc('{col.date_trunc}', {col_ref})"
 
                 # Apply aggregation if specified
                 if col.aggregation != AggregationType.NONE:
@@ -764,8 +776,13 @@ class QueryBuilder:
 
         conditions: list[str] = []
         for f in filters:
+            # Handle filter with inline sql_expression (e.g., calculated field)
+            if f.sql_expression:
+                col_ref = f"({f.sql_expression})"
+                # No type coercion for calculated fields (type not known from schema)
+                data_type = None
             # Handle calculated field references - expand to SQL expression
-            if f.column in calc_sql_map:
+            elif f.column in calc_sql_map:
                 col_ref = f"({calc_sql_map[f.column]})"
                 # No type coercion for calculated fields (type not known from schema)
                 data_type = None
@@ -876,6 +893,27 @@ class QueryBuilder:
         if op == FilterOperator.IS_NOT_NULL:
             return f"{col_ref} IS NOT NULL", params
 
+        if op == FilterOperator.IN_SUBQUERY:
+            # For subquery filters (used in RLS filtering).
+            # SECURITY: The SQL in value["sql"] is interpolated directly without
+            # parameterization. Callers MUST ensure the SQL is safely generated
+            # (e.g., from trusted internal code, not user input). This is by design
+            # since subqueries cannot be parameterized.
+            if not isinstance(f.value, dict):
+                raise ValueError(
+                    f"IN_SUBQUERY filter on column '{f.column}' requires "
+                    f"value={{'sql': '...'}}, got {type(f.value).__name__}"
+                )
+            if "sql" not in f.value:
+                raise ValueError(
+                    f"IN_SUBQUERY filter on column '{f.column}' requires "
+                    f"value={{'sql': '...'}}, missing 'sql' key"
+                )
+            subquery_sql = f.value["sql"].strip()
+            if not subquery_sql:
+                raise ValueError(f"IN_SUBQUERY filter on column '{f.column}' has empty SQL")
+            return f"{col_ref} IN ({subquery_sql})", params
+
         # Unknown operator - raise error instead of silent fallback
         raise ValueError(f"Unknown filter operator: {op}")
 
@@ -901,6 +939,11 @@ class QueryBuilder:
             cf.name for cf in query.calculated_fields if cf.has_internal_aggregation
         }
 
+        # Build lookup from (table_id, column) to column selection for date_trunc/sql_expression
+        column_lookup: dict[tuple[str, str], ColumnSelection] = {
+            (col.table_id, col.column): col for col in query.columns
+        }
+
         # Add regular GROUP BY columns
         group_by_cols = query.derive_group_by()
         for g in group_by_cols:
@@ -909,12 +952,24 @@ class QueryBuilder:
             if g.column in calc_fields_with_agg:
                 continue
 
+            # Look up the column selection to check for date_trunc/sql_expression
+            col_sel = column_lookup.get((g.table_id, g.column))
+
+            # Handle column with inline sql_expression (e.g., calculated field)
+            if col_sel and col_sel.sql_expression:
+                group_by_parts.append(f"({col_sel.sql_expression})")
             # Handle calculated field references - expand to SQL expression
-            if g.column in calc_sql_map:
+            elif g.column in calc_sql_map:
                 group_by_parts.append(f"({calc_sql_map[g.column]})")
             else:
                 table_ref = table_refs[g.table_id]
-                group_by_parts.append(f"{table_ref}.{self._quote_identifier(g.column)}")
+                col_ref = f"{table_ref}.{self._quote_identifier(g.column)}"
+
+                # Apply date_trunc if specified (must match SELECT clause)
+                if col_sel and col_sel.date_trunc:
+                    col_ref = f"date_trunc('{col_sel.date_trunc}', {col_ref})"
+
+                group_by_parts.append(col_ref)
 
         # If time series is present and there are aggregations, we need GROUP BY
         if query.time_series and query.has_aggregations() and not group_by_cols:
