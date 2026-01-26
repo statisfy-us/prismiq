@@ -53,6 +53,41 @@ def serialize_value(value: Any) -> Any:
     return value
 
 
+def deserialize_param(value: Any) -> Any:
+    """Convert JSON parameter values to proper Python types for asyncpg.
+
+    asyncpg requires proper Python types (datetime.date, datetime.datetime, bool)
+    rather than ISO format strings or 0/1 integers that come from JSON.
+    """
+    if value is None:
+        return None
+    # Check for boolean first (before int, since bool is subclass of int in Python)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        # Check for boolean strings first
+        if value.lower() in ("true", "false"):
+            return value.lower() == "true"
+        # Try to parse as date/datetime
+        # ISO format: YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS
+        if len(value) == 10 and value[4] == "-" and value[7] == "-":
+            # Looks like a date: YYYY-MM-DD
+            try:
+                return date.fromisoformat(value)
+            except ValueError:
+                pass
+        elif "T" in value or (len(value) > 10 and " " in value):
+            # Looks like a datetime
+            try:
+                # Handle both 'T' separator and space separator
+                return datetime.fromisoformat(value.replace(" ", "T"))
+            except ValueError:
+                pass
+    if isinstance(value, list):
+        return [deserialize_param(v) for v in value]
+    return value
+
+
 class QueryExecutor:
     """Executes validated queries against a PostgreSQL database.
 
@@ -123,6 +158,9 @@ class QueryExecutor:
             limited_query = query.model_copy(update={"limit": self._max_rows + 1})
             sql, params = self._builder.build(limited_query)
             truncated = True
+
+        # Deserialize params (convert date strings to datetime objects for asyncpg)
+        params = [deserialize_param(p) for p in params]
 
         # Execute with timeout
         start_time = time.perf_counter()
@@ -263,6 +301,9 @@ class QueryExecutor:
                         f"Missing parameter: {name}",
                         errors=[f"Parameter '{name}' referenced in SQL but not provided"],
                     )
+
+        # Deserialize params (convert date strings to datetime objects for asyncpg)
+        param_list = [deserialize_param(p) for p in param_list]
 
         # Execute with timeout
         start_time = time.perf_counter()

@@ -138,6 +138,7 @@ export type FilterOperator =
   | 'lte'
   | 'in_'
   | 'not_in'
+  | 'in_or_null'
   | 'like'
   | 'ilike'
   | 'between'

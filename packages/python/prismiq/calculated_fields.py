@@ -665,6 +665,14 @@ def resolve_calculated_fields(
                     parts = inner_field.split(".", 1)
                     inner_sql = f'"{parts[0]}"."{parts[1]}"'
                 elif base_table_name:
+                    # Debug logging
+                    import logging
+                    logging.getLogger(__name__).warning(
+                        "Aggregation ref '%s' inner_field '%s' not in calc_field_map. "
+                        "Available: %s. Using table-qualified: %s.%s",
+                        dep, inner_field, list(calc_field_map.keys()),
+                        base_table_name, inner_field
+                    )
                     inner_sql = f'"{base_table_name}"."{inner_field}"'
                 else:
                     inner_sql = f'"{inner_field}"'

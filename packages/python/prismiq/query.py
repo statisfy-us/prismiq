@@ -11,7 +11,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
-from prismiq.calculated_fields import ExpressionParser
+from prismiq.calculated_fields import ExpressionParser, resolve_calculated_fields
 from prismiq.types import (
     AggregationType,
     DatabaseSchema,
@@ -232,7 +232,14 @@ class QueryBuilder:
                     )
 
         # Validate filter columns
+        # Build set of calculated field names that don't need schema validation
+        calc_field_names = {cf.name for cf in query.calculated_fields}
+
         for i, f in enumerate(query.filters):
+            # Skip validation for calculated fields - they are virtual columns
+            if f.column in calc_field_names:
+                continue
+
             table_name = table_map.get(f.table_id)
             if table_name:
                 table = self._schema.get_table(table_name)
@@ -267,6 +274,10 @@ class QueryBuilder:
 
         # Validate order by columns
         for i, o in enumerate(query.order_by):
+            # Skip validation for calculated fields
+            if o.column in calc_field_names:
+                continue
+
             table_name = table_map.get(o.table_id)
             if table_name:
                 table = self._schema.get_table(table_name)
@@ -558,19 +569,75 @@ class QueryBuilder:
 
         # Parse and convert calculated field expressions to SQL
         # The expressions use bracket syntax like [field_name] which needs conversion
+        # Use resolve_calculated_fields for proper dependency resolution (e.g., [last_month_date])
         calc_sql_map: dict[str, str] = {}
         if calc_field_map:
-            parser = ExpressionParser()
-            # Build a field mapping for references within expressions
-            # Initially empty - will resolve field refs as column names
-            field_mapping: dict[str, str] = {}
-            for name, expr in calc_field_map.items():
-                try:
-                    ast = parser.parse(expr)
-                    calc_sql_map[name] = ast.to_sql(field_mapping)
-                except Exception:
-                    # If parsing fails, use the raw expression (might be plain SQL)
-                    calc_sql_map[name] = expr
+            try:
+                # Get base table name for column qualification in JOINs
+                base_table_name = query.tables[0].name if query.tables else None
+
+                # Build query_columns in the format expected by resolve_calculated_fields
+                query_columns = [
+                    {
+                        "column": col.column,
+                        "aggregation": col.aggregation.value if col.aggregation else "none",
+                    }
+                    for col in query.columns
+                ]
+
+                # Build calculated_fields in the format expected by resolve_calculated_fields
+                calculated_fields_list = [
+                    {"name": name, "expression": expr}
+                    for name, expr in calc_field_map.items()
+                ]
+
+                # Resolve with proper dependency handling
+                resolved = resolve_calculated_fields(
+                    query_columns=query_columns,
+                    calculated_fields=calculated_fields_list,
+                    base_table_name=base_table_name,
+                )
+
+                # Extract just the SQL expressions (discard has_aggregation flag)
+                calc_sql_map = {name: sql for name, (sql, _) in resolved.items()}
+
+                # Debug logging
+                import logging
+                logging.getLogger(__name__).info(
+                    "resolve_calculated_fields returned: %s",
+                    list(resolved.keys()),
+                )
+                # Log the actual SQL expressions for debugging
+                for name, sql in calc_sql_map.items():
+                    if "isCMS" in name or name == "%":
+                        logging.getLogger(__name__).info(
+                            "Calculated field '%s' SQL: %s",
+                            name,
+                            sql[:200] if len(sql) > 200 else sql,
+                        )
+            except Exception as e:
+                # Log the error and fallback to simple parsing without dependency resolution
+                import logging
+                logging.getLogger(__name__).warning(
+                    "Failed to resolve calculated fields: %s. Falling back to simple parsing. "
+                    "Fields: %s",
+                    str(e),
+                    list(calc_field_map.keys()),
+                )
+                parser = ExpressionParser()
+                field_mapping: dict[str, str] = {}
+                for name, expr in calc_field_map.items():
+                    try:
+                        ast = parser.parse(expr)
+                        calc_sql_map[name] = ast.to_sql(field_mapping)
+                    except Exception as parse_err:
+                        # If parsing fails, use the raw expression (might be plain SQL)
+                        logging.getLogger(__name__).warning(
+                            "Failed to parse calculated field '%s': %s",
+                            name,
+                            str(parse_err),
+                        )
+                        calc_sql_map[name] = expr
 
         # Add time series bucket column first if configured
         if query.time_series:
@@ -584,6 +651,15 @@ class QueryBuilder:
             date_trunc = f"{date_trunc} AS {self._quote_identifier(alias)}"
 
             parts.append(date_trunc)
+
+        # Debug logging
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(
+            "Building SELECT. calc_sql_map keys: %s, query columns: %s",
+            list(calc_sql_map.keys()),
+            [c.column for c in query.columns],
+        )
 
         # Add regular columns
         for col in query.columns:
@@ -601,6 +677,20 @@ class QueryBuilder:
                 if col.aggregation != AggregationType.NONE:
                     col_ref = self._apply_aggregation(col_ref, col.aggregation)
             else:
+                # Check if this looks like a calculated field name (contains special chars)
+                # that should have been resolved but wasn't
+                # These special characters are almost never valid in PostgreSQL column names
+                invalid_db_column_chars = set('%#$@&*=<>!?^|~`"\'[]{}')
+                if any(c in col.column for c in invalid_db_column_chars):
+                    # This is a calculated field reference that failed to resolve
+                    # Raise an error since this column cannot be a valid database column
+                    raise ValueError(
+                        f"Column '{col.column}' appears to be a calculated field reference "
+                        f"but was not found in calculated_fields. "
+                        f"Available calculated fields: {list(calc_sql_map.keys())}. "
+                        f"Ensure the calculated field is properly defined in the query."
+                    )
+
                 col_ref = f"{table_ref}.{self._quote_identifier(col.column)}"
 
                 # Apply aggregation if specified
@@ -724,10 +814,17 @@ class QueryBuilder:
 
         if op == FilterOperator.EQ:
             params.append(f.value)
+            # Cast column to int when comparing with 0/1 to handle boolean columns
+            # asyncpg is strict and requires matching types
+            if f.value in (0, 1) and not isinstance(f.value, bool):
+                return f"({col_ref})::int = ${len(params)}", params
             return f"{col_ref} = ${len(params)}", params
 
         if op == FilterOperator.NEQ:
             params.append(f.value)
+            # Cast column to int when comparing with 0/1 to handle boolean columns
+            if f.value in (0, 1) and not isinstance(f.value, bool):
+                return f"({col_ref})::int <> ${len(params)}", params
             return f"{col_ref} <> ${len(params)}", params
 
         if op == FilterOperator.GT:
@@ -765,6 +862,21 @@ class QueryBuilder:
                 return f"{col_ref} NOT IN ({', '.join(placeholders)})", params
             params.append(f.value)
             return f"{col_ref} NOT IN (${len(params)})", params
+
+        if op == FilterOperator.IN_OR_NULL:
+            # Handle mixed selection of concrete values AND NULL
+            # Generates: (col IN (...) OR col IS NULL)
+            if not f.value:
+                # No concrete values, just NULL filter
+                return f"{col_ref} IS NULL", params
+            if isinstance(f.value, list):
+                placeholders = []
+                for v in f.value:
+                    params.append(v)
+                    placeholders.append(f"${len(params)}")
+                return f"({col_ref} IN ({', '.join(placeholders)}) OR {col_ref} IS NULL)", params
+            params.append(f.value)
+            return f"({col_ref} IN (${len(params)}) OR {col_ref} IS NULL)", params
 
         if op == FilterOperator.LIKE:
             params.append(f.value)
@@ -805,6 +917,9 @@ class QueryBuilder:
         configured."""
         group_by_parts: list[str] = []
 
+        # Build set of calculated field names for quick lookup
+        calc_field_names = {cf.name for cf in query.calculated_fields}
+
         # Add time series bucket to GROUP BY if present
         if query.time_series:
             ts = query.time_series
@@ -815,6 +930,10 @@ class QueryBuilder:
         # Add regular GROUP BY columns
         group_by_cols = query.derive_group_by()
         for g in group_by_cols:
+            # Skip calculated fields - they contain aggregations and shouldn't be in GROUP BY
+            # (their expressions are expanded in SELECT which handles the aggregation)
+            if g.column in calc_field_names:
+                continue
             table_ref = table_refs[g.table_id]
             group_by_parts.append(f"{table_ref}.{self._quote_identifier(g.column)}")
 
@@ -832,6 +951,9 @@ class QueryBuilder:
         configured."""
         parts: list[str] = []
 
+        # Build set of calculated field names for quick lookup
+        calc_field_names = {cf.name for cf in query.calculated_fields}
+
         # If time series is present and no explicit order by, order by date bucket
         if query.time_series and not query.order_by:
             ts = query.time_series
@@ -841,6 +963,10 @@ class QueryBuilder:
         else:
             # Use explicit order by
             for o in query.order_by:
+                # Skip calculated fields - they should be referenced by alias in ORDER BY
+                # but for now we just skip them to avoid errors
+                if o.column in calc_field_names:
+                    continue
                 table_ref = table_refs[o.table_id]
                 parts.append(f"{table_ref}.{self._quote_identifier(o.column)} {o.direction.value}")
 

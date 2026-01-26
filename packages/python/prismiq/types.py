@@ -205,6 +205,7 @@ class FilterOperator(str, Enum):
     LTE = "lte"
     IN = "in_"
     NOT_IN = "not_in"
+    IN_OR_NULL = "in_or_null"
     LIKE = "like"
     ILIKE = "ilike"
     BETWEEN = "between"

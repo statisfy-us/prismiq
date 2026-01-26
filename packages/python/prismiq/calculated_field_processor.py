@@ -15,10 +15,13 @@ Usage:
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
 from .calculated_fields import resolve_calculated_fields
+
+logger = logging.getLogger(__name__)
 
 
 def _has_special_characters(column_name: str) -> bool:
@@ -203,9 +206,13 @@ def preprocess_calculated_fields(
                 calculated_fields=calculated_fields,
                 base_table_name=base_table_name,
             )
-        except Exception:
-            # Continue without calculated fields rather than failing
-            # Caller can handle logging if needed
+        except Exception as e:
+            # Log the error but continue without calculated fields rather than failing
+            logger.warning(
+                "Failed to resolve calculated fields: %s. Fields: %s",
+                str(e),
+                [cf.get("name") for cf in calculated_fields],
+            )
             calc_field_sql_map = {}
 
     # Always process columns and filters to handle calculated field references
