@@ -514,20 +514,25 @@ class QueryBuilder:
         # Build table_id -> table reference mapping
         table_refs = self._build_table_refs(query)
 
+        # Build calculated field SQL map (shared across SELECT, WHERE, ORDER BY)
+        calc_sql_map = self._build_calc_sql_map(query)
+
         # SELECT clause - with time series support
-        select_clause = self._build_select(query, table_refs)
+        select_clause = self._build_select(query, table_refs, calc_sql_map)
 
         # FROM clause
         from_clause = self._build_from(query, table_refs)
 
         # WHERE clause
-        where_clause, params = self._build_where(query.filters, table_refs, table_map, params)
+        where_clause, params = self._build_where(
+            query.filters, table_refs, table_map, calc_sql_map, params
+        )
 
         # GROUP BY clause - with time series support
         group_by_clause = self._build_group_by(query, table_refs)
 
         # ORDER BY clause - with time series support
-        order_by_clause = self._build_order_by(query, table_refs)
+        order_by_clause = self._build_order_by(query, table_refs, calc_sql_map)
 
         # LIMIT and OFFSET
         limit_clause = ""
@@ -552,26 +557,20 @@ class QueryBuilder:
 
         return sql, params
 
-    def _build_table_refs(self, query: QueryDefinition) -> dict[str, str]:
-        """Build mapping from table_id to quoted table reference."""
-        refs: dict[str, str] = {}
-        for qt in query.tables:
-            if qt.alias:
-                refs[qt.id] = self._quote_identifier(qt.alias)
-            else:
-                refs[qt.id] = self._quote_identifier(qt.name)
-        return refs
+    def _build_calc_sql_map(self, query: QueryDefinition) -> dict[str, str]:
+        """Build mapping from calculated field names to their SQL expressions.
 
-    def _build_select(self, query: QueryDefinition, table_refs: dict[str, str]) -> str:
-        """Build the SELECT clause, including time series bucket if
-        configured."""
-        parts: list[str] = []
+        Parses bracket notation expressions (e.g., [field_name]) and converts
+        them to PostgreSQL SQL. Used by SELECT, WHERE, and ORDER BY builders.
 
-        # Build calculated field name -> expression map
+        Args:
+            query: Query definition containing calculated_fields.
+
+        Returns:
+            Dict mapping calculated field name to SQL expression.
+        """
         calc_field_map = {cf.name: cf.expression for cf in query.calculated_fields}
 
-        # Parse and convert calculated field expressions to SQL
-        # The expressions use bracket syntax like [field_name] which needs conversion
         calc_sql_map: dict[str, str] = {}
         if calc_field_map:
             parser = ExpressionParser()
@@ -585,6 +584,28 @@ class QueryBuilder:
                 except Exception:
                     # If parsing fails, use the raw expression (might be plain SQL)
                     calc_sql_map[name] = expr
+
+        return calc_sql_map
+
+    def _build_table_refs(self, query: QueryDefinition) -> dict[str, str]:
+        """Build mapping from table_id to quoted table reference."""
+        refs: dict[str, str] = {}
+        for qt in query.tables:
+            if qt.alias:
+                refs[qt.id] = self._quote_identifier(qt.alias)
+            else:
+                refs[qt.id] = self._quote_identifier(qt.name)
+        return refs
+
+    def _build_select(
+        self,
+        query: QueryDefinition,
+        table_refs: dict[str, str],
+        calc_sql_map: dict[str, str],
+    ) -> str:
+        """Build the SELECT clause, including time series bucket if
+        configured."""
+        parts: list[str] = []
 
         # Add time series bucket column first if configured
         if query.time_series:
@@ -715,6 +736,7 @@ class QueryBuilder:
         filters: list[FilterDefinition],
         table_refs: dict[str, str],
         table_map: dict[str, str],
+        calc_sql_map: dict[str, str],
         params: list[Any],
     ) -> tuple[str, list[Any]]:
         """Build the WHERE clause."""
@@ -723,18 +745,24 @@ class QueryBuilder:
 
         conditions: list[str] = []
         for f in filters:
-            table_ref = table_refs[f.table_id]
-            col_ref = f"{table_ref}.{self._quote_identifier(f.column)}"
+            # Handle calculated field references - expand to SQL expression
+            if f.column in calc_sql_map:
+                col_ref = f"({calc_sql_map[f.column]})"
+                # No type coercion for calculated fields (type not known from schema)
+                data_type = None
+            else:
+                table_ref = table_refs[f.table_id]
+                col_ref = f"{table_ref}.{self._quote_identifier(f.column)}"
 
-            # Get column data type for value coercion
-            table_name = table_map.get(f.table_id)
-            data_type = None
-            if table_name:
-                table = self._schema.get_table(table_name)
-                if table:
-                    column = table.get_column(f.column)
-                    if column:
-                        data_type = column.data_type
+                # Get column data type for value coercion
+                table_name = table_map.get(f.table_id)
+                data_type = None
+                if table_name:
+                    table = self._schema.get_table(table_name)
+                    if table:
+                        column = table.get_column(f.column)
+                        if column:
+                            data_type = column.data_type
 
             condition, params = self._build_condition(col_ref, f, data_type, params)
             conditions.append(condition)
@@ -855,7 +883,12 @@ class QueryBuilder:
 
         return ", ".join(group_by_parts)
 
-    def _build_order_by(self, query: QueryDefinition, table_refs: dict[str, str]) -> str:
+    def _build_order_by(
+        self,
+        query: QueryDefinition,
+        table_refs: dict[str, str],
+        calc_sql_map: dict[str, str],
+    ) -> str:
         """Build the ORDER BY clause, adding time series bucket if
         configured."""
         parts: list[str] = []
@@ -869,8 +902,13 @@ class QueryBuilder:
         else:
             # Use explicit order by
             for o in query.order_by:
-                table_ref = table_refs[o.table_id]
-                parts.append(f"{table_ref}.{self._quote_identifier(o.column)} {o.direction.value}")
+                # Handle calculated field references - expand to SQL expression
+                if o.column in calc_sql_map:
+                    col_ref = f"({calc_sql_map[o.column]})"
+                else:
+                    table_ref = table_refs[o.table_id]
+                    col_ref = f"{table_ref}.{self._quote_identifier(o.column)}"
+                parts.append(f"{col_ref} {o.direction.value}")
 
         return ", ".join(parts)
 
