@@ -1,6 +1,6 @@
 """Calculated field expression parser and SQL generator.
 
-Parses RevealBI expression syntax (e.g., "if([is_won]==1, [amount], 0)")
+Parses bracket notation expression syntax (e.g., "if([is_won]==1, [amount], 0)")
 and converts to PostgreSQL SQL expressions.
 
 Supported functions:
@@ -45,7 +45,7 @@ class ExprNode:
 class FieldRef(ExprNode):
     """Field reference: [field_name] or [Table.field]"""
 
-    # Patterns for RevealBI aggregation references like [Sum of X], [Count Distinct of Y]
+    # Patterns for aggregation references like [Sum of X], [Count Distinct of Y]
     AGG_PATTERNS = {  # noqa: RUF012
         "Sum of ": "SUM",
         "Average of ": "AVG",
@@ -63,7 +63,7 @@ class FieldRef(ExprNode):
         if self.name in field_mapping:
             return f"({field_mapping[self.name]})"
 
-        # Handle RevealBI aggregation references like [Sum of pageview_cms]
+        # Handle aggregation references like [Sum of pageview_cms]
         # These are post-aggregation references used in calculated fields
         for prefix, agg_func in self.AGG_PATTERNS.items():
             if self.name.startswith(prefix):
@@ -79,7 +79,7 @@ class FieldRef(ExprNode):
                 else:
                     return f"{agg_func}({inner_sql})"
 
-        # Handle alias.column syntax (e.g., "A.date" from RevealBI joined tables)
+        # Handle alias.column syntax (e.g., "A.date" from joined tables)
         # This generates "A"."date" instead of "A.date"
         if "." in self.name:
             parts = self.name.split(".", 1)
@@ -177,10 +177,10 @@ class FunctionCall(ExprNode):
 
         elif self.name == "datediff":
             # DATEDIFF(start_date, end_date, interval) -> PostgreSQL date arithmetic
-            # RevealBI syntax: datediff(start, end, interval) returns (end - start)
+            # Syntax: datediff(start, end, interval) returns (end - start)
             # Example: datediff(today(), [date], 'd') = [date] - today()
             #   If date is Jan 17 and today is Jan 18, result = -1 (yesterday is -1 day from today)
-            # PostgreSQL equivalent: (date2 - date1) to match RevealBI semantics
+            # PostgreSQL equivalent: (date2 - date1) to match expected semantics
             if len(self.args) >= 2:
                 date1 = self.args[0].to_sql(field_mapping, use_window_functions)
                 date2 = self.args[1].to_sql(field_mapping, use_window_functions)
@@ -189,7 +189,7 @@ class FunctionCall(ExprNode):
                 if len(self.args) >= 3 and isinstance(self.args[2], Literal):
                     interval = str(self.args[2].value).lower()
 
-                # Note: RevealBI datediff returns (end - start), so we use (date2 - date1)
+                # Note: datediff returns (end - start), so we use (date2 - date1)
                 if interval in ("d", "day", "days"):
                     # Day difference: cast to date and subtract (end - start)
                     return f"(({date2})::date - ({date1})::date)"
@@ -255,7 +255,7 @@ class BinaryOp(ExprNode):
         left_sql = self.left.to_sql(field_mapping, use_window_functions)
         right_sql = self.right.to_sql(field_mapping, use_window_functions)
 
-        # Map RevealBI operators to SQL
+        # Map expression operators to SQL
         op_map = {"==": "=", "!=": "<>"}
         sql_op = op_map.get(self.op, self.op)
 
@@ -295,7 +295,7 @@ class Literal(ExprNode):
 
 
 class ExpressionParser:
-    """Parser for RevealBI expression syntax.
+    """Parser for bracket notation expression syntax.
 
     Implements a recursive descent parser for the expression language.
     """
@@ -304,7 +304,7 @@ class ExpressionParser:
         """Parse expression string into AST.
 
         Args:
-            expression: RevealBI expression string
+            expression: Expression string using bracket notation
 
         Returns:
             Root AST node
@@ -341,7 +341,7 @@ class ExpressionParser:
         # - Numbers (including decimals)
         # - Strings in quotes
         # - Identifiers (function names)
-        # - Operators: ==, !=, >=, <=, >, <, +, -, *, /, = (single = for RevealBI compat)
+        # - Operators: ==, !=, >=, <=, >, <, +, -, *, /, = (single = as alias for ==)
         # - Delimiters: ( ) , .
         # Note: Order matters - must match == before = to avoid partial match
         pattern = r'\[([^\]]+)\]|(\d+\.?\d*)|("(?:[^"\\]|\\.)*")|([a-zA-Z_]\w*)|(\(|\)|,|\.)|(<=|>=|==|!=|>|<|=|[\+\-*/])'
@@ -398,7 +398,7 @@ class ExpressionParser:
         """Parse comparison operators: ==, =, !=, >, <, >=, <="""
         left, pos = self._parse_additive(tokens, pos)
 
-        # Note: "=" is RevealBI's equality operator, equivalent to "=="
+        # Note: "=" is an alias for equality operator "=="
         while pos < len(tokens) and tokens[pos] in [
             "==",
             "=",
@@ -549,9 +549,9 @@ def has_aggregation(expression: str) -> bool:
     if any(func in expr_lower for func in agg_funcs):
         return True
 
-    # RevealBI aggregation reference syntax: [Sum of X], [Count Distinct of Y], etc.
+    # Aggregation reference syntax: [Sum of X], [Count Distinct of Y], etc.
     # These are field references that represent aggregated values
-    revealbi_agg_patterns = [
+    agg_patterns = [
         "[sum of ",
         "[average of ",
         "[count of ",
@@ -559,7 +559,7 @@ def has_aggregation(expression: str) -> bool:
         "[min of ",
         "[max of ",
     ]
-    return any(pattern in expr_lower for pattern in revealbi_agg_patterns)
+    return any(pattern in expr_lower for pattern in agg_patterns)
 
 
 def resolve_calculated_fields(
@@ -633,7 +633,7 @@ def resolve_calculated_fields(
         # Check if this field will have an outer aggregation applied
         will_have_outer_agg = name in outer_agg_map
 
-        # Helper to check for and extract RevealBI aggregation reference patterns
+        # Helper to check for and extract aggregation reference patterns
         # e.g., "Sum of pageview_cms" -> ("SUM", "pageview_cms")
         def parse_agg_reference(field_name: str) -> tuple[str, str] | None:
             """Check if field_name is an aggregation reference like 'Sum of
@@ -682,7 +682,7 @@ def resolve_calculated_fields(
                 dep_sql_map[dep] = dep_sql
             else:
                 # Not a calculated field - format as column reference
-                # Handle alias.column syntax (e.g., "A.date" from RevealBI joined tables)
+                # Handle alias.column syntax (e.g., "A.date" from joined tables)
                 if "." in dep:
                     parts = dep.split(".", 1)
                     if len(parts) == 2:

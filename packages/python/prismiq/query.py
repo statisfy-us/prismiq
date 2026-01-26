@@ -11,6 +11,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from prismiq.calculated_fields import ExpressionParser
 from prismiq.types import (
     AggregationType,
     DatabaseSchema,
@@ -148,6 +149,9 @@ class QueryBuilder:
                     )
                 )
 
+        # Build set of calculated field names for reference checking
+        calculated_field_names = {cf.name for cf in query.calculated_fields}
+
         # Validate columns exist in tables
         for i, col in enumerate(query.columns):
             table_name = table_map.get(col.table_id)
@@ -157,6 +161,10 @@ class QueryBuilder:
                     # Allow "*" for COUNT(*) - this is a valid SQL pattern
                     if col.column == "*" and col.aggregation == AggregationType.COUNT:
                         continue  # Skip further validation for COUNT(*)
+
+                    # Allow references to calculated fields - they're defined in calculated_fields
+                    if col.column in calculated_field_names:
+                        continue  # Skip further validation for calculated field references
 
                     if not table.has_column(col.column):
                         available_columns = [c.name for c in table.columns]
@@ -545,6 +553,25 @@ class QueryBuilder:
         configured."""
         parts: list[str] = []
 
+        # Build calculated field name -> expression map
+        calc_field_map = {cf.name: cf.expression for cf in query.calculated_fields}
+
+        # Parse and convert calculated field expressions to SQL
+        # The expressions use bracket syntax like [field_name] which needs conversion
+        calc_sql_map: dict[str, str] = {}
+        if calc_field_map:
+            parser = ExpressionParser()
+            # Build a field mapping for references within expressions
+            # Initially empty - will resolve field refs as column names
+            field_mapping: dict[str, str] = {}
+            for name, expr in calc_field_map.items():
+                try:
+                    ast = parser.parse(expr)
+                    calc_sql_map[name] = ast.to_sql(field_mapping)
+                except Exception:
+                    # If parsing fails, use the raw expression (might be plain SQL)
+                    calc_sql_map[name] = expr
+
         # Add time series bucket column first if configured
         if query.time_series:
             ts = query.time_series
@@ -565,6 +592,14 @@ class QueryBuilder:
             # Handle COUNT(*) specially - don't quote the asterisk
             if col.column == "*" and col.aggregation == AggregationType.COUNT:
                 col_ref = "COUNT(*)"
+            # Handle calculated field references - expand to SQL expression
+            elif col.column in calc_sql_map:
+                # Use the converted SQL expression
+                col_ref = f"({calc_sql_map[col.column]})"
+
+                # Apply aggregation if specified
+                if col.aggregation != AggregationType.NONE:
+                    col_ref = self._apply_aggregation(col_ref, col.aggregation)
             else:
                 col_ref = f"{table_ref}.{self._quote_identifier(col.column)}"
 

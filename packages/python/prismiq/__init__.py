@@ -113,7 +113,7 @@ from prismiq.sql_utils import (
     ALLOWED_JOIN_TYPES,
     ALLOWED_OPERATORS,
     ALLOWED_ORDER_DIRECTIONS,
-    convert_revealbi_date_format_to_postgres,
+    convert_java_date_format_to_postgres,
     quote_identifier,
     validate_identifier,
 )
@@ -463,7 +463,7 @@ __all__ = [
     "can_edit_widget",
     "can_view_dashboard",
     "configure_logging",
-    "convert_revealbi_date_format_to_postgres",
+    "convert_java_date_format_to_postgres",
     "create_header_auth_dependency",
     "create_metrics_router",
     "create_rate_limiter",
