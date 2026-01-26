@@ -13,13 +13,11 @@ from typing import TYPE_CHECKING, Any
 
 import asyncpg  # type: ignore[import-not-found]
 
-if TYPE_CHECKING:
-    from prismiq.persistence import SavedQueryStore
-
 from prismiq.cache import CacheBackend, CacheConfig, QueryCache
 from prismiq.dashboard_store import DashboardStore, InMemoryDashboardStore
 from prismiq.executor import QueryExecutor
 from prismiq.metrics import record_cache_hit, record_query_execution, set_active_connections
+from prismiq.persistence import PostgresDashboardStore, SavedQueryStore, ensure_tables
 from prismiq.query import QueryBuilder, ValidationResult
 from prismiq.schema import SchemaIntrospector
 from prismiq.schema_config import (
@@ -241,13 +239,6 @@ class PrismiqEngine:
 
         # Initialize dashboard store
         if self._persist_dashboards:
-            # Lazy import persistence module (reads schema.sql at import time)
-            from prismiq.persistence import (
-                PostgresDashboardStore,
-                SavedQueryStore,
-                ensure_tables,
-            )
-
             # Create tables if they don't exist
             await ensure_tables(self._pool)
             self._dashboard_store = PostgresDashboardStore(self._pool)
