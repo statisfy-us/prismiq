@@ -884,7 +884,10 @@ class QueryBuilder:
             is_date: True for date columns, False for timestamp columns.
 
         Returns:
-            Python date or datetime object, or original value if already correct type.
+            Python date or datetime object, or original value if not a string/date type.
+
+        Raises:
+            ValueError: If a string value cannot be parsed as a valid date/datetime.
         """
         # Already the correct type
         if isinstance(value, datetime):
@@ -894,6 +897,7 @@ class QueryBuilder:
 
         # Try to parse string values
         if isinstance(value, str):
+            expected_type = "date" if is_date else "datetime"
             try:
                 # Try ISO format with time first (e.g., "2026-01-01T00:00:00")
                 if "T" in value or " " in value:
@@ -903,9 +907,11 @@ class QueryBuilder:
                 # Date only format (e.g., "2026-01-01")
                 dt = datetime.strptime(value, "%Y-%m-%d")
                 return dt.date() if is_date else dt
-            except ValueError:
-                # If parsing fails, return original value and let database handle it
-                return value
+            except ValueError as e:
+                raise ValueError(
+                    f"Invalid {expected_type} value: {value!r}. "
+                    f"Expected ISO format (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS)."
+                ) from e
 
         return value
 
