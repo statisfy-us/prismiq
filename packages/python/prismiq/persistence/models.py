@@ -1,21 +1,25 @@
 """SQLAlchemy declarative models for Prismiq tables.
 
-These models are provided for integration with Alembic migrations.
-They mirror the schema.sql definitions and provide ORM-style table
-definitions that can be used with SQLAlchemy's metadata.create_all().
+These models are provided for integration with Alembic migrations
+and programmatic table creation via ensure_tables_sync().
+
+The declarative base (PrismiqBase) provides a separate metadata object
+that can be combined with other SQLAlchemy metadata in multi-tenant
+Alembic configurations.
 
 Usage with Alembic:
     from prismiq import PrismiqBase
 
     # In env.py, add prismiq tables to target_metadata:
     for table in PrismiqBase.metadata.tables.values():
-        table.tometadata(target_metadata)
+        table.to_metadata(target_metadata)
 
 Usage with sync engines:
     from prismiq import ensure_tables_sync
 
     with engine.connect() as conn:
-        ensure_tables_sync(conn, schema_name="org_123")
+        ensure_tables_sync(conn, schema_name="tenant_123")
+        conn.commit()
 """
 
 from __future__ import annotations
