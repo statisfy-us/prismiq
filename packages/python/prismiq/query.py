@@ -238,6 +238,10 @@ class QueryBuilder:
             if table_name:
                 table = self._schema.get_table(table_name)
                 if table:
+                    # Allow references to calculated fields - they're defined in calculated_fields
+                    if f.column in calculated_field_names:
+                        continue  # Skip further validation for calculated field references
+
                     if not table.has_column(f.column):
                         available_columns = [c.name for c in table.columns]
                         suggestion = self._suggest_similar(f.column, available_columns)
@@ -268,6 +272,10 @@ class QueryBuilder:
 
         # Validate order by columns
         for i, o in enumerate(query.order_by):
+            # Allow references to calculated fields
+            if o.column in calculated_field_names:
+                continue
+
             table_name = table_map.get(o.table_id)
             if table_name:
                 table = self._schema.get_table(table_name)
