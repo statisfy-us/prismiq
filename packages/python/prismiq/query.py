@@ -154,6 +154,10 @@ class QueryBuilder:
             if table_name:
                 table = self._schema.get_table(table_name)
                 if table:
+                    # Allow "*" for COUNT(*) - this is a valid SQL pattern
+                    if col.column == "*" and col.aggregation == AggregationType.COUNT:
+                        continue  # Skip further validation for COUNT(*)
+
                     if not table.has_column(col.column):
                         available_columns = [c.name for c in table.columns]
                         suggestion = self._suggest_similar(col.column, available_columns)
@@ -557,11 +561,16 @@ class QueryBuilder:
         # Add regular columns
         for col in query.columns:
             table_ref = table_refs[col.table_id]
-            col_ref = f"{table_ref}.{self._quote_identifier(col.column)}"
 
-            # Apply aggregation if specified
-            if col.aggregation != AggregationType.NONE:
-                col_ref = self._apply_aggregation(col_ref, col.aggregation)
+            # Handle COUNT(*) specially - don't quote the asterisk
+            if col.column == "*" and col.aggregation == AggregationType.COUNT:
+                col_ref = "COUNT(*)"
+            else:
+                col_ref = f"{table_ref}.{self._quote_identifier(col.column)}"
+
+                # Apply aggregation if specified
+                if col.aggregation != AggregationType.NONE:
+                    col_ref = self._apply_aggregation(col_ref, col.aggregation)
 
             # Apply alias if specified
             if col.alias:

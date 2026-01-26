@@ -6,10 +6,7 @@ metadata from PostgreSQL's information_schema.
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
-
-_logger = logging.getLogger(__name__)
 
 from prismiq.types import (
     ColumnSchema,
@@ -236,22 +233,11 @@ class SchemaIntrospector:
             rows: list[Record] = await conn.fetch(query, self._schema_name)
 
         table_names = [row["table_name"] for row in rows]
-        _logger.debug(
-            "Introspected schema %s: found %d tables/views: %s",
-            self._schema_name,
-            len(table_names),
-            table_names[:10],  # Log first 10 for brevity
-        )
 
         # Filter to exposed tables if specified
         if self._exposed_tables is not None:
-            filtered = [t for t in table_names if t in self._exposed_tables]
-            _logger.debug(
-                "After filtering to exposed_tables (%d): %s",
-                len(self._exposed_tables),
-                filtered,
-            )
-            table_names = filtered
+            exposed_set = set(self._exposed_tables)
+            table_names = [t for t in table_names if t in exposed_set]
 
         return table_names
 
