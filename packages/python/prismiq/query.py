@@ -553,11 +553,11 @@ class QueryBuilder:
         configured."""
         parts: list[str] = []
 
-        # Build calculated field name -> expression map (raw RevealBI expressions)
+        # Build calculated field name -> expression map
         calc_field_map = {cf.name: cf.expression for cf in query.calculated_fields}
 
         # Parse and convert calculated field expressions to SQL
-        # The expressions use RevealBI syntax like [field_name] which needs conversion
+        # The expressions use bracket syntax like [field_name] which needs conversion
         calc_sql_map: dict[str, str] = {}
         if calc_field_map:
             parser = ExpressionParser()

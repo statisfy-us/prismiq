@@ -18,7 +18,7 @@ from .sql_utils import (
     ALLOWED_JOIN_TYPES,
     ALLOWED_OPERATORS,
     ALLOWED_ORDER_DIRECTIONS,
-    convert_revealbi_date_format_to_postgres,
+    convert_java_date_format_to_postgres,
     validate_identifier,
 )
 
@@ -262,7 +262,7 @@ def build_sql_from_dict(
             # Apply date formatting if date_format is specified
             date_format = col.get("date_format")
             if date_format:
-                pg_format = convert_revealbi_date_format_to_postgres(date_format)
+                pg_format = convert_java_date_format_to_postgres(date_format)
                 expr = f"TO_CHAR({date_trunc_expr}, '{pg_format}')"
             else:
                 expr = date_trunc_expr

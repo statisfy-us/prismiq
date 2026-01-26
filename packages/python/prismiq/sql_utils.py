@@ -66,23 +66,23 @@ def quote_identifier(identifier: str) -> str:
     return f'"{identifier}"'
 
 
-def convert_revealbi_date_format_to_postgres(revealbi_format: str) -> str:
-    """Convert RevealBI date format to PostgreSQL TO_CHAR format.
+def convert_java_date_format_to_postgres(java_format: str) -> str:
+    """Convert Java SimpleDateFormat to PostgreSQL TO_CHAR format.
 
     Args:
-        revealbi_format: RevealBI date format using Java SimpleDateFormat
-                         patterns (e.g., "MMM-yyyy", "MM/dd/yyyy")
+        java_format: Date format using Java SimpleDateFormat patterns
+                     (e.g., "MMM-yyyy", "MM/dd/yyyy")
 
     Returns:
         PostgreSQL TO_CHAR format string (e.g., "Mon-YYYY", "MM/DD/YYYY")
 
     Example:
-        >>> convert_revealbi_date_format_to_postgres("MMM-yyyy")
+        >>> convert_java_date_format_to_postgres("MMM-yyyy")
         'Mon-YYYY'
-        >>> convert_revealbi_date_format_to_postgres("MM/dd/yyyy")
+        >>> convert_java_date_format_to_postgres("MM/dd/yyyy")
         'MM/DD/YYYY'
     """
-    # Map common RevealBI patterns (Java SimpleDateFormat) to PostgreSQL patterns
+    # Map Java SimpleDateFormat patterns to PostgreSQL patterns
     format_map = {
         "yyyy": "YYYY",  # 4-digit year
         "yy": "YY",  # 2-digit year
@@ -103,15 +103,15 @@ def convert_revealbi_date_format_to_postgres(revealbi_format: str) -> str:
     # Use numeric placeholders to avoid substring matching issues
     # e.g., "MMM-yyyy" -> "<<0>>-yyyy" -> "<<0>>-<<1>>" -> "Mon-YYYY"
     placeholders: list[str] = []
-    result = revealbi_format
+    result = java_format
 
     # Replace patterns with numeric placeholders (longest first to avoid partial matches)
-    for reveal_pattern, pg_pattern in sorted(format_map.items(), key=lambda x: -len(x[0])):
-        while reveal_pattern in result:
+    for java_pattern, pg_pattern in sorted(format_map.items(), key=lambda x: -len(x[0])):
+        while java_pattern in result:
             placeholder_id = len(placeholders)
             placeholders.append(pg_pattern)
             # Use double angle brackets to avoid conflicts with format strings
-            result = result.replace(reveal_pattern, f"<<{placeholder_id}>>", 1)
+            result = result.replace(java_pattern, f"<<{placeholder_id}>>", 1)
 
     # Replace numeric placeholders with actual PostgreSQL patterns
     for i, pg_pattern in enumerate(placeholders):
