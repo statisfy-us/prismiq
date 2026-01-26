@@ -65,7 +65,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         persist_dashboards=True,  # Use PostgreSQL for dashboard persistence
         cache=redis_cache,  # Use Redis for caching (query=24h, schema=1h by default)
     )
-    await engine.startup()
+    try:
+        await engine.startup()
+    except Exception:
+        # Clean up Redis connection if engine startup fails
+        if redis_cache is not None:
+            await redis_cache.disconnect()
+        raise
     print("Database connected!")
 
     # Create and include the Prismiq router

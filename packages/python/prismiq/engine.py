@@ -832,7 +832,11 @@ class PrismiqEngine:
     # Custom SQL Methods
     # ========================================================================
 
-    async def validate_sql(self, sql: str) -> SQLValidationResult:
+    async def validate_sql(
+        self,
+        sql: str,
+        schema_name: str | None = None,
+    ) -> SQLValidationResult:
         """Validate a raw SQL query without executing.
 
         Checks that the SQL is a valid SELECT statement and only
@@ -840,6 +844,8 @@ class PrismiqEngine:
 
         Args:
             sql: Raw SQL query to validate.
+            schema_name: PostgreSQL schema for table validation. If None, uses the
+                engine's default schema. Used for multi-tenant schema isolation.
 
         Returns:
             SQLValidationResult with validation status and details.
@@ -848,6 +854,14 @@ class PrismiqEngine:
             RuntimeError: If the engine has not been started.
         """
         self._ensure_started()
+
+        # For non-default schemas, create a validator with the tenant's schema
+        effective_schema = schema_name or self._schema_name
+        if effective_schema != self._schema_name:
+            tenant_schema = await self.get_schema(schema_name=effective_schema)
+            validator = SQLValidator(tenant_schema)
+            return validator.validate(sql)
+
         assert self._sql_validator is not None
         return self._sql_validator.validate(sql)
 
@@ -855,6 +869,7 @@ class PrismiqEngine:
         self,
         sql: str,
         params: dict[str, Any] | None = None,
+        schema_name: str | None = None,
     ) -> QueryResult:
         """Execute a raw SQL query.
 
@@ -864,6 +879,8 @@ class PrismiqEngine:
         Args:
             sql: Raw SQL query (SELECT only).
             params: Optional named parameters for the query.
+            schema_name: PostgreSQL schema for table validation. If None, uses the
+                engine's default schema. Used for multi-tenant schema isolation.
 
         Returns:
             QueryResult with columns, rows, and execution metadata.
@@ -876,6 +893,19 @@ class PrismiqEngine:
         """
         self._ensure_started()
         assert self._executor is not None
+        assert self._pool is not None
+
+        # For non-default schemas, validate with tenant's schema
+        effective_schema = schema_name or self._schema_name
+        if effective_schema != self._schema_name:
+            validation = await self.validate_sql(sql, schema_name=effective_schema)
+            if not validation.valid:
+                from .sql_validator import SQLValidationError
+
+                raise SQLValidationError(
+                    "SQL validation failed: " + "; ".join(validation.errors),
+                    errors=validation.errors,
+                )
 
         start = time.perf_counter()
 
@@ -935,6 +965,7 @@ class PrismiqEngine:
         interval: TimeInterval,
         date_column: str,
         fill_missing: bool = True,
+        schema_name: str | None = None,
     ) -> QueryResult:
         """Execute a time series query with automatic bucketing.
 
@@ -946,6 +977,8 @@ class PrismiqEngine:
             interval: Time interval for bucketing.
             date_column: Name of the date/timestamp column to bucket.
             fill_missing: Whether to fill missing time buckets with default values.
+            schema_name: PostgreSQL schema for table resolution. If None, uses the
+                engine's default schema. Used for multi-tenant schema isolation.
 
         Returns:
             QueryResult with time-bucketed data.
@@ -956,10 +989,15 @@ class PrismiqEngine:
             ValueError: If the date column is not found.
         """
         self._ensure_started()
-        assert self._executor is not None
+        assert self._pool is not None
+
+        effective_schema = schema_name or self._schema_name
+
+        # Get schema for the target schema
+        db_schema = await self.get_schema(schema_name=effective_schema)
 
         # Find the table ID for the date column
-        table_id = self._find_table_for_column(query, date_column)
+        table_id = self._find_table_for_column_in_schema(query, date_column, db_schema)
         if table_id is None:
             raise ValueError(f"Date column '{date_column}' not found in query tables")
 
@@ -981,15 +1019,32 @@ class PrismiqEngine:
             ),
         )
 
-        return await self._executor.execute(modified_query)
+        # Create executor for this schema
+        executor = QueryExecutor(
+            self._pool,
+            db_schema,
+            query_timeout=self._query_timeout,
+            max_rows=self._max_rows,
+            schema_name=effective_schema,
+        )
+
+        return await executor.execute(modified_query)
 
     def _find_table_for_column(self, query: QueryDefinition, column_name: str) -> str | None:
         """Find the table ID that contains the specified column."""
         self._ensure_started()
         assert self._schema is not None
+        return self._find_table_for_column_in_schema(query, column_name, self._schema)
 
+    def _find_table_for_column_in_schema(
+        self,
+        query: QueryDefinition,
+        column_name: str,
+        schema: DatabaseSchema,
+    ) -> str | None:
+        """Find the table ID that contains the specified column in the given schema."""
         for query_table in query.tables:
-            table_schema = self._schema.get_table(query_table.name)
+            table_schema = schema.get_table(query_table.name)
             if table_schema and table_schema.has_column(column_name):
                 return query_table.id
 

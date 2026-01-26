@@ -877,7 +877,10 @@ def create_router(
     # ========================================================================
 
     @router.post("/query/validate-sql", response_model=SQLValidationResponse)
-    async def validate_sql(request: ExecuteSQLRequest) -> SQLValidationResponse:
+    async def validate_sql(
+        request: ExecuteSQLRequest,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> SQLValidationResponse:
         """Validate a raw SQL query without executing it.
 
         Checks that the SQL is a valid SELECT statement and only
@@ -885,11 +888,13 @@ def create_router(
 
         Args:
             request: SQL validation request.
+            auth: Authentication context with tenant and schema info.
 
         Returns:
             SQLValidationResponse with validation status and details.
         """
-        result = await engine.validate_sql(request.sql)
+        schema_name = auth.schema_name
+        result = await engine.validate_sql(request.sql, schema_name=schema_name)
         return SQLValidationResponse(
             valid=result.valid,
             errors=result.errors,
@@ -897,7 +902,10 @@ def create_router(
         )
 
     @router.post("/query/execute-sql", response_model=QueryResult)
-    async def execute_sql(request: ExecuteSQLRequest) -> QueryResult:
+    async def execute_sql(
+        request: ExecuteSQLRequest,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> QueryResult:
         """Execute a raw SQL query.
 
         Only SELECT statements are allowed. Queries are restricted
@@ -905,6 +913,7 @@ def create_router(
 
         Args:
             request: SQL execution request with query and optional params.
+            auth: Authentication context with tenant and schema info.
 
         Returns:
             QueryResult with columns, rows, and execution metadata.
@@ -913,10 +922,12 @@ def create_router(
             400: If the SQL fails validation.
             500: If the query execution fails.
         """
+        schema_name = auth.schema_name
         try:
             return await engine.execute_raw_sql(
                 sql=request.sql,
                 params=request.params,
+                schema_name=schema_name,
             )
         except SQLValidationError as e:
             raise HTTPException(
@@ -930,7 +941,10 @@ def create_router(
     # ========================================================================
 
     @router.post("/query/execute/timeseries", response_model=QueryResult)
-    async def execute_timeseries_query(request: TimeSeriesQueryRequest) -> QueryResult:
+    async def execute_timeseries_query(
+        request: TimeSeriesQueryRequest,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> QueryResult:
         """Execute a time series query with automatic bucketing.
 
         Automatically adds date_trunc to the query for time bucketing
@@ -938,6 +952,7 @@ def create_router(
 
         Args:
             request: Time series query request with interval configuration.
+            auth: Authentication context with tenant and schema info.
 
         Returns:
             QueryResult with time-bucketed data.
@@ -946,12 +961,14 @@ def create_router(
             400: If the query fails validation or date column is invalid.
             500: If the query execution fails.
         """
+        schema_name = auth.schema_name
         try:
             return await engine.execute_timeseries_query(
                 query=request.query,
                 interval=request.interval,
                 date_column=request.date_column,
                 fill_missing=request.fill_missing,
+                schema_name=schema_name,
             )
         except QueryValidationError as e:
             raise HTTPException(
