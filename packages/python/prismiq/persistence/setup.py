@@ -43,7 +43,6 @@ async def drop_tables(pool: Pool) -> None:
             """
             DROP TABLE IF EXISTS prismiq_widgets CASCADE;
             DROP TABLE IF EXISTS prismiq_dashboards CASCADE;
-            DROP TABLE IF EXISTS prismiq_schema_config CASCADE;
             DROP TABLE IF EXISTS prismiq_saved_queries CASCADE;
             DROP FUNCTION IF EXISTS prismiq_update_timestamp CASCADE;
         """

@@ -176,38 +176,6 @@ class SQLValidationResponse(BaseModel):
     """List of tables referenced in the query."""
 
 
-class TableConfigUpdate(BaseModel):
-    """Request model for updating table configuration."""
-
-    display_name: str | None = None
-    """Friendly display name for the table."""
-
-    description: str | None = None
-    """Description for the table."""
-
-    hidden: bool | None = None
-    """Whether to hide the table from the schema explorer."""
-
-
-class ColumnConfigUpdate(BaseModel):
-    """Request model for updating column configuration."""
-
-    display_name: str | None = None
-    """Friendly display name for the column."""
-
-    description: str | None = None
-    """Description for the column."""
-
-    hidden: bool | None = None
-    """Whether to hide the column from the schema explorer."""
-
-    format: str | None = None
-    """Number format: plain, currency, percent, compact."""
-
-    date_format: str | None = None
-    """Date format string for date/timestamp columns."""
-
-
 class SuccessResponse(BaseModel):
     """Generic success response."""
 
@@ -1086,8 +1054,17 @@ def create_router(
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     # ========================================================================
-    # Schema Config Endpoints
+    # Schema Config Endpoints (Read-Only)
     # ========================================================================
+    # NOTE: Schema configuration should be set at engine initialization time
+    # via the schema_config parameter. These endpoints are read-only for
+    # introspection purposes. To configure schema display names, hidden
+    # tables/columns, etc., pass a SchemaConfig when creating the engine:
+    #
+    #   engine = PrismiqEngine(
+    #       database_url="...",
+    #       schema_config=SchemaConfig(tables={...})
+    #   )
 
     @router.get("/config", response_model=SchemaConfig)
     async def get_schema_config() -> SchemaConfig:
@@ -1095,21 +1072,12 @@ def create_router(
 
         Returns:
             Current SchemaConfig with all table and column settings.
+
+        Note:
+            This endpoint is read-only. Schema configuration should be
+            set at engine initialization time via the schema_config parameter.
         """
         return engine.get_schema_config()
-
-    @router.put("/config", response_model=SuccessResponse)
-    async def set_schema_config(config: SchemaConfig) -> SuccessResponse:
-        """Replace the entire schema configuration.
-
-        Args:
-            config: New schema configuration.
-
-        Returns:
-            Success response.
-        """
-        engine.set_schema_config(config)
-        return SuccessResponse(message="Schema configuration updated")
 
     @router.get("/config/tables/{table_name}", response_model=TableConfig)
     async def get_table_config(table_name: str) -> TableConfig:
@@ -1124,35 +1092,6 @@ def create_router(
         config = engine.get_schema_config()
         return config.get_table_config(table_name)
 
-    @router.put("/config/tables/{table_name}", response_model=SuccessResponse)
-    async def update_table_config(table_name: str, update: TableConfigUpdate) -> SuccessResponse:
-        """Update configuration for a specific table.
-
-        Only the provided fields are updated; others are preserved.
-
-        Args:
-            table_name: Name of the table.
-            update: Fields to update.
-
-        Returns:
-            Success response.
-        """
-        current = engine.get_schema_config().get_table_config(table_name)
-
-        new_config = TableConfig(
-            display_name=update.display_name
-            if update.display_name is not None
-            else current.display_name,
-            description=update.description
-            if update.description is not None
-            else current.description,
-            hidden=update.hidden if update.hidden is not None else current.hidden,
-            columns=current.columns,
-        )
-
-        engine.update_table_config(table_name, new_config)
-        return SuccessResponse(message=f"Table '{table_name}' configuration updated")
-
     @router.get("/config/tables/{table_name}/columns/{column_name}", response_model=ColumnConfig)
     async def get_column_config(table_name: str, column_name: str) -> ColumnConfig:
         """Get configuration for a specific column.
@@ -1166,74 +1105,6 @@ def create_router(
         """
         config = engine.get_schema_config()
         return config.get_column_config(table_name, column_name)
-
-    @router.put(
-        "/config/tables/{table_name}/columns/{column_name}",
-        response_model=SuccessResponse,
-    )
-    async def update_column_config(
-        table_name: str, column_name: str, update: ColumnConfigUpdate
-    ) -> SuccessResponse:
-        """Update configuration for a specific column.
-
-        Only the provided fields are updated; others are preserved.
-
-        Args:
-            table_name: Name of the table.
-            column_name: Name of the column.
-            update: Fields to update.
-
-        Returns:
-            Success response.
-        """
-        current = engine.get_schema_config().get_column_config(table_name, column_name)
-
-        new_config = ColumnConfig(
-            display_name=update.display_name
-            if update.display_name is not None
-            else current.display_name,
-            description=update.description
-            if update.description is not None
-            else current.description,
-            hidden=update.hidden if update.hidden is not None else current.hidden,
-            format=update.format if update.format is not None else current.format,
-            date_format=update.date_format
-            if update.date_format is not None
-            else current.date_format,
-        )
-
-        engine.update_column_config(table_name, column_name, new_config)
-        return SuccessResponse(message=f"Column '{table_name}.{column_name}' configuration updated")
-
-    @router.delete("/config/tables/{table_name}", response_model=SuccessResponse)
-    async def reset_table_config(table_name: str) -> SuccessResponse:
-        """Reset configuration for a specific table to defaults.
-
-        Args:
-            table_name: Name of the table.
-
-        Returns:
-            Success response.
-        """
-        engine.update_table_config(table_name, TableConfig())
-        return SuccessResponse(message=f"Table '{table_name}' configuration reset")
-
-    @router.delete(
-        "/config/tables/{table_name}/columns/{column_name}",
-        response_model=SuccessResponse,
-    )
-    async def reset_column_config(table_name: str, column_name: str) -> SuccessResponse:
-        """Reset configuration for a specific column to defaults.
-
-        Args:
-            table_name: Name of the table.
-            column_name: Name of the column.
-
-        Returns:
-            Success response.
-        """
-        engine.update_column_config(table_name, column_name, ColumnConfig())
-        return SuccessResponse(message=f"Column '{table_name}.{column_name}' configuration reset")
 
     # ========================================================================
     # Dashboard Endpoints

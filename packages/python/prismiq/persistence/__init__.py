@@ -7,7 +7,6 @@ from prismiq.persistence.tables import (
     dashboards_table,
     metadata,
     saved_queries_table,
-    schema_config_table,
     widgets_table,
 )
 
@@ -19,7 +18,6 @@ __all__ = [
     "ensure_tables",
     "metadata",
     "saved_queries_table",
-    "schema_config_table",
     "table_exists",
     "widgets_table",
 ]
