@@ -12,7 +12,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
-from prismiq.calculated_fields import ExpressionParser, has_aggregation
+from prismiq.calculated_fields import ExpressionParser
 from prismiq.types import (
     AggregationType,
     DatabaseSchema,
@@ -885,25 +885,18 @@ class QueryBuilder:
             date_col = f"{table_ref}.{self._quote_identifier(ts.date_column)}"
             group_by_parts.append(f"date_trunc('{ts.interval}', {date_col})")
 
-        # Build map of calculated field names to their expressions for aggregation check
-        # Check both expression and sql_expression to handle all cases
-        calc_expr_map: dict[str, str] = {}
-        for cf in query.calculated_fields:
-            if cf.expression:
-                calc_expr_map[cf.name] = cf.expression
-            elif cf.sql_expression:
-                # Fall back to sql_expression if expression is not available
-                calc_expr_map[cf.name] = cf.sql_expression
+        # Build set of calculated fields that have internal aggregation
+        calc_fields_with_agg = {
+            cf.name for cf in query.calculated_fields if cf.has_internal_aggregation
+        }
 
         # Add regular GROUP BY columns
         group_by_cols = query.derive_group_by()
         for g in group_by_cols:
-            # Skip calculated fields whose expressions contain aggregation
-            # These fields have internal aggregation (e.g., SUM, COUNT) and should NOT be in GROUP BY
-            if g.column in calc_expr_map:
-                expr = calc_expr_map[g.column]
-                if has_aggregation(expr):
-                    continue  # Skip - aggregate functions are not allowed in GROUP BY
+            # Skip calculated fields that have internal aggregation
+            # These fields contain SUM, COUNT, etc. and should NOT be in GROUP BY
+            if g.column in calc_fields_with_agg:
+                continue
 
             # Handle calculated field references - expand to SQL expression
             if g.column in calc_sql_map:

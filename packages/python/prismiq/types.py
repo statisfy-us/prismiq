@@ -304,6 +304,13 @@ class CalculatedField(BaseModel):
     - Be valid PostgreSQL syntax
     """
 
+    has_internal_aggregation: bool = False
+    """
+    Whether this calculated field's expression contains aggregation functions.
+    When True, this field should NOT be included in GROUP BY clauses.
+    The caller (e.g., converter) should set this based on expression analysis.
+    """
+
     data_type: str = "number"
     """Data type of the result: 'number', 'string', 'date', 'boolean'."""
 
