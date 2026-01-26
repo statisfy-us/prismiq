@@ -168,9 +168,7 @@ class QueryBuilder:
 
                     if not table.has_column(col.column):
                         available_columns = [c.name for c in table.columns]
-                        suggestion = self._suggest_similar(
-                            col.column, available_columns
-                        )
+                        suggestion = self._suggest_similar(col.column, available_columns)
                         errors.append(
                             ValidationError(
                                 code=ERROR_COLUMN_NOT_FOUND,
@@ -207,9 +205,7 @@ class QueryBuilder:
                 from_table = self._schema.get_table(from_table_name)
                 if from_table and not from_table.has_column(join.from_column):
                     available_columns = [c.name for c in from_table.columns]
-                    suggestion = self._suggest_similar(
-                        join.from_column, available_columns
-                    )
+                    suggestion = self._suggest_similar(join.from_column, available_columns)
                     errors.append(
                         ValidationError(
                             code=ERROR_INVALID_JOIN,
@@ -225,9 +221,7 @@ class QueryBuilder:
                 to_table = self._schema.get_table(to_table_name)
                 if to_table and not to_table.has_column(join.to_column):
                     available_columns = [c.name for c in to_table.columns]
-                    suggestion = self._suggest_similar(
-                        join.to_column, available_columns
-                    )
+                    suggestion = self._suggest_similar(join.to_column, available_columns)
                     errors.append(
                         ValidationError(
                             code=ERROR_INVALID_JOIN,
@@ -350,9 +344,7 @@ class QueryBuilder:
                     "timestamp with time zone",
                     "timestamptz",
                 }
-                is_date_type = any(
-                    dt in column_schema.data_type.lower() for dt in date_types
-                )
+                is_date_type = any(dt in column_schema.data_type.lower() for dt in date_types)
                 if not is_date_type:
                     errors.append(
                         ValidationError(
@@ -437,9 +429,7 @@ class QueryBuilder:
         data_type_lower = data_type.lower()
 
         # Check for list operators - combined condition
-        if operator in (FilterOperator.IN, FilterOperator.NOT_IN) and not isinstance(
-            value, list
-        ):
+        if operator in (FilterOperator.IN, FilterOperator.NOT_IN) and not isinstance(value, list):
             return f"Operator '{operator.value}' requires a list value for column '{column_name}'"
 
         # Check for between operator - combined condition
@@ -465,9 +455,7 @@ class QueryBuilder:
             FilterOperator.IS_NOT_NULL,
         ):
             # For IN/NOT_IN, check list items
-            if operator in (FilterOperator.IN, FilterOperator.NOT_IN) and isinstance(
-                value, list
-            ):
+            if operator in (FilterOperator.IN, FilterOperator.NOT_IN) and isinstance(value, list):
                 for v in value:
                     if v is not None and not isinstance(v, int | float):
                         return f"Column '{column_name}' is numeric but received non-numeric value in list"
@@ -476,9 +464,7 @@ class QueryBuilder:
                     if not isinstance(v, int | float):
                         return f"Column '{column_name}' is numeric but received non-numeric value in range"
             elif not isinstance(value, int | float | list | tuple):
-                return (
-                    f"Column '{column_name}' is numeric but received non-numeric value"
-                )
+                return f"Column '{column_name}' is numeric but received non-numeric value"
 
         return None
 
@@ -814,9 +800,7 @@ class QueryBuilder:
         # Unknown operator - raise error instead of silent fallback
         raise ValueError(f"Unknown filter operator: {op}")
 
-    def _build_group_by(
-        self, query: QueryDefinition, table_refs: dict[str, str]
-    ) -> str:
+    def _build_group_by(self, query: QueryDefinition, table_refs: dict[str, str]) -> str:
         """Build the GROUP BY clause, including time series bucket if
         configured."""
         group_by_parts: list[str] = []
@@ -843,9 +827,7 @@ class QueryBuilder:
 
         return ", ".join(group_by_parts)
 
-    def _build_order_by(
-        self, query: QueryDefinition, table_refs: dict[str, str]
-    ) -> str:
+    def _build_order_by(self, query: QueryDefinition, table_refs: dict[str, str]) -> str:
         """Build the ORDER BY clause, adding time series bucket if
         configured."""
         parts: list[str] = []
@@ -860,9 +842,7 @@ class QueryBuilder:
             # Use explicit order by
             for o in query.order_by:
                 table_ref = table_refs[o.table_id]
-                parts.append(
-                    f"{table_ref}.{self._quote_identifier(o.column)} {o.direction.value}"
-                )
+                parts.append(f"{table_ref}.{self._quote_identifier(o.column)} {o.direction.value}")
 
         return ", ".join(parts)
 
