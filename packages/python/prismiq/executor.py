@@ -72,6 +72,7 @@ class QueryExecutor:
         schema: DatabaseSchema,
         query_timeout: float = 30.0,
         max_rows: int = 10000,
+        schema_name: str | None = None,
     ) -> None:
         """Initialize the query executor.
 
@@ -80,12 +81,15 @@ class QueryExecutor:
             schema: Database schema for validation.
             query_timeout: Maximum query execution time in seconds.
             max_rows: Maximum number of rows to return.
+            schema_name: PostgreSQL schema name for schema-qualified SQL generation.
+                If None, tables are referenced without schema prefix.
         """
         self._pool = pool
         self._schema = schema
         self._query_timeout = query_timeout
         self._max_rows = max_rows
-        self._builder = QueryBuilder(schema)
+        self._schema_name = schema_name
+        self._builder = QueryBuilder(schema, schema_name=schema_name)
         self._sql_validator = SQLValidator(schema)
 
     async def execute(self, query: QueryDefinition) -> QueryResult:

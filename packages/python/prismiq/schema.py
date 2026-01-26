@@ -70,6 +70,17 @@ class SchemaIntrospector:
         self._cache = cache
         self._cache_ttl = cache_ttl
 
+    def _cache_key(self, suffix: str) -> str:
+        """Generate schema-qualified cache key for tenant isolation.
+
+        Args:
+            suffix: Cache key suffix (e.g., "full", "table:users").
+
+        Returns:
+            Cache key with schema prefix (e.g., "schema:org_123:full").
+        """
+        return f"schema:{self._schema_name}:{suffix}"
+
     async def get_schema(self, force_refresh: bool = False) -> DatabaseSchema:
         """Get the complete database schema.
 
@@ -79,18 +90,18 @@ class SchemaIntrospector:
         Returns:
             DatabaseSchema containing all exposed tables and their relationships.
         """
-        # Try cache first
+        # Try cache first (using schema-qualified key for tenant isolation)
         if self._cache and not force_refresh:
-            cached = await self._cache.get("schema:full")
+            cached = await self._cache.get(self._cache_key("full"))
             if cached is not None:
                 return DatabaseSchema.model_validate(cached)
 
         # Introspect from database
         schema = await self._introspect_schema()
 
-        # Store in cache
+        # Store in cache (using schema-qualified key)
         if self._cache:
-            await self._cache.set("schema:full", schema.model_dump(), self._cache_ttl)
+            await self._cache.set(self._cache_key("full"), schema.model_dump(), self._cache_ttl)
 
         return schema
 
@@ -124,9 +135,10 @@ class SchemaIntrospector:
         if self._exposed_tables is not None and table_name not in self._exposed_tables:
             raise TableNotFoundError(table_name)
 
-        # Try cache first
+        # Try cache first (using schema-qualified key for tenant isolation)
+        cache_key = self._cache_key(f"table:{table_name}")
         if self._cache and not force_refresh:
-            cached = await self._cache.get(f"schema:table:{table_name}")
+            cached = await self._cache.get(cache_key)
             if cached is not None:
                 return TableSchema.model_validate(cached)
 
@@ -138,18 +150,16 @@ class SchemaIntrospector:
         # Introspect from database
         table = await self._get_table_schema(table_name)
 
-        # Store in cache
+        # Store in cache (using schema-qualified key)
         if self._cache:
-            await self._cache.set(
-                f"schema:table:{table_name}",
-                table.model_dump(),
-                self._cache_ttl,
-            )
+            await self._cache.set(cache_key, table.model_dump(), self._cache_ttl)
 
         return table
 
     async def invalidate_cache(self) -> int:
-        """Invalidate all cached schema data.
+        """Invalidate all cached schema data for this schema.
+
+        Only invalidates cache entries for this schema (tenant isolation).
 
         Returns:
             Number of cache entries cleared.
@@ -157,7 +167,8 @@ class SchemaIntrospector:
         if self._cache is None:
             return 0
 
-        return await self._cache.clear("schema:*")
+        # Only clear cache entries for this specific schema
+        return await self._cache.clear(f"schema:{self._schema_name}:*")
 
     async def detect_relationships(self) -> list[Relationship]:
         """Detect foreign key relationships between exposed tables.

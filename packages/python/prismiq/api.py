@@ -462,7 +462,11 @@ def create_router(
                 status="healthy",
                 latency_ms=round(latency, 2),
             )
+        except (TypeError, AttributeError, ImportError, AssertionError):
+            # Re-raise programming bugs - these need to be fixed, not reported as unhealthy
+            raise
         except Exception as e:
+            # Infrastructure errors - report as unhealthy
             checks["database"] = HealthCheck(
                 status="unhealthy",
                 message=str(e),
@@ -488,7 +492,11 @@ def create_router(
                         status="degraded",
                         message="Cache read/write verification failed",
                     )
+            except (TypeError, AttributeError, ImportError, AssertionError):
+                # Re-raise programming bugs
+                raise
             except Exception as e:
+                # Infrastructure errors - report as unhealthy
                 checks["cache"] = HealthCheck(
                     status="unhealthy",
                     message=str(e),
@@ -552,34 +560,51 @@ def create_router(
     # ========================================================================
 
     @router.get("/schema", response_model=DatabaseSchema)
-    async def get_schema() -> DatabaseSchema:
+    async def get_schema(
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> DatabaseSchema:
         """Get the complete database schema (raw).
 
         Returns all exposed tables, their columns, and relationships
         without any configuration applied.
+
+        Uses the schema_name from AuthContext for multi-tenant schema isolation.
         """
-        return await engine.get_schema()
+        schema_name = auth.schema_name
+        return await engine.get_schema(schema_name=schema_name)
 
     @router.get("/schema/enhanced", response_model=EnhancedDatabaseSchema)
-    async def get_enhanced_schema() -> EnhancedDatabaseSchema:
+    async def get_enhanced_schema(
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> EnhancedDatabaseSchema:
         """Get the enhanced database schema with configuration applied.
 
         Returns schema with display names, descriptions, and hidden
         tables/columns filtered out.
+
+        Uses the schema_name from AuthContext for multi-tenant schema isolation.
         """
-        return await engine.get_enhanced_schema()
+        schema_name = auth.schema_name
+        return await engine.get_enhanced_schema(schema_name=schema_name)
 
     @router.get("/tables", response_model=TableListResponse)
-    async def get_tables() -> TableListResponse:
+    async def get_tables(
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> TableListResponse:
         """Get list of available table names.
 
         Returns a simple list of table names for quick reference.
+        Uses the schema_name from AuthContext for multi-tenant schema isolation.
         """
-        schema = await engine.get_schema()
+        schema_name = auth.schema_name
+        schema = await engine.get_schema(schema_name=schema_name)
         return TableListResponse(tables=schema.table_names())
 
     @router.get("/tables/{table_name}", response_model=TableSchema)
-    async def get_table(table_name: str) -> TableSchema:
+    async def get_table(
+        table_name: str,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> TableSchema:
         """Get schema information for a single table (raw).
 
         Args:
@@ -591,13 +616,17 @@ def create_router(
         Raises:
             404: If the table is not found.
         """
+        schema_name = auth.schema_name
         try:
-            return await engine.get_table(table_name)
+            return await engine.get_table(table_name, schema_name=schema_name)
         except TableNotFoundError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @router.get("/tables/{table_name}/enhanced", response_model=EnhancedTableSchema)
-    async def get_enhanced_table(table_name: str) -> EnhancedTableSchema:
+    async def get_enhanced_table(
+        table_name: str,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> EnhancedTableSchema:
         """Get enhanced schema information for a single table.
 
         Args:
@@ -609,7 +638,8 @@ def create_router(
         Raises:
             404: If the table is not found or is hidden.
         """
-        enhanced_schema = await engine.get_enhanced_schema()
+        schema_name = auth.schema_name
+        enhanced_schema = await engine.get_enhanced_schema(schema_name=schema_name)
         table = enhanced_schema.get_table(table_name)
         if table is None:
             raise HTTPException(status_code=404, detail=f"Table '{table_name}' not found")
@@ -620,6 +650,7 @@ def create_router(
         table_name: str,
         column_name: str,
         limit: int = 5,
+        auth: AuthContext = Depends(get_auth_context),
     ) -> dict[str, list[Any]]:
         """Get sample values from a column for data preview.
 
@@ -634,8 +665,11 @@ def create_router(
         Raises:
             404: If the table or column is not found.
         """
+        schema_name = auth.schema_name
         try:
-            values = await engine.sample_column_values(table_name, column_name, limit)
+            values = await engine.sample_column_values(
+                table_name, column_name, limit, schema_name=schema_name
+            )
             return {"values": values}
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
@@ -647,11 +681,16 @@ def create_router(
     # ========================================================================
 
     @router.post("/query/validate", response_model=ValidationResponse)
-    async def validate_query(query: QueryDefinition) -> ValidationResponse:
+    async def validate_query(
+        query: QueryDefinition,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> ValidationResponse:
         """Validate a query without executing it.
 
         Checks that all tables and columns exist in the schema,
         and that join columns are compatible.
+
+        Uses the schema_name from AuthContext for multi-tenant schema isolation.
 
         Args:
             query: Query definition to validate.
@@ -659,16 +698,20 @@ def create_router(
         Returns:
             ValidationResponse with valid flag and any errors.
         """
-        errors = engine.validate_query(query)
+        schema_name = auth.schema_name
+        errors = await engine.validate_query_async(query, schema_name=schema_name)
         return ValidationResponse(valid=len(errors) == 0, errors=errors)
 
     @router.post("/query/validate/detailed", response_model=DetailedValidationResponse)
     async def validate_query_detailed(
         query: QueryDefinition,
+        auth: AuthContext = Depends(get_auth_context),
     ) -> DetailedValidationResponse:
         """Validate a query with detailed error information.
 
         Returns detailed errors with error codes, field paths, and suggestions.
+
+        Uses the schema_name from AuthContext for multi-tenant schema isolation.
 
         Args:
             query: Query definition to validate.
@@ -676,14 +719,20 @@ def create_router(
         Returns:
             DetailedValidationResponse with complete validation result.
         """
-        result = engine.validate_query_detailed(query)
+        schema_name = auth.schema_name
+        result = await engine.validate_query_detailed_async(query, schema_name=schema_name)
         return DetailedValidationResponse(result=result)
 
     @router.post("/query/sql")
-    async def generate_sql(query: QueryDefinition) -> dict[str, str]:
+    async def generate_sql(
+        query: QueryDefinition,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> dict[str, str]:
         """Generate SQL from a query definition without executing.
 
         Useful for previewing the SQL that will be generated.
+
+        Uses the schema_name from AuthContext for multi-tenant schema isolation.
 
         Args:
             query: Query definition to generate SQL for.
@@ -694,8 +743,9 @@ def create_router(
         Raises:
             400: If the query fails validation.
         """
+        schema_name = auth.schema_name
         try:
-            sql = engine.generate_sql(query)
+            sql = await engine.generate_sql_async(query, schema_name=schema_name)
             return {"sql": sql}
         except QueryValidationError as e:
             raise HTTPException(
@@ -703,7 +753,10 @@ def create_router(
             ) from e
 
     @router.post("/query/execute", response_model=QueryResultWithCache)
-    async def execute_query(request: ExecuteQueryRequest) -> QueryResultWithCache:
+    async def execute_query(
+        request: ExecuteQueryRequest,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> QueryResultWithCache:
         """Execute a query and return results with cache metadata.
 
         Args:
@@ -719,10 +772,11 @@ def create_router(
         try:
             query = request.query
             bypass_cache = request.bypass_cache
+            schema_name = auth.schema_name
 
             # Execute query (bypass cache if requested)
             use_cache = not bypass_cache
-            result = await engine.execute_query(query, use_cache=use_cache)
+            result = await engine.execute_query(query, schema_name=schema_name, use_cache=use_cache)
 
             # Get cache metadata
             cached_at: float | None = None
@@ -788,7 +842,10 @@ def create_router(
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     @router.post("/query/preview", response_model=QueryResult)
-    async def preview_query(request: PreviewRequest) -> QueryResult:
+    async def preview_query(
+        request: PreviewRequest,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> QueryResult:
         """Execute a query with a limited number of rows.
 
         Useful for quick previews in the query builder UI.
@@ -803,8 +860,11 @@ def create_router(
             400: If the query fails validation.
             500: If the query execution fails.
         """
+        schema_name = auth.schema_name
         try:
-            return await engine.preview_query(request.query, limit=request.limit)
+            return await engine.preview_query(
+                request.query, limit=request.limit, schema_name=schema_name
+            )
         except QueryValidationError as e:
             raise HTTPException(
                 status_code=400, detail={"message": e.message, "errors": e.errors}
@@ -1510,8 +1570,11 @@ def create_router(
         if widget.query is None:
             raise HTTPException(status_code=400, detail="Widget has no query")
 
+        # Get schema_name from auth context
+        schema_name = auth.schema_name
+
         # Merge dashboard filters with widget query
-        schema = await engine.get_schema()
+        schema = await engine.get_schema(schema_name=schema_name)
         query = merge_filters(
             widget.query,
             dashboard.filters,
@@ -1520,7 +1583,7 @@ def create_router(
         )
 
         try:
-            return await engine.execute_query(query)
+            return await engine.execute_query(query, schema_name=schema_name)
         except QueryValidationError as e:
             raise HTTPException(
                 status_code=400, detail={"message": e.message, "errors": e.errors}

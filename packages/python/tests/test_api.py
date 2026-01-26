@@ -76,17 +76,21 @@ def mock_engine(sample_schema: DatabaseSchema) -> MagicMock:
     # This prevents the execute_query endpoint from trying to access cache metadata
     engine._query_cache = None
 
-    # Mock async methods
-    async def get_schema() -> DatabaseSchema:
+    # Mock async methods (with schema_name support for multi-tenant)
+    async def get_schema(schema_name: str | None = None) -> DatabaseSchema:
         return sample_schema
 
-    async def get_table(table_name: str) -> TableSchema:
+    async def get_table(table_name: str, schema_name: str | None = None) -> TableSchema:
         table = sample_schema.get_table(table_name)
         if table is None:
             raise TableNotFoundError(table_name)
         return table
 
-    async def execute_query(query: QueryDefinition, use_cache: bool = True) -> QueryResult:
+    async def execute_query(
+        query: QueryDefinition,
+        schema_name: str | None = None,
+        use_cache: bool = True,
+    ) -> QueryResult:
         return QueryResult(
             columns=["id", "email"],
             column_types=["integer", "text"],
@@ -95,7 +99,11 @@ def mock_engine(sample_schema: DatabaseSchema) -> MagicMock:
             execution_time_ms=5.0,
         )
 
-    async def preview_query(query: QueryDefinition, limit: int = 100) -> QueryResult:
+    async def preview_query(
+        query: QueryDefinition,
+        limit: int = 100,
+        schema_name: str | None = None,
+    ) -> QueryResult:
         return QueryResult(
             columns=["id", "email"],
             column_types=["integer", "text"],
@@ -107,12 +115,37 @@ def mock_engine(sample_schema: DatabaseSchema) -> MagicMock:
     async def check_connection() -> bool:
         return True
 
+    async def get_enhanced_schema(schema_name: str | None = None) -> Any:
+        # Return a mock enhanced schema
+        return MagicMock(get_table=lambda name: sample_schema.get_table(name))
+
+    async def validate_query_async(
+        query: QueryDefinition, schema_name: str | None = None
+    ) -> list[str]:
+        return []
+
+    async def validate_query_detailed_async(
+        query: QueryDefinition, schema_name: str | None = None
+    ) -> Any:
+        from prismiq.query import ValidationResult
+
+        return ValidationResult(valid=True, errors=[])
+
+    async def generate_sql_async(query: QueryDefinition, schema_name: str | None = None) -> str:
+        return 'SELECT "id", "email" FROM "users"'
+
     engine.get_schema = get_schema
     engine.get_table = get_table
+    engine.get_enhanced_schema = get_enhanced_schema
     engine.execute_query = execute_query
     engine.preview_query = preview_query
     engine.check_connection = check_connection
     engine.validate_query = MagicMock(return_value=[])
+    engine.validate_query_async = validate_query_async
+    engine.validate_query_detailed = MagicMock(return_value=MagicMock(valid=True, errors=[]))
+    engine.validate_query_detailed_async = validate_query_detailed_async
+    engine.generate_sql = MagicMock(return_value='SELECT "id", "email" FROM "users"')
+    engine.generate_sql_async = generate_sql_async
 
     return engine
 
@@ -123,7 +156,8 @@ def client(mock_engine: MagicMock) -> TestClient:
     app = FastAPI()
     router = create_router(mock_engine)
     app.include_router(router, prefix="/api/analytics")
-    return TestClient(app)
+    # Include default headers for multi-tenant auth
+    return TestClient(app, headers={"X-Tenant-ID": "test-tenant"})
 
 
 # ============================================================================
@@ -411,7 +445,14 @@ class TestValidateQuery:
 
     def test_validate_invalid_query(self, client: TestClient, mock_engine: MagicMock) -> None:
         """Test validation of an invalid query."""
-        mock_engine.validate_query.return_value = ["Column 'nonexistent' not found"]
+
+        # Override the async validation method to return errors
+        async def validate_with_errors(
+            query: QueryDefinition, schema_name: str | None = None
+        ) -> list[str]:
+            return ["Column 'nonexistent' not found"]
+
+        mock_engine.validate_query_async = validate_with_errors
 
         query = {
             "tables": [{"id": "t1", "name": "users"}],
@@ -477,7 +518,9 @@ class TestExecuteQuery:
     ) -> None:
         """Test that validation errors return 400."""
 
-        async def raise_validation_error(query: Any, use_cache: bool = True) -> None:
+        async def raise_validation_error(
+            query: Any, schema_name: str | None = None, use_cache: bool = True
+        ) -> None:
             raise QueryValidationError("Invalid query", errors=["Table not found"])
 
         mock_engine.execute_query = raise_validation_error
@@ -535,7 +578,9 @@ class TestPreviewQuery:
     ) -> None:
         """Test that validation errors return 400."""
 
-        async def raise_validation_error(query: Any, limit: int = 100) -> None:
+        async def raise_validation_error(
+            query: Any, limit: int = 100, schema_name: str | None = None
+        ) -> None:
             raise QueryValidationError("Invalid query", errors=["Column not found"])
 
         mock_engine.preview_query = raise_validation_error
@@ -573,7 +618,9 @@ class TestErrorResponses:
     ) -> None:
         """Test that validation errors include errors list."""
 
-        async def raise_validation_error(query: Any, use_cache: bool = True) -> None:
+        async def raise_validation_error(
+            query: Any, schema_name: str | None = None, use_cache: bool = True
+        ) -> None:
             raise QueryValidationError("Validation failed", errors=["Error 1", "Error 2"])
 
         mock_engine.execute_query = raise_validation_error

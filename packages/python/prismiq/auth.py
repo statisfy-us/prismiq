@@ -45,6 +45,17 @@ class AuthContext(Protocol):
         """
         ...
 
+    @property
+    def schema_name(self) -> str | None:
+        """PostgreSQL schema name for this tenant.
+
+        Used for schema-based multi-tenancy where each tenant has their
+        own PostgreSQL schema (e.g., "org_123", "tenant_abc").
+
+        If None, the engine's default schema is used (typically "public").
+        """
+        ...
+
 
 @dataclass(frozen=True)
 class SimpleAuthContext:
@@ -56,6 +67,7 @@ class SimpleAuthContext:
 
     tenant_id: str
     user_id: str | None = None
+    schema_name: str | None = None
 
     # Optional: add extra fields your app needs
     email: str | None = None
@@ -75,6 +87,7 @@ def create_header_auth_dependency():
     Headers:
         X-Tenant-ID: Required tenant identifier
         X-User-ID: Optional user identifier
+        X-Schema-Name: Optional PostgreSQL schema name for per-tenant schema isolation
     """
     from fastapi import HTTPException
 
@@ -84,10 +97,12 @@ def create_header_auth_dependency():
             raise HTTPException(status_code=400, detail="X-Tenant-ID header is required")
 
         user_id = request.headers.get("X-User-ID")
+        schema_name = request.headers.get("X-Schema-Name")
 
         return SimpleAuthContext(
             tenant_id=tenant_id,
             user_id=user_id,
+            schema_name=schema_name,
         )
 
     return get_auth_context

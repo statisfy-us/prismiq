@@ -46,6 +46,12 @@ export interface ClientConfig {
    * Used for dashboard ownership and access control.
    */
   userId?: string;
+  /**
+   * PostgreSQL schema name for per-tenant schema isolation.
+   * Included in X-Schema-Name header when provided.
+   * Used when each tenant has their own PostgreSQL schema (e.g., "org_123").
+   */
+  schemaName?: string;
   /** Optional function to get an authentication token. */
   getToken?: () => Promise<string> | string;
 }
@@ -91,6 +97,7 @@ export class PrismiqClient {
   private readonly endpoint: string;
   private readonly tenantId: string;
   private readonly userId?: string;
+  private readonly schemaName?: string;
   private readonly getToken?: () => Promise<string> | string;
 
   constructor(config: ClientConfig) {
@@ -98,6 +105,7 @@ export class PrismiqClient {
     this.endpoint = config.endpoint.replace(/\/$/, '');
     this.tenantId = config.tenantId;
     this.userId = config.userId;
+    this.schemaName = config.schemaName;
     this.getToken = config.getToken;
   }
 
@@ -119,6 +127,11 @@ export class PrismiqClient {
     // Add user ID header if provided
     if (this.userId) {
       (headers as Record<string, string>)['X-User-ID'] = this.userId;
+    }
+
+    // Add schema name header if provided (for per-tenant schema isolation)
+    if (this.schemaName) {
+      (headers as Record<string, string>)['X-Schema-Name'] = this.schemaName;
     }
 
     // Add authorization header if token provider is configured
