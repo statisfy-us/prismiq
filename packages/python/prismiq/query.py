@@ -911,9 +911,7 @@ class QueryBuilder:
                 )
             subquery_sql = f.value["sql"].strip()
             if not subquery_sql:
-                raise ValueError(
-                    f"IN_SUBQUERY filter on column '{f.column}' has empty SQL"
-                )
+                raise ValueError(f"IN_SUBQUERY filter on column '{f.column}' has empty SQL")
             return f"{col_ref} IN ({subquery_sql})", params
 
         # Unknown operator - raise error instead of silent fallback
