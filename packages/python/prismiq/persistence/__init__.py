@@ -9,6 +9,7 @@ from prismiq.persistence.models import (
 from prismiq.persistence.postgres_store import PostgresDashboardStore
 from prismiq.persistence.saved_query_store import SavedQueryStore
 from prismiq.persistence.setup import (
+    TableCreationError,
     drop_tables,
     ensure_tables,
     ensure_tables_sync,
@@ -28,6 +29,7 @@ __all__ = [
     "PrismiqSavedQuery",
     "PrismiqWidget",
     "SavedQueryStore",
+    "TableCreationError",
     "dashboards_table",
     "drop_tables",
     "ensure_tables",
