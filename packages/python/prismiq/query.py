@@ -11,6 +11,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from prismiq.calculated_fields import ExpressionParser
 from prismiq.types import (
     AggregationType,
     DatabaseSchema,
@@ -148,6 +149,9 @@ class QueryBuilder:
                     )
                 )
 
+        # Build set of calculated field names for reference checking
+        calculated_field_names = {cf.name for cf in query.calculated_fields}
+
         # Validate columns exist in tables
         for i, col in enumerate(query.columns):
             table_name = table_map.get(col.table_id)
@@ -158,9 +162,15 @@ class QueryBuilder:
                     if col.column == "*" and col.aggregation == AggregationType.COUNT:
                         continue  # Skip further validation for COUNT(*)
 
+                    # Allow references to calculated fields - they're defined in calculated_fields
+                    if col.column in calculated_field_names:
+                        continue  # Skip further validation for calculated field references
+
                     if not table.has_column(col.column):
                         available_columns = [c.name for c in table.columns]
-                        suggestion = self._suggest_similar(col.column, available_columns)
+                        suggestion = self._suggest_similar(
+                            col.column, available_columns
+                        )
                         errors.append(
                             ValidationError(
                                 code=ERROR_COLUMN_NOT_FOUND,
@@ -197,7 +207,9 @@ class QueryBuilder:
                 from_table = self._schema.get_table(from_table_name)
                 if from_table and not from_table.has_column(join.from_column):
                     available_columns = [c.name for c in from_table.columns]
-                    suggestion = self._suggest_similar(join.from_column, available_columns)
+                    suggestion = self._suggest_similar(
+                        join.from_column, available_columns
+                    )
                     errors.append(
                         ValidationError(
                             code=ERROR_INVALID_JOIN,
@@ -213,7 +225,9 @@ class QueryBuilder:
                 to_table = self._schema.get_table(to_table_name)
                 if to_table and not to_table.has_column(join.to_column):
                     available_columns = [c.name for c in to_table.columns]
-                    suggestion = self._suggest_similar(join.to_column, available_columns)
+                    suggestion = self._suggest_similar(
+                        join.to_column, available_columns
+                    )
                     errors.append(
                         ValidationError(
                             code=ERROR_INVALID_JOIN,
@@ -336,7 +350,9 @@ class QueryBuilder:
                     "timestamp with time zone",
                     "timestamptz",
                 }
-                is_date_type = any(dt in column_schema.data_type.lower() for dt in date_types)
+                is_date_type = any(
+                    dt in column_schema.data_type.lower() for dt in date_types
+                )
                 if not is_date_type:
                     errors.append(
                         ValidationError(
@@ -421,7 +437,9 @@ class QueryBuilder:
         data_type_lower = data_type.lower()
 
         # Check for list operators - combined condition
-        if operator in (FilterOperator.IN, FilterOperator.NOT_IN) and not isinstance(value, list):
+        if operator in (FilterOperator.IN, FilterOperator.NOT_IN) and not isinstance(
+            value, list
+        ):
             return f"Operator '{operator.value}' requires a list value for column '{column_name}'"
 
         # Check for between operator - combined condition
@@ -447,7 +465,9 @@ class QueryBuilder:
             FilterOperator.IS_NOT_NULL,
         ):
             # For IN/NOT_IN, check list items
-            if operator in (FilterOperator.IN, FilterOperator.NOT_IN) and isinstance(value, list):
+            if operator in (FilterOperator.IN, FilterOperator.NOT_IN) and isinstance(
+                value, list
+            ):
                 for v in value:
                     if v is not None and not isinstance(v, int | float):
                         return f"Column '{column_name}' is numeric but received non-numeric value in list"
@@ -456,7 +476,9 @@ class QueryBuilder:
                     if not isinstance(v, int | float):
                         return f"Column '{column_name}' is numeric but received non-numeric value in range"
             elif not isinstance(value, int | float | list | tuple):
-                return f"Column '{column_name}' is numeric but received non-numeric value"
+                return (
+                    f"Column '{column_name}' is numeric but received non-numeric value"
+                )
 
         return None
 
@@ -545,6 +567,25 @@ class QueryBuilder:
         configured."""
         parts: list[str] = []
 
+        # Build calculated field name -> expression map (raw RevealBI expressions)
+        calc_field_map = {cf.name: cf.expression for cf in query.calculated_fields}
+
+        # Parse and convert calculated field expressions to SQL
+        # The expressions use RevealBI syntax like [field_name] which needs conversion
+        calc_sql_map: dict[str, str] = {}
+        if calc_field_map:
+            parser = ExpressionParser()
+            # Build a field mapping for references within expressions
+            # Initially empty - will resolve field refs as column names
+            field_mapping: dict[str, str] = {}
+            for name, expr in calc_field_map.items():
+                try:
+                    ast = parser.parse(expr)
+                    calc_sql_map[name] = ast.to_sql(field_mapping)
+                except Exception:
+                    # If parsing fails, use the raw expression (might be plain SQL)
+                    calc_sql_map[name] = expr
+
         # Add time series bucket column first if configured
         if query.time_series:
             ts = query.time_series
@@ -565,6 +606,14 @@ class QueryBuilder:
             # Handle COUNT(*) specially - don't quote the asterisk
             if col.column == "*" and col.aggregation == AggregationType.COUNT:
                 col_ref = "COUNT(*)"
+            # Handle calculated field references - expand to SQL expression
+            elif col.column in calc_sql_map:
+                # Use the converted SQL expression
+                col_ref = f"({calc_sql_map[col.column]})"
+
+                # Apply aggregation if specified
+                if col.aggregation != AggregationType.NONE:
+                    col_ref = self._apply_aggregation(col_ref, col.aggregation)
             else:
                 col_ref = f"{table_ref}.{self._quote_identifier(col.column)}"
 
@@ -765,7 +814,9 @@ class QueryBuilder:
         # Unknown operator - raise error instead of silent fallback
         raise ValueError(f"Unknown filter operator: {op}")
 
-    def _build_group_by(self, query: QueryDefinition, table_refs: dict[str, str]) -> str:
+    def _build_group_by(
+        self, query: QueryDefinition, table_refs: dict[str, str]
+    ) -> str:
         """Build the GROUP BY clause, including time series bucket if
         configured."""
         group_by_parts: list[str] = []
@@ -792,7 +843,9 @@ class QueryBuilder:
 
         return ", ".join(group_by_parts)
 
-    def _build_order_by(self, query: QueryDefinition, table_refs: dict[str, str]) -> str:
+    def _build_order_by(
+        self, query: QueryDefinition, table_refs: dict[str, str]
+    ) -> str:
         """Build the ORDER BY clause, adding time series bucket if
         configured."""
         parts: list[str] = []
@@ -807,7 +860,9 @@ class QueryBuilder:
             # Use explicit order by
             for o in query.order_by:
                 table_ref = table_refs[o.table_id]
-                parts.append(f"{table_ref}.{self._quote_identifier(o.column)} {o.direction.value}")
+                parts.append(
+                    f"{table_ref}.{self._quote_identifier(o.column)} {o.direction.value}"
+                )
 
         return ", ".join(parts)
 
