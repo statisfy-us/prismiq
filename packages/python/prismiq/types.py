@@ -193,6 +193,18 @@ class ColumnSelection(BaseModel):
     alias: str | None = None
     """Optional alias for the result column."""
 
+    date_trunc: str | None = None
+    """Date truncation unit (e.g., 'year', 'month', 'day') for date columns."""
+
+    date_format: str | None = None
+    """Date format string for display (e.g., 'MMM-yyyy')."""
+
+    sql_expression: str | None = None
+    """
+    Pre-computed SQL expression for calculated fields.
+    When provided, this is used directly instead of looking up the column.
+    """
+
 
 class FilterOperator(str, Enum):
     """SQL filter operators."""
@@ -210,6 +222,7 @@ class FilterOperator(str, Enum):
     BETWEEN = "between"
     IS_NULL = "is_null"
     IS_NOT_NULL = "is_not_null"
+    IN_SUBQUERY = "in_subquery"
 
 
 class FilterDefinition(BaseModel):
@@ -233,6 +246,13 @@ class FilterDefinition(BaseModel):
     - List for in_, not_in
     - Tuple of (min, max) for between
     - None for is_null, is_not_null
+    - Dict with 'sql' key for in_subquery
+    """
+
+    sql_expression: str | None = None
+    """
+    Pre-computed SQL expression for calculated fields.
+    When provided, this is used directly instead of looking up the column.
     """
 
 
