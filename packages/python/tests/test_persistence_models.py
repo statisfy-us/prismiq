@@ -153,3 +153,99 @@ class TestEnsureTablesSync:
         params = list(sig.parameters.keys())
         assert "connection" in params
         assert "schema_name" in params
+
+
+class TestTableCreationError:
+    """Test TableCreationError exception."""
+
+    def test_exception_exists(self) -> None:
+        """TableCreationError should be importable from prismiq."""
+        from prismiq import TableCreationError
+
+        assert issubclass(TableCreationError, Exception)
+
+    def test_exception_can_be_raised(self) -> None:
+        """TableCreationError should be raisable with a message."""
+        import pytest
+
+        from prismiq import TableCreationError
+
+        with pytest.raises(TableCreationError, match="test error"):
+            raise TableCreationError("test error")
+
+
+class TestSchemaNameValidation:
+    """Test schema name validation in ensure_tables_sync."""
+
+    def test_empty_schema_name_rejected(self) -> None:
+        """Empty schema name should raise ValueError."""
+        import pytest
+
+        from prismiq.persistence.setup import _validate_schema_name
+
+        with pytest.raises(ValueError, match="cannot be empty"):
+            _validate_schema_name("")
+
+    def test_invalid_characters_rejected(self) -> None:
+        """Schema names with special characters should raise ValueError."""
+        import pytest
+
+        from prismiq.persistence.setup import _validate_schema_name
+
+        invalid_names = ["my-schema", "my.schema", "my schema", "123_schema", "@schema"]
+        for name in invalid_names:
+            with pytest.raises(ValueError, match="Invalid schema name"):
+                _validate_schema_name(name)
+
+    def test_reserved_schemas_rejected(self) -> None:
+        """Reserved schema names should raise ValueError."""
+        import pytest
+
+        from prismiq.persistence.setup import _validate_schema_name
+
+        reserved = ["public", "information_schema", "pg_catalog", "pg_toast"]
+        for name in reserved:
+            with pytest.raises(ValueError, match="reserved schema"):
+                _validate_schema_name(name)
+
+    def test_valid_schema_names_accepted(self) -> None:
+        """Valid schema names should not raise."""
+        from prismiq.persistence.setup import _validate_schema_name
+
+        valid_names = [
+            "tenant_123",
+            "org_abc",
+            "_private",
+            "MySchema",
+            "UPPERCASE",
+            "a",
+            "tenant_1_2_3",
+        ]
+        for name in valid_names:
+            _validate_schema_name(name)  # Should not raise
+
+
+class TestUniqueConstraints:
+    """Test unique constraints on models."""
+
+    def test_dashboard_unique_constraint_exists(self) -> None:
+        """Dashboard should have unique constraint on (tenant_id, name)."""
+        table = PrismiqBase.metadata.tables["prismiq_dashboards"]
+        constraint_names = [c.name for c in table.constraints if hasattr(c, "name") and c.name]
+        assert "unique_dashboard_name_per_tenant" in constraint_names
+
+    def test_saved_query_unique_constraint_exists(self) -> None:
+        """SavedQuery should have unique constraint on (tenant_id, name)."""
+        table = PrismiqBase.metadata.tables["prismiq_saved_queries"]
+        constraint_names = [c.name for c in table.constraints if hasattr(c, "name") and c.name]
+        assert "unique_query_name_per_tenant" in constraint_names
+
+
+class TestForeignKeyBehavior:
+    """Test foreign key configuration."""
+
+    def test_widget_foreign_key_has_cascade_delete(self) -> None:
+        """Widget foreign key should have ON DELETE CASCADE."""
+        table = PrismiqBase.metadata.tables["prismiq_widgets"]
+        fk = next(iter(table.foreign_keys))
+        assert fk.ondelete == "CASCADE"
