@@ -7,6 +7,7 @@ import pytest
 from prismiq.query import QueryBuilder
 from prismiq.types import (
     AggregationType,
+    CalculatedField,
     ColumnSchema,
     ColumnSelection,
     DatabaseSchema,
@@ -957,3 +958,157 @@ class TestTimeSeriesValidation:
                 date_column="created_at",
                 interval="invalid",
             )
+
+
+# ============================================================================
+# Calculated Fields Tests
+# ============================================================================
+
+
+class TestCalculatedFields:
+    """Tests for calculated field support in queries."""
+
+    def test_calculated_field_in_select(self, builder: QueryBuilder) -> None:
+        """Test calculated field is expanded in SELECT clause."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="orders")],
+            columns=[ColumnSelection(table_id="t1", column="is_large_order")],
+            calculated_fields=[
+                CalculatedField(name="is_large_order", expression="if([total] > 100, 1, 0)")
+            ],
+        )
+        sql, _params = builder.build(query)
+
+        # Should expand to CASE WHEN expression, not "orders"."is_large_order"
+        assert "is_large_order" not in sql or "CASE WHEN" in sql
+        assert '"orders"."is_large_order"' not in sql
+
+    def test_calculated_field_in_filter(self, builder: QueryBuilder) -> None:
+        """Test calculated field is expanded in WHERE clause."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="orders")],
+            columns=[ColumnSelection(table_id="t1", column="total")],
+            filters=[
+                FilterDefinition(
+                    table_id="t1",
+                    column="is_large_order",
+                    operator=FilterOperator.EQ,
+                    value=1,
+                )
+            ],
+            calculated_fields=[
+                CalculatedField(name="is_large_order", expression="if([total] > 100, 1, 0)")
+            ],
+        )
+        sql, params = builder.build(query)
+
+        # Should expand calculated field in WHERE, not reference non-existent column
+        assert '"orders"."is_large_order"' not in sql
+        assert "WHERE" in sql
+        assert "CASE WHEN" in sql
+        assert params == [1]
+
+    def test_calculated_field_in_order_by(self, builder: QueryBuilder) -> None:
+        """Test calculated field is expanded in ORDER BY clause."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="orders")],
+            columns=[ColumnSelection(table_id="t1", column="total")],
+            order_by=[
+                SortDefinition(table_id="t1", column="is_large_order", direction=SortDirection.DESC)
+            ],
+            calculated_fields=[
+                CalculatedField(name="is_large_order", expression="if([total] > 100, 1, 0)")
+            ],
+        )
+        sql, _params = builder.build(query)
+
+        # Should expand calculated field in ORDER BY, not reference non-existent column
+        assert '"orders"."is_large_order"' not in sql
+        assert "ORDER BY" in sql
+        assert "CASE WHEN" in sql
+        assert "DESC" in sql
+
+    def test_calculated_field_validation_allows_filter(self, builder: QueryBuilder) -> None:
+        """Test validation passes for filter on calculated field."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="orders")],
+            columns=[ColumnSelection(table_id="t1", column="total")],
+            filters=[
+                FilterDefinition(
+                    table_id="t1",
+                    column="is_large_order",
+                    operator=FilterOperator.EQ,
+                    value=1,
+                )
+            ],
+            calculated_fields=[
+                CalculatedField(name="is_large_order", expression="if([total] > 100, 1, 0)")
+            ],
+        )
+        errors = builder.validate(query)
+
+        # Should not error about "is_large_order" not found in table
+        assert len(errors) == 0
+
+    def test_calculated_field_validation_allows_order_by(self, builder: QueryBuilder) -> None:
+        """Test validation passes for order by calculated field."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="orders")],
+            columns=[ColumnSelection(table_id="t1", column="total")],
+            order_by=[
+                SortDefinition(table_id="t1", column="is_large_order", direction=SortDirection.ASC)
+            ],
+            calculated_fields=[
+                CalculatedField(name="is_large_order", expression="if([total] > 100, 1, 0)")
+            ],
+        )
+        errors = builder.validate(query)
+
+        # Should not error about "is_large_order" not found in table
+        assert len(errors) == 0
+
+    def test_calculated_field_with_simple_expression(self, builder: QueryBuilder) -> None:
+        """Test calculated field with simple arithmetic expression."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="orders")],
+            columns=[ColumnSelection(table_id="t1", column="double_total")],
+            calculated_fields=[CalculatedField(name="double_total", expression="[total] * 2")],
+        )
+        sql, _params = builder.build(query)
+
+        # Should expand to arithmetic expression
+        assert '"total"' in sql
+        assert "* 2" in sql
+
+    def test_multiple_calculated_fields(self, builder: QueryBuilder) -> None:
+        """Test multiple calculated fields in same query."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="orders")],
+            columns=[
+                ColumnSelection(table_id="t1", column="is_large_order"),
+                ColumnSelection(table_id="t1", column="double_total"),
+            ],
+            filters=[
+                FilterDefinition(
+                    table_id="t1",
+                    column="is_large_order",
+                    operator=FilterOperator.EQ,
+                    value=1,
+                )
+            ],
+            order_by=[
+                SortDefinition(table_id="t1", column="double_total", direction=SortDirection.DESC)
+            ],
+            calculated_fields=[
+                CalculatedField(name="is_large_order", expression="if([total] > 100, 1, 0)"),
+                CalculatedField(name="double_total", expression="[total] * 2"),
+            ],
+        )
+        sql, params = builder.build(query)
+
+        # Both calculated fields should be expanded
+        assert '"orders"."is_large_order"' not in sql
+        assert '"orders"."double_total"' not in sql
+        assert "CASE WHEN" in sql  # From is_large_order
+        assert "* 2" in sql  # From double_total
+        assert params == [1]
