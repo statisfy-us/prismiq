@@ -50,6 +50,29 @@ class ExprNode:
         raise NotImplementedError
 
 
+def _quote_column_ref(name: str, default_table_ref: str | None = None) -> str:
+    """Quote a column reference with proper PostgreSQL identifier quoting.
+
+    Handles three cases:
+    1. Qualified "alias.column" -> "alias"."column"
+    2. Unqualified with default_table_ref -> "default_table_ref"."name"
+    3. Unqualified without default -> "name"
+
+    Args:
+        name: Column name, possibly qualified with table alias (e.g., "A.date")
+        default_table_ref: Table reference to use for unqualified columns
+
+    Returns:
+        Properly quoted PostgreSQL column reference
+    """
+    if "." in name:
+        alias, column = name.split(".", 1)
+        return f'"{alias}"."{column}"'
+    if default_table_ref:
+        return f'"{default_table_ref}"."{name}"'
+    return f'"{name}"'
+
+
 class FieldRef(ExprNode):
     """Field reference: [field_name] or [Table.field]"""
 
@@ -84,32 +107,15 @@ class FieldRef(ExprNode):
                 # Check if the inner field is also a calculated field
                 if inner_field in field_mapping:
                     inner_sql = f"({field_mapping[inner_field]})"
-                elif "." in inner_field:
-                    # Handle qualified fields like "alias.column" -> "alias"."column"
-                    parts = inner_field.split(".", 1)
-                    inner_sql = f'"{parts[0]}"."{parts[1]}"'
-                elif default_table_ref:
-                    inner_sql = f'"{default_table_ref}"."{inner_field}"'
                 else:
-                    inner_sql = f'"{inner_field}"'
+                    inner_sql = _quote_column_ref(inner_field, default_table_ref)
                 # Generate the aggregation SQL
                 if agg_func == "COUNT_DISTINCT":
                     return f"COUNT(DISTINCT {inner_sql})"
-                else:
-                    return f"{agg_func}({inner_sql})"
+                return f"{agg_func}({inner_sql})"
 
-        # Handle alias.column syntax (e.g., "A.date" from joined tables)
-        # This generates "A"."date" instead of "A.date"
-        if "." in self.name:
-            parts = self.name.split(".", 1)
-            if len(parts) == 2:
-                alias, column = parts
-                return f'"{alias}"."{column}"'
-
-        # Regular column reference - qualify with default_table_ref if provided
-        if default_table_ref:
-            return f'"{default_table_ref}"."{self.name}"'
-        return f'"{self.name}"'
+        # Regular column reference (possibly qualified with alias)
+        return _quote_column_ref(self.name, default_table_ref)
 
 
 class FunctionCall(ExprNode):
