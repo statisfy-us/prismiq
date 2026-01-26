@@ -84,6 +84,10 @@ class FieldRef(ExprNode):
                 # Check if the inner field is also a calculated field
                 if inner_field in field_mapping:
                     inner_sql = f"({field_mapping[inner_field]})"
+                elif "." in inner_field:
+                    # Handle qualified fields like "alias.column" -> "alias"."column"
+                    parts = inner_field.split(".", 1)
+                    inner_sql = f'"{parts[0]}"."{parts[1]}"'
                 elif default_table_ref:
                     inner_sql = f'"{default_table_ref}"."{inner_field}"'
                 else:
