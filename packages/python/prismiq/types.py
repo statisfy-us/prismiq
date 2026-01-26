@@ -297,6 +297,11 @@ class CalculatedField(BaseModel):
     Pre-computed SQL expression with all field references resolved.
     When provided, this is used directly instead of parsing `expression`.
     This allows the caller to handle inter-field dependency resolution.
+
+    IMPORTANT: This is an internal field for SQL generation. The SQL should:
+    - Have all column references fully qualified (e.g., "table"."column")
+    - Have all inter-field dependencies already resolved
+    - Be valid PostgreSQL syntax
     """
 
     data_type: str = "number"

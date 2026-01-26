@@ -577,6 +577,7 @@ class QueryBuilder:
 
         for cf in query.calculated_fields:
             # Use pre-computed SQL if available (handles inter-field dependencies)
+            # Note: sql_expression should already be fully qualified for JOINs
             if cf.sql_expression:
                 calc_sql_map[cf.name] = cf.sql_expression
             elif cf.expression:
@@ -585,9 +586,12 @@ class QueryBuilder:
                     parser = ExpressionParser()
                     ast = parser.parse(cf.expression)
                     calc_sql_map[cf.name] = ast.to_sql({}, default_table_ref=base_table_name)
-                except Exception:
-                    # If parsing fails, use the raw expression
-                    calc_sql_map[cf.name] = cf.expression
+                except ValueError as e:
+                    # Raise a clear, actionable error instead of silently falling back
+                    raise ValueError(
+                        f"Failed to parse calculated field '{cf.name}': {e}. "
+                        f"Expression: {cf.expression!r}"
+                    ) from e
 
         return calc_sql_map
 
@@ -882,7 +886,14 @@ class QueryBuilder:
             group_by_parts.append(f"date_trunc('{ts.interval}', {date_col})")
 
         # Build map of calculated field names to their expressions for aggregation check
-        calc_expr_map = {cf.name: cf.expression for cf in query.calculated_fields if cf.expression}
+        # Check both expression and sql_expression to handle all cases
+        calc_expr_map: dict[str, str] = {}
+        for cf in query.calculated_fields:
+            if cf.expression:
+                calc_expr_map[cf.name] = cf.expression
+            elif cf.sql_expression:
+                # Fall back to sql_expression if expression is not available
+                calc_expr_map[cf.name] = cf.sql_expression
 
         # Add regular GROUP BY columns
         group_by_cols = query.derive_group_by()
