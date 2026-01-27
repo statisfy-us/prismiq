@@ -90,40 +90,53 @@ def provision_tenant_tables(schema_name: str):
 
 ### Option 3: Async Table Creation
 
-For async applications using asyncpg directly, you need to execute the schema SQL within a connection that has the correct `search_path`:
+For async applications using asyncpg, create a tenant-scoped connection pool with
+`server_settings` to set the `search_path` for all connections:
 
 ```python
 import asyncpg
-from pathlib import Path
+from prismiq import ensure_tables
 
-async def setup_tenant_tables(pool: asyncpg.Pool, schema_name: str):
-    """Create Prismiq tables in an existing tenant schema using raw SQL.
+async def create_tenant_pool(dsn: str, schema_name: str) -> asyncpg.Pool:
+    """Create a connection pool scoped to a specific tenant schema.
 
-    The schema must already exist. This reads schema.sql directly because
-    ensure_tables() acquires a new connection that wouldn't inherit the
-    search_path setting.
+    All connections from this pool will use the tenant's schema as the
+    default search_path.
 
     Args:
-        pool: asyncpg connection pool
+        dsn: Database connection string
         schema_name: Name of existing PostgreSQL schema
 
-    Raises:
-        asyncpg.InvalidSchemaNameError: If schema doesn't exist
+    Returns:
+        asyncpg.Pool configured for the tenant schema
     """
-    # Read the schema SQL from prismiq package
-    from prismiq.persistence.setup import _get_schema_sql
-    schema_sql = _get_schema_sql()
+    return await asyncpg.create_pool(
+        dsn,
+        server_settings={"search_path": schema_name},
+    )
 
-    async with pool.acquire() as conn:
-        # Set search path to existing schema and create tables
-        await conn.execute(f'SET search_path TO "{schema_name}"')
-        await conn.execute(schema_sql)
+async def setup_tenant_tables(dsn: str, schema_name: str):
+    """Create Prismiq tables in an existing tenant schema.
+
+    The schema must already exist. Creates a tenant-scoped pool and uses
+    ensure_tables() to create the tables.
+
+    Args:
+        dsn: Database connection string
+        schema_name: Name of existing PostgreSQL schema
+    """
+    # Create a pool scoped to the tenant schema
+    pool = await create_tenant_pool(dsn, schema_name)
+    try:
+        # ensure_tables() will create tables in the pool's search_path
+        await ensure_tables(pool)
+    finally:
+        await pool.close()
 ```
 
-> **Important:** The schema must exist before calling this function. The `ensure_tables(pool)`
-> function creates tables in the default schema because it acquires a fresh connection.
-> For schema-based multi-tenancy with asyncpg, either use **Option 2** with SQLAlchemy,
-> or execute the schema SQL directly as shown above.
+> **Important:** The schema must exist before calling this function. The `server_settings`
+> parameter ensures all connections use the tenant's schema as the default `search_path`.
+> For SQLAlchemy-based applications, use **Option 2** with `ensure_tables_sync()` instead.
 
 ## SQLAlchemy Declarative Models
 
@@ -259,11 +272,11 @@ done
 about the schema not existing, create the schema first as part of your tenant provisioning:
 
 ```python
-from sqlalchemy import text
+from sqlalchemy.schema import CreateSchema
 
 # Create schema in your tenant provisioning code (separate from Prismiq)
 with engine.connect() as conn:
-    conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema_name}"'))
+    conn.execute(CreateSchema(schema_name, if_not_exists=True))
     conn.commit()
 
 # Then create Prismiq tables

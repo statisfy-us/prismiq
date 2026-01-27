@@ -142,6 +142,10 @@ async def table_exists(pool: Pool, table_name: str) -> bool:
         return bool(result)
 
 
+# NOTE: Synchronous I/O exception for Alembic/migration use.
+# Alembic migrations are inherently synchronous, so this helper intentionally
+# uses sync I/O. This is the accepted exception to the async-only guideline.
+# For async application code, use ensure_tables() instead.
 def ensure_tables_sync(connection: Connection, schema_name: str | None = None) -> None:
     """Create Prismiq tables in specified schema (synchronous).
 
