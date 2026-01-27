@@ -480,6 +480,44 @@ class TestFilters:
         assert 'WHERE "users"."name" ILIKE $1' in sql
         assert params == ["%john%"]
 
+    def test_filter_not_like(self, builder: QueryBuilder) -> None:
+        """Test NOT LIKE filter."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="users")],
+            columns=[ColumnSelection(table_id="t1", column="email")],
+            filters=[
+                FilterDefinition(
+                    table_id="t1",
+                    column="email",
+                    operator=FilterOperator.NOT_LIKE,
+                    value="%@spam.com",
+                )
+            ],
+        )
+        sql, params = builder.build(query)
+
+        assert 'WHERE "users"."email" NOT LIKE $1' in sql
+        assert params == ["%@spam.com"]
+
+    def test_filter_not_ilike(self, builder: QueryBuilder) -> None:
+        """Test NOT ILIKE filter (case-insensitive)."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="users")],
+            columns=[ColumnSelection(table_id="t1", column="name")],
+            filters=[
+                FilterDefinition(
+                    table_id="t1",
+                    column="name",
+                    operator=FilterOperator.NOT_ILIKE,
+                    value="%test%",
+                )
+            ],
+        )
+        sql, params = builder.build(query)
+
+        assert 'WHERE "users"."name" NOT ILIKE $1' in sql
+        assert params == ["%test%"]
+
     def test_filter_between(self, builder: QueryBuilder) -> None:
         """Test BETWEEN filter."""
         query = QueryDefinition(

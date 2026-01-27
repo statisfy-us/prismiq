@@ -464,8 +464,12 @@ class QueryBuilder:
             FilterOperator.IS_NULL,
             FilterOperator.IS_NOT_NULL,
         ):
-            # For IN/NOT_IN, check list items
-            if operator in (FilterOperator.IN, FilterOperator.NOT_IN) and isinstance(value, list):
+            # For IN/NOT_IN/IN_OR_NULL, check list items (None allowed for IN_OR_NULL)
+            if operator in (
+                FilterOperator.IN,
+                FilterOperator.NOT_IN,
+                FilterOperator.IN_OR_NULL,
+            ) and isinstance(value, list):
                 for v in value:
                     if v is not None and not isinstance(v, int | float):
                         return f"Column '{column_name}' is numeric but received non-numeric value in list"
@@ -893,6 +897,14 @@ class QueryBuilder:
         if op == FilterOperator.ILIKE:
             params.append(coerced_value)
             return f"{col_ref} ILIKE ${len(params)}", params
+
+        if op == FilterOperator.NOT_LIKE:
+            params.append(coerced_value)
+            return f"{col_ref} NOT LIKE ${len(params)}", params
+
+        if op == FilterOperator.NOT_ILIKE:
+            params.append(coerced_value)
+            return f"{col_ref} NOT ILIKE ${len(params)}", params
 
         if op == FilterOperator.BETWEEN:
             if isinstance(coerced_value, list | tuple) and len(coerced_value) == 2:

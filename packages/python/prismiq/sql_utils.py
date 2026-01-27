@@ -135,7 +135,9 @@ ALLOWED_OPERATORS = frozenset(
         "in_or_null",
         "in_subquery",
         "like",
+        "ilike",
         "not_like",
+        "not_ilike",
     }
 )
 ALLOWED_AGGREGATIONS = frozenset({"none", "sum", "avg", "count", "count_distinct", "min", "max"})

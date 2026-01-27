@@ -227,6 +227,8 @@ class FilterOperator(str, Enum):
     IN_OR_NULL = "in_or_null"
     LIKE = "like"
     ILIKE = "ilike"
+    NOT_LIKE = "not_like"
+    NOT_ILIKE = "not_ilike"
     BETWEEN = "between"
     IS_NULL = "is_null"
     IS_NOT_NULL = "is_not_null"
