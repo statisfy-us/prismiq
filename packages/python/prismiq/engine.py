@@ -474,8 +474,9 @@ class PrismiqEngine:
         start = time.perf_counter()
 
         # Create schema-specific cache for non-default schemas
+        # Always create the cache object so we can update it even when bypassing
         query_cache = self._query_cache
-        if use_cache and self._cache and effective_schema != self._schema_name:
+        if self._cache and effective_schema != self._schema_name:
             # Build CacheConfig with provided TTLs or use defaults
             config_kwargs: dict[str, int] = {}
             if self._query_cache_ttl is not None:
@@ -514,8 +515,9 @@ class PrismiqEngine:
         try:
             result = await executor.execute(query)
 
-            # Cache the result (non-critical, log failures but don't fail the request)
-            if use_cache and query_cache:
+            # Always cache the result when cache is available
+            # Even when use_cache=False (bypass), we want to update the cache with fresh data
+            if query_cache:
                 try:
                     await query_cache.cache_result(query, result)
                 except Exception as cache_err:
