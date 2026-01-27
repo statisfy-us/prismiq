@@ -311,6 +311,65 @@ class TestTypeMismatch:
         result = builder.validate_detailed(query)
         assert result.valid is True
 
+    def test_in_or_null_numeric_with_non_numeric_value(self, sample_schema: DatabaseSchema) -> None:
+        """IN_OR_NULL on numeric column with non-numeric value produces TYPE_MISMATCH."""
+        builder = QueryBuilder(sample_schema)
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="users")],
+            columns=[ColumnSelection(table_id="t1", column="id")],
+            filters=[
+                FilterDefinition(
+                    table_id="t1",
+                    column="id",
+                    operator=FilterOperator.IN_OR_NULL,
+                    value=[1, "not_a_number", 3],
+                )
+            ],
+        )
+
+        result = builder.validate_detailed(query)
+        assert result.valid is False
+        assert result.errors[0].code == ERROR_TYPE_MISMATCH
+        assert "numeric" in result.errors[0].message.lower()
+
+    def test_in_or_null_numeric_with_valid_values(self, sample_schema: DatabaseSchema) -> None:
+        """IN_OR_NULL on numeric column with valid numeric values passes."""
+        builder = QueryBuilder(sample_schema)
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="users")],
+            columns=[ColumnSelection(table_id="t1", column="id")],
+            filters=[
+                FilterDefinition(
+                    table_id="t1",
+                    column="id",
+                    operator=FilterOperator.IN_OR_NULL,
+                    value=[1, 2, 3],
+                )
+            ],
+        )
+
+        result = builder.validate_detailed(query)
+        assert result.valid is True
+
+    def test_in_or_null_numeric_allows_none_in_list(self, sample_schema: DatabaseSchema) -> None:
+        """IN_OR_NULL on numeric column allows None values in list."""
+        builder = QueryBuilder(sample_schema)
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="users")],
+            columns=[ColumnSelection(table_id="t1", column="id")],
+            filters=[
+                FilterDefinition(
+                    table_id="t1",
+                    column="id",
+                    operator=FilterOperator.IN_OR_NULL,
+                    value=[1, None, 3],
+                )
+            ],
+        )
+
+        result = builder.validate_detailed(query)
+        assert result.valid is True
+
 
 class TestInvalidAggregation:
     """Tests for INVALID_AGGREGATION errors."""

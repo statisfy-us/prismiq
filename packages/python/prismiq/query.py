@@ -464,8 +464,12 @@ class QueryBuilder:
             FilterOperator.IS_NULL,
             FilterOperator.IS_NOT_NULL,
         ):
-            # For IN/NOT_IN, check list items
-            if operator in (FilterOperator.IN, FilterOperator.NOT_IN) and isinstance(value, list):
+            # For IN/NOT_IN/IN_OR_NULL, check list items (None allowed for IN_OR_NULL)
+            if operator in (
+                FilterOperator.IN,
+                FilterOperator.NOT_IN,
+                FilterOperator.IN_OR_NULL,
+            ) and isinstance(value, list):
                 for v in value:
                     if v is not None and not isinstance(v, int | float):
                         return f"Column '{column_name}' is numeric but received non-numeric value in list"
