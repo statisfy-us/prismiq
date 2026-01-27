@@ -24,8 +24,6 @@ export interface PinnedDashboardListProps {
   context: string;
   /** Called when user selects a dashboard. */
   onSelect: (dashboard: Dashboard) => void;
-  /** Enable drag-drop reordering. */
-  reorderable?: boolean;
   /** Custom empty state element. */
   emptyState?: ReactNode;
   /** Custom render function for each item. */
@@ -226,8 +224,9 @@ export function PinnedDashboardList({
         try {
           await unpin(dashboardId, context);
           await refetch();
-        } catch {
-          // Error handled by hook
+        } catch (err) {
+          // Log error for debugging - usePinMutations also stores it in state
+          console.error('Failed to unpin dashboard:', dashboardId, err);
         }
       };
     },

@@ -19,14 +19,14 @@ class PinnedDashboard(BaseModel):
         id: Unique identifier for this pin.
         dashboard_id: ID of the pinned dashboard.
         context: Context where the dashboard is pinned (e.g., "accounts").
-        position: Order position within the context (0-based).
+        position: Order position within the context (0-based, non-negative).
         pinned_at: When the dashboard was pinned.
     """
 
     id: str
     dashboard_id: str
-    context: str
-    position: int
+    context: str = Field(..., min_length=1, max_length=100)
+    position: int = Field(..., ge=0)
     pinned_at: datetime
 
 
@@ -61,8 +61,8 @@ class ReorderPinsRequest(BaseModel):
 
     Attributes:
         context: Context to reorder pins in.
-        dashboard_ids: Ordered list of dashboard IDs (new order).
+        dashboard_ids: Ordered list of dashboard IDs (new order). Must not be empty.
     """
 
-    context: str
-    dashboard_ids: list[str]
+    context: str = Field(..., min_length=1, max_length=100)
+    dashboard_ids: list[str] = Field(..., min_length=1)

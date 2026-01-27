@@ -243,8 +243,9 @@ export function PinMenu({
           onPinChange?.(ctx, true);
         }
         await refetch();
-      } catch {
-        // Error handled by usePinMutations
+      } catch (err) {
+        // Log error for debugging - usePinMutations also stores it in state
+        console.error('Failed to toggle pin for context:', ctx, err);
       }
     };
   }, [dashboardId, isPinned, isLoading, pin, unpin, onPinChange, refetch]);

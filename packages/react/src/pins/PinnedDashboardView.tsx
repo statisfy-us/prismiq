@@ -193,8 +193,9 @@ export function PinnedDashboardView({
     try {
       await unpin(selectedDashboard.id, context);
       onBack();
-    } catch {
-      // Error handled by hook
+    } catch (err) {
+      // Log error for debugging - usePinMutations also stores it in state
+      console.error('Failed to unpin dashboard:', selectedDashboard.id, err);
     }
   };
 

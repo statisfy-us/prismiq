@@ -21,11 +21,6 @@ export interface UseDashboardPinStatusOptions {
    */
   dashboardId: string;
   /**
-   * Optional list of contexts to check.
-   * If not provided, fetches all contexts where the dashboard is pinned.
-   */
-  contexts?: string[];
-  /**
    * Whether to automatically fetch on mount.
    * @default true
    */

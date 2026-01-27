@@ -172,8 +172,9 @@ export function PinButton({
       }
       // Refresh status after mutation
       await refetch();
-    } catch {
-      // Error is already handled by usePinMutations
+    } catch (err) {
+      // Log error for debugging - usePinMutations also stores it in state
+      console.error('Failed to toggle pin:', err);
     }
   }, [dashboardId, context, isPinned, isLoading, pin, unpin, onPinChange, refetch]);
 
