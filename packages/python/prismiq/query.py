@@ -823,10 +823,14 @@ class QueryBuilder:
         coerced_value = self._coerce_value(f.value, data_type)
 
         if op == FilterOperator.EQ:
+            if coerced_value is None:
+                return f"{col_ref} IS NULL", params
             params.append(coerced_value)
             return f"{col_ref} = ${len(params)}", params
 
         if op == FilterOperator.NEQ:
+            if coerced_value is None:
+                return f"{col_ref} IS NOT NULL", params
             params.append(coerced_value)
             return f"{col_ref} <> ${len(params)}", params
 
@@ -848,6 +852,8 @@ class QueryBuilder:
 
         if op == FilterOperator.IN:
             if isinstance(coerced_value, list):
+                if not coerced_value:
+                    return "FALSE", params
                 placeholders: list[str] = []
                 for v in coerced_value:
                     params.append(v)
@@ -858,6 +864,8 @@ class QueryBuilder:
 
         if op == FilterOperator.NOT_IN:
             if isinstance(coerced_value, list):
+                if not coerced_value:
+                    return "TRUE", params
                 placeholders = []
                 for v in coerced_value:
                     params.append(v)
