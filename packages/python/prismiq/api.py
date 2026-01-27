@@ -35,6 +35,7 @@ from prismiq.permissions import (
     can_edit_widget,
     can_view_dashboard,
 )
+from prismiq.pins import PinnedDashboard, PinRequest, ReorderPinsRequest, UnpinRequest
 from prismiq.query import ValidationResult
 from prismiq.schema_config import (
     EnhancedDatabaseSchema,
@@ -355,6 +356,28 @@ class SavedQueryListResponse(BaseModel):
 
     queries: list[SavedQuery]
     """List of saved queries."""
+
+
+# ============================================================================
+# Pin Request/Response Models
+# ============================================================================
+
+
+class PinnedDashboardsResponse(BaseModel):
+    """Response model for getting pinned dashboards."""
+
+    dashboards: list[Dashboard]
+    """List of pinned dashboards, ordered by position."""
+
+    pins: list[PinnedDashboard]
+    """List of pin entries with metadata."""
+
+
+class DashboardPinContextsResponse(BaseModel):
+    """Response model for getting contexts where a dashboard is pinned."""
+
+    contexts: list[str]
+    """List of context names where the dashboard is pinned."""
 
 
 # ============================================================================
@@ -1652,5 +1675,161 @@ def create_router(
                 detail=f"Saved query '{query_id}' not found or permission denied",
             )
         return SuccessResponse(message=f"Saved query '{query_id}' deleted")
+
+    # ========================================================================
+    # Pin Endpoints
+    # ========================================================================
+
+    @router.post("/pins", response_model=PinnedDashboard, status_code=201)
+    async def pin_dashboard(
+        request: PinRequest,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> PinnedDashboard:
+        """Pin a dashboard to a context.
+
+        Args:
+            request: Pin request with dashboard_id, context, and optional position.
+
+        Returns:
+            Created pin entry.
+
+        Raises:
+            400: If dashboard already pinned to context.
+            401: If user_id is not provided.
+            404: If dashboard not found.
+        """
+        if auth.user_id is None:
+            raise HTTPException(status_code=401, detail="User ID required for pin operations")
+        try:
+            return await store.pin_dashboard(
+                dashboard_id=request.dashboard_id,
+                context=request.context,
+                tenant_id=auth.tenant_id,
+                user_id=auth.user_id,
+                position=request.position,
+            )
+        except ValueError as e:
+            if "not found" in str(e):
+                raise HTTPException(status_code=404, detail=str(e)) from e
+            raise HTTPException(status_code=400, detail=str(e)) from e
+
+    @router.delete("/pins", response_model=SuccessResponse)
+    async def unpin_dashboard(
+        request: UnpinRequest,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> SuccessResponse:
+        """Unpin a dashboard from a context.
+
+        Args:
+            request: Unpin request with dashboard_id and context.
+
+        Returns:
+            Success response.
+
+        Raises:
+            401: If user_id is not provided.
+            404: If pin not found.
+        """
+        if auth.user_id is None:
+            raise HTTPException(status_code=401, detail="User ID required for pin operations")
+        unpinned = await store.unpin_dashboard(
+            dashboard_id=request.dashboard_id,
+            context=request.context,
+            tenant_id=auth.tenant_id,
+            user_id=auth.user_id,
+        )
+        if not unpinned:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Pin not found for dashboard '{request.dashboard_id}' in context '{request.context}'",
+            )
+        return SuccessResponse(message="Dashboard unpinned successfully")
+
+    @router.get("/pins", response_model=PinnedDashboardsResponse)
+    async def get_pinned_dashboards(
+        context: str,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> PinnedDashboardsResponse:
+        """Get all dashboards pinned to a context.
+
+        Args:
+            context: Context to get pins for (e.g., "accounts", "dashboard").
+
+        Returns:
+            List of dashboards and their pin metadata.
+
+        Raises:
+            401: If user_id is not provided.
+        """
+        if auth.user_id is None:
+            raise HTTPException(status_code=401, detail="User ID required for pin operations")
+        dashboards = await store.get_pinned_dashboards(
+            context=context,
+            tenant_id=auth.tenant_id,
+            user_id=auth.user_id,
+        )
+        pins = await store.get_pins_for_context(
+            context=context,
+            tenant_id=auth.tenant_id,
+            user_id=auth.user_id,
+        )
+        return PinnedDashboardsResponse(dashboards=dashboards, pins=pins)
+
+    @router.get("/dashboards/{dashboard_id}/pins", response_model=DashboardPinContextsResponse)
+    async def get_dashboard_pin_contexts(
+        dashboard_id: str,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> DashboardPinContextsResponse:
+        """Get all contexts where a dashboard is pinned.
+
+        Args:
+            dashboard_id: Dashboard ID.
+
+        Returns:
+            List of context names.
+
+        Raises:
+            401: If user_id is not provided.
+            404: If dashboard not found.
+        """
+        if auth.user_id is None:
+            raise HTTPException(status_code=401, detail="User ID required for pin operations")
+        # Verify dashboard exists
+        dashboard = await store.get_dashboard(dashboard_id, tenant_id=auth.tenant_id)
+        if dashboard is None:
+            raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
+
+        contexts = await store.get_pin_contexts_for_dashboard(
+            dashboard_id=dashboard_id,
+            tenant_id=auth.tenant_id,
+            user_id=auth.user_id,
+        )
+        return DashboardPinContextsResponse(contexts=contexts)
+
+    @router.put("/pins/order", response_model=SuccessResponse)
+    async def reorder_pins(
+        request: ReorderPinsRequest,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> SuccessResponse:
+        """Reorder pinned dashboards within a context.
+
+        Args:
+            request: Reorder request with context and ordered dashboard IDs.
+
+        Returns:
+            Success response.
+
+        Raises:
+            401: If user_id is not provided.
+        """
+        if auth.user_id is None:
+            raise HTTPException(status_code=401, detail="User ID required for pin operations")
+        await store.reorder_pins(
+            context=request.context,
+            dashboard_ids=request.dashboard_ids,
+            tenant_id=auth.tenant_id,
+            user_id=auth.user_id,
+        )
+        return SuccessResponse(message="Pins reordered successfully")
 
     return router
