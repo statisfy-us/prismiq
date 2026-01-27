@@ -862,6 +862,30 @@ class QueryBuilder:
             params.append(coerced_value)
             return f"{col_ref} NOT IN (${len(params)})", params
 
+        if op == FilterOperator.IN_OR_NULL:
+            # Handle mixed selection of concrete values AND NULL
+            # Generates: (col IN (...) OR col IS NULL)
+            if isinstance(coerced_value, list):
+                # Filter out None values - they're handled by the IS NULL clause
+                concrete_values = [v for v in coerced_value if v is not None]
+                if not concrete_values:
+                    # No concrete values (empty list or list of only None values)
+                    return f"{col_ref} IS NULL", params
+                placeholders = []
+                for v in concrete_values:
+                    params.append(v)
+                    placeholders.append(f"${len(params)}")
+                return (
+                    f"({col_ref} IN ({', '.join(placeholders)}) OR {col_ref} IS NULL)",
+                    params,
+                )
+            # Single non-list value
+            if coerced_value is None:
+                # Single None value - just IS NULL
+                return f"{col_ref} IS NULL", params
+            params.append(coerced_value)
+            return f"({col_ref} IN (${len(params)}) OR {col_ref} IS NULL)", params
+
         if op == FilterOperator.LIKE:
             params.append(coerced_value)
             return f"{col_ref} LIKE ${len(params)}", params

@@ -330,6 +330,121 @@ class TestFilters:
         assert 'WHERE "orders"."status" NOT IN ($1)' in sql
         assert params == ["cancelled"]
 
+    def test_filter_in_or_null(self, builder: QueryBuilder) -> None:
+        """Test IN OR NULL filter."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="orders")],
+            columns=[ColumnSelection(table_id="t1", column="status")],
+            filters=[
+                FilterDefinition(
+                    table_id="t1",
+                    column="status",
+                    operator=FilterOperator.IN_OR_NULL,
+                    value=["pending", "shipped"],
+                )
+            ],
+        )
+        sql, params = builder.build(query)
+
+        assert '("orders"."status" IN ($1, $2) OR "orders"."status" IS NULL)' in sql
+        assert params == ["pending", "shipped"]
+
+    def test_filter_in_or_null_single_value(self, builder: QueryBuilder) -> None:
+        """Test IN OR NULL filter with a single non-list value."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="orders")],
+            columns=[ColumnSelection(table_id="t1", column="status")],
+            filters=[
+                FilterDefinition(
+                    table_id="t1",
+                    column="status",
+                    operator=FilterOperator.IN_OR_NULL,
+                    value="pending",
+                )
+            ],
+        )
+        sql, params = builder.build(query)
+
+        assert '("orders"."status" IN ($1) OR "orders"."status" IS NULL)' in sql
+        assert params == ["pending"]
+
+    def test_filter_in_or_null_empty_list(self, builder: QueryBuilder) -> None:
+        """Test IN OR NULL filter with empty list falls back to IS NULL."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="orders")],
+            columns=[ColumnSelection(table_id="t1", column="status")],
+            filters=[
+                FilterDefinition(
+                    table_id="t1",
+                    column="status",
+                    operator=FilterOperator.IN_OR_NULL,
+                    value=[],
+                )
+            ],
+        )
+        sql, params = builder.build(query)
+
+        assert 'WHERE "orders"."status" IS NULL' in sql
+        assert params == []
+
+    def test_filter_in_or_null_filters_none_from_list(self, builder: QueryBuilder) -> None:
+        """Test IN OR NULL filter removes None values from list (handled by IS NULL)."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="orders")],
+            columns=[ColumnSelection(table_id="t1", column="status")],
+            filters=[
+                FilterDefinition(
+                    table_id="t1",
+                    column="status",
+                    operator=FilterOperator.IN_OR_NULL,
+                    value=["pending", None, "shipped"],
+                )
+            ],
+        )
+        sql, params = builder.build(query)
+
+        # None should be filtered out - only concrete values in IN clause
+        assert '("orders"."status" IN ($1, $2) OR "orders"."status" IS NULL)' in sql
+        assert params == ["pending", "shipped"]
+
+    def test_filter_in_or_null_list_of_only_nones(self, builder: QueryBuilder) -> None:
+        """Test IN OR NULL filter with list of only None values falls back to IS NULL."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="orders")],
+            columns=[ColumnSelection(table_id="t1", column="status")],
+            filters=[
+                FilterDefinition(
+                    table_id="t1",
+                    column="status",
+                    operator=FilterOperator.IN_OR_NULL,
+                    value=[None, None],
+                )
+            ],
+        )
+        sql, params = builder.build(query)
+
+        assert 'WHERE "orders"."status" IS NULL' in sql
+        assert params == []
+
+    def test_filter_in_or_null_single_none_value(self, builder: QueryBuilder) -> None:
+        """Test IN OR NULL filter with single None value returns IS NULL."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="orders")],
+            columns=[ColumnSelection(table_id="t1", column="status")],
+            filters=[
+                FilterDefinition(
+                    table_id="t1",
+                    column="status",
+                    operator=FilterOperator.IN_OR_NULL,
+                    value=None,
+                )
+            ],
+        )
+        sql, params = builder.build(query)
+
+        assert 'WHERE "orders"."status" IS NULL' in sql
+        assert params == []
+
     def test_filter_like(self, builder: QueryBuilder) -> None:
         """Test LIKE filter."""
         query = QueryDefinition(
