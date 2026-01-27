@@ -495,6 +495,26 @@ export type {
 } from './ssr';
 
 // ============================================================================
+// Pin Components
+// ============================================================================
+
+export {
+  PinButton,
+  PinMenu,
+  PinnedDashboardList,
+  PinnedDashboardView,
+} from './pins';
+
+export type {
+  PinButtonProps,
+  PinMenuProps,
+  PinContextOption,
+  PinnedDashboardListProps,
+  PinnedDashboardItemActions,
+  PinnedDashboardViewProps,
+} from './pins';
+
+// ============================================================================
 // Version
 // ============================================================================
 
