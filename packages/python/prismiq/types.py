@@ -224,6 +224,7 @@ class FilterOperator(str, Enum):
     LTE = "lte"
     IN = "in_"
     NOT_IN = "not_in"
+    IN_OR_NULL = "in_or_null"
     LIKE = "like"
     ILIKE = "ilike"
     BETWEEN = "between"
@@ -250,7 +251,7 @@ class FilterDefinition(BaseModel):
     """
     Value(s) for the filter.
     - Single value for eq, neq, gt, gte, lt, lte, like, ilike
-    - List for in_, not_in
+    - List for in_, not_in, in_or_null
     - Tuple of (min, max) for between
     - None for is_null, is_not_null
     - Dict with 'sql' key for in_subquery: {"sql": "SELECT id FROM ..."}
