@@ -210,10 +210,16 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "QueryCache": ("prismiq.cache", "QueryCache"),
     "RedisCache": ("prismiq.cache", "RedisCache"),
     "SchemaCache": ("prismiq.cache", "SchemaCache"),
-    # Persistence (requires asyncpg)
+    # Persistence (requires asyncpg for async, sqlalchemy for sync)
     "PostgresDashboardStore": ("prismiq.persistence", "PostgresDashboardStore"),
+    "PrismiqBase": ("prismiq.persistence", "PrismiqBase"),
+    "PrismiqDashboard": ("prismiq.persistence", "PrismiqDashboard"),
+    "PrismiqSavedQuery": ("prismiq.persistence", "PrismiqSavedQuery"),
+    "PrismiqWidget": ("prismiq.persistence", "PrismiqWidget"),
+    "TableCreationError": ("prismiq.persistence", "TableCreationError"),
     "drop_tables": ("prismiq.persistence", "drop_tables"),
     "ensure_tables": ("prismiq.persistence", "ensure_tables"),
+    "ensure_tables_sync": ("prismiq.persistence", "ensure_tables_sync"),
     # SQL validator (requires sqlglot)
     "SQLValidationError": ("prismiq.sql_validator", "SQLValidationError"),
     "SQLValidationResult": ("prismiq.sql_validator", "SQLValidationResult"),
@@ -318,7 +324,17 @@ if TYPE_CHECKING:
         TokenBucket,
         create_rate_limiter,
     )
-    from prismiq.persistence import PostgresDashboardStore, drop_tables, ensure_tables
+    from prismiq.persistence import (
+        PostgresDashboardStore,
+        PrismiqBase,
+        PrismiqDashboard,
+        PrismiqSavedQuery,
+        PrismiqWidget,
+        TableCreationError,
+        drop_tables,
+        ensure_tables,
+        ensure_tables_sync,
+    )
     from prismiq.query import QueryBuilder, ValidationError, ValidationResult
     from prismiq.schema import SchemaIntrospector
     from prismiq.sql_validator import SQLValidationError, SQLValidationResult, SQLValidator
@@ -385,12 +401,16 @@ __all__ = [
     "Metrics",
     # Formatting utilities (lightweight)
     "NumberFormat",
-    # Persistence (asyncpg)
+    # Persistence (asyncpg for async, sqlalchemy for sync)
     "PostgresDashboardStore",
+    "PrismiqBase",
+    "PrismiqDashboard",
     # === Lazy imports (heavy dependencies) ===
     # Engine (asyncpg)
     "PrismiqEngine",
     "PrismiqError",
+    "PrismiqSavedQuery",
+    "PrismiqWidget",
     # Query builder (asyncpg)
     "QueryBuilder",
     "QueryCache",
@@ -427,6 +447,7 @@ __all__ = [
     "SortDirection",
     "StructuredFormatter",
     "TableConfig",
+    "TableCreationError",
     "TableNotFoundError",
     "TableSchema",
     "TextFormatter",
@@ -473,6 +494,7 @@ __all__ = [
     "date_trunc",
     "drop_tables",
     "ensure_tables",
+    "ensure_tables_sync",
     "fill_missing_buckets",
     "fill_nulls",
     "filter_to_query_filter",

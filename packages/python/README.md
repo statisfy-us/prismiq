@@ -39,6 +39,28 @@ result = await engine.execute({
 - **Visual query building** - Build SQL from JSON query definitions
 - **Async execution** - Non-blocking database operations with asyncpg
 - **Type safe** - Full type hints with Pydantic models
+- **Multi-tenant support** - Schema-based isolation with Alembic integration
+
+## Multi-Tenant Integration
+
+For applications with schema-based multi-tenancy, Prismiq provides SQLAlchemy declarative models and sync table creation:
+
+```python
+from sqlalchemy import create_engine
+from prismiq import ensure_tables_sync, PrismiqBase
+
+engine = create_engine("postgresql://user:pass@localhost/db")
+
+# Create tables in a tenant-specific schema
+with engine.connect() as conn:
+    ensure_tables_sync(conn, schema_name="tenant_123")
+    conn.commit()
+
+# For Alembic integration, access the metadata:
+# PrismiqBase.metadata.tables contains all Prismiq table definitions
+```
+
+See [Multi-Tenant Integration Guide](../../docs/multi-tenant-integration.md) for complete documentation.
 
 ## Documentation
 
