@@ -587,6 +587,76 @@ class TestFilters:
         assert " AND " in sql
         assert params == ["pending", 100]
 
+    def test_filter_eq_null(self, builder: QueryBuilder) -> None:
+        """Test EQ filter with None value generates IS NULL."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="users")],
+            columns=[ColumnSelection(table_id="t1", column="email")],
+            filters=[
+                FilterDefinition(
+                    table_id="t1", column="name", operator=FilterOperator.EQ, value=None
+                )
+            ],
+        )
+        sql, params = builder.build(query)
+
+        assert 'WHERE "users"."name" IS NULL' in sql
+        assert params == []
+
+    def test_filter_neq_null(self, builder: QueryBuilder) -> None:
+        """Test NEQ filter with None value generates IS NOT NULL."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="users")],
+            columns=[ColumnSelection(table_id="t1", column="email")],
+            filters=[
+                FilterDefinition(
+                    table_id="t1", column="name", operator=FilterOperator.NEQ, value=None
+                )
+            ],
+        )
+        sql, params = builder.build(query)
+
+        assert 'WHERE "users"."name" IS NOT NULL' in sql
+        assert params == []
+
+    def test_filter_in_empty_list(self, builder: QueryBuilder) -> None:
+        """Test IN filter with empty list generates FALSE."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="orders")],
+            columns=[ColumnSelection(table_id="t1", column="total")],
+            filters=[
+                FilterDefinition(
+                    table_id="t1",
+                    column="status",
+                    operator=FilterOperator.IN,
+                    value=[],
+                )
+            ],
+        )
+        sql, params = builder.build(query)
+
+        assert "WHERE FALSE" in sql
+        assert params == []
+
+    def test_filter_not_in_empty_list(self, builder: QueryBuilder) -> None:
+        """Test NOT_IN filter with empty list generates TRUE."""
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="orders")],
+            columns=[ColumnSelection(table_id="t1", column="total")],
+            filters=[
+                FilterDefinition(
+                    table_id="t1",
+                    column="status",
+                    operator=FilterOperator.NOT_IN,
+                    value=[],
+                )
+            ],
+        )
+        sql, params = builder.build(query)
+
+        assert "WHERE TRUE" in sql
+        assert params == []
+
 
 # ============================================================================
 # Join Tests
