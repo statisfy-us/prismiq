@@ -115,6 +115,9 @@ export {
   useDashboardMutations,
   useSavedQueries,
   useCustomSQL,
+  usePinnedDashboards,
+  usePinMutations,
+  useDashboardPinStatus,
 } from './hooks';
 export type {
   UseSchemaResult,
@@ -130,6 +133,12 @@ export type {
   UseSavedQueriesResult,
   UseCustomSQLOptions,
   UseCustomSQLResult,
+  UsePinnedDashboardsOptions,
+  UsePinnedDashboardsResult,
+  PinMutationState,
+  UsePinMutationsResult,
+  UseDashboardPinStatusOptions,
+  UseDashboardPinStatusResult,
 } from './hooks';
 
 // ============================================================================
