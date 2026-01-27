@@ -106,6 +106,14 @@ export function Layout() {
           </NavLink>
 
           <NavLink
+            to="/pinned"
+            style={({ isActive }) => getLinkStyle(isActive)}
+          >
+            <PinIcon />
+            Pinned
+          </NavLink>
+
+          <NavLink
             to="/explore"
             style={({ isActive }) => getLinkStyle(isActive)}
           >
@@ -143,6 +151,15 @@ function DashboardIcon() {
       <rect x="14" y="3" width="7" height="7" rx="1" />
       <rect x="3" y="14" width="7" height="7" rx="1" />
       <rect x="14" y="14" width="7" height="7" rx="1" />
+    </svg>
+  )
+}
+
+function PinIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M12 17v5" />
+      <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6a2 2 0 0 1 2-2h0a2 2 0 0 0 2-2H5a2 2 0 0 0 2 2h0a2 2 0 0 1 2 2z" />
     </svg>
   )
 }

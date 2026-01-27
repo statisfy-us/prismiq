@@ -69,6 +69,9 @@ export type {
   PinnedDashboard,
   PinnedDashboardsResponse,
   DashboardPinContextsResponse,
+  // Dashboard mutation types
+  DashboardCreate,
+  DashboardUpdate,
 } from './types';
 
 // ============================================================================
