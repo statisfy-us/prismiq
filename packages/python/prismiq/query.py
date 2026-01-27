@@ -894,6 +894,14 @@ class QueryBuilder:
             params.append(coerced_value)
             return f"{col_ref} ILIKE ${len(params)}", params
 
+        if op == FilterOperator.NOT_LIKE:
+            params.append(coerced_value)
+            return f"{col_ref} NOT LIKE ${len(params)}", params
+
+        if op == FilterOperator.NOT_ILIKE:
+            params.append(coerced_value)
+            return f"{col_ref} NOT ILIKE ${len(params)}", params
+
         if op == FilterOperator.BETWEEN:
             if isinstance(coerced_value, list | tuple) and len(coerced_value) == 2:
                 params.append(coerced_value[0])
