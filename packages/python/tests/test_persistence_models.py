@@ -7,6 +7,7 @@ from sqlalchemy import inspect
 from prismiq import (
     PrismiqBase,
     PrismiqDashboard,
+    PrismiqPinnedDashboard,
     PrismiqSavedQuery,
     PrismiqWidget,
 )
@@ -21,12 +22,13 @@ class TestPrismiqModels:
         assert PrismiqBase.metadata is not None
 
     def test_metadata_contains_all_tables(self) -> None:
-        """Metadata should contain all 3 prismiq tables."""
+        """Metadata should contain all 4 prismiq tables."""
         table_names = list(PrismiqBase.metadata.tables.keys())
         assert "prismiq_dashboards" in table_names
         assert "prismiq_widgets" in table_names
         assert "prismiq_saved_queries" in table_names
-        assert len(table_names) == 3
+        assert "prismiq_pinned_dashboards" in table_names
+        assert len(table_names) == 4
 
 
 class TestPrismiqDashboard:
@@ -132,6 +134,49 @@ class TestPrismiqSavedQuery:
         table = PrismiqBase.metadata.tables["prismiq_saved_queries"]
         index_names = [idx.name for idx in table.indexes]
         assert "idx_saved_queries_tenant" in index_names
+
+
+class TestPrismiqPinnedDashboard:
+    """Test PrismiqPinnedDashboard model definition."""
+
+    def test_table_name(self) -> None:
+        """PinnedDashboard should have correct table name."""
+        assert PrismiqPinnedDashboard.__tablename__ == "prismiq_pinned_dashboards"
+
+    def test_has_required_columns(self) -> None:
+        """PinnedDashboard should have all required columns."""
+        mapper = inspect(PrismiqPinnedDashboard)
+        column_names = [c.key for c in mapper.columns]
+        required = [
+            "id",
+            "tenant_id",
+            "user_id",
+            "dashboard_id",
+            "context",
+            "position",
+            "pinned_at",
+        ]
+        for col in required:
+            assert col in column_names, f"Missing column: {col}"
+
+    def test_has_foreign_key(self) -> None:
+        """PinnedDashboard should have foreign key to dashboards."""
+        table = PrismiqBase.metadata.tables["prismiq_pinned_dashboards"]
+        fk_columns = [fk.parent.name for fk in table.foreign_keys]
+        assert "dashboard_id" in fk_columns
+
+    def test_has_indexes(self) -> None:
+        """PinnedDashboard should have required indexes."""
+        table = PrismiqBase.metadata.tables["prismiq_pinned_dashboards"]
+        index_names = [idx.name for idx in table.indexes]
+        assert "idx_pinned_tenant_user_context" in index_names
+        assert "idx_pinned_dashboard" in index_names
+
+    def test_has_unique_constraint(self) -> None:
+        """PinnedDashboard should have unique constraint on (tenant_id, user_id, dashboard_id, context)."""
+        table = PrismiqBase.metadata.tables["prismiq_pinned_dashboards"]
+        constraint_names = [c.name for c in table.constraints if hasattr(c, "name") and c.name]
+        assert "unique_pin_per_context" in constraint_names
 
 
 class TestEnsureTablesSync:

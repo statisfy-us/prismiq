@@ -111,6 +111,7 @@ async def drop_tables(pool: Pool) -> None:
     async with pool.acquire() as conn:
         await conn.execute(
             """
+            DROP TABLE IF EXISTS prismiq_pinned_dashboards CASCADE;
             DROP TABLE IF EXISTS prismiq_widgets CASCADE;
             DROP TABLE IF EXISTS prismiq_dashboards CASCADE;
             DROP TABLE IF EXISTS prismiq_saved_queries CASCADE;

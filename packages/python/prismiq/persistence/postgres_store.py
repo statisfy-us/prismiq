@@ -20,6 +20,7 @@ from prismiq.dashboards import (
     WidgetType,
     WidgetUpdate,
 )
+from prismiq.pins import PinnedDashboard
 from prismiq.types import QueryDefinition
 
 if TYPE_CHECKING:
@@ -582,4 +583,284 @@ class PostgresDashboardStore:
             config=WidgetConfig(**config_data) if config_data else WidgetConfig(),
             created_at=data.get("created_at") or now,
             updated_at=data.get("updated_at") or now,
+        )
+
+    # -------------------------------------------------------------------------
+    # Pin Operations
+    # -------------------------------------------------------------------------
+
+    async def pin_dashboard(
+        self,
+        dashboard_id: str,
+        context: str,
+        tenant_id: str,
+        user_id: str,
+        position: int | None = None,
+    ) -> PinnedDashboard:
+        """Pin a dashboard to a context.
+
+        Args:
+            dashboard_id: The dashboard ID to pin.
+            context: The context to pin to.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who is pinning.
+            position: Optional position. If None, appends at end.
+
+        Returns:
+            The created PinnedDashboard entry.
+
+        Raises:
+            ValueError: If dashboard not found or already pinned.
+        """
+        # Verify dashboard exists and belongs to tenant
+        dashboard = await self.get_dashboard(dashboard_id, tenant_id)
+        if not dashboard:
+            raise ValueError(f"Dashboard '{dashboard_id}' not found")
+
+        async with self._pool.acquire() as conn:
+            # Determine position if not provided
+            if position is None:
+                result = await conn.fetchval(
+                    """
+                    SELECT COALESCE(MAX(position) + 1, 0)
+                    FROM prismiq_pinned_dashboards
+                    WHERE tenant_id = $1 AND user_id = $2 AND context = $3
+                    """,
+                    tenant_id,
+                    user_id,
+                    context,
+                )
+                position = int(result)
+
+            pin_id = uuid.uuid4()
+            now = datetime.now(timezone.utc)
+
+            try:
+                row = await conn.fetchrow(
+                    """
+                    INSERT INTO prismiq_pinned_dashboards
+                    (id, tenant_id, user_id, dashboard_id, context, position, pinned_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    RETURNING *
+                    """,
+                    pin_id,
+                    tenant_id,
+                    user_id,
+                    uuid.UUID(dashboard_id),
+                    context,
+                    position,
+                    now,
+                )
+            except Exception as e:
+                # Unique constraint violation means already pinned
+                if "unique_pin_per_context" in str(e):
+                    raise ValueError(
+                        f"Dashboard '{dashboard_id}' already pinned to context '{context}'"
+                    ) from e
+                raise
+
+            return self._row_to_pinned_dashboard(row)
+
+    async def unpin_dashboard(
+        self,
+        dashboard_id: str,
+        context: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> bool:
+        """Unpin a dashboard from a context.
+
+        Args:
+            dashboard_id: The dashboard ID to unpin.
+            context: The context to unpin from.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who owns the pin.
+
+        Returns:
+            True if unpinned, False if not found.
+        """
+        async with self._pool.acquire() as conn:
+            result = await conn.execute(
+                """
+                DELETE FROM prismiq_pinned_dashboards
+                WHERE tenant_id = $1 AND user_id = $2 AND dashboard_id = $3 AND context = $4
+                """,
+                tenant_id,
+                user_id,
+                uuid.UUID(dashboard_id),
+                context,
+            )
+            return result == "DELETE 1"
+
+    async def get_pinned_dashboards(
+        self,
+        context: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> list[Dashboard]:
+        """Get all dashboards pinned to a context.
+
+        Args:
+            context: The context to get pins for.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who owns the pins.
+
+        Returns:
+            List of Dashboard objects, ordered by position.
+        """
+        # Get pinned dashboard IDs in order
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT dashboard_id FROM prismiq_pinned_dashboards
+                WHERE tenant_id = $1 AND user_id = $2 AND context = $3
+                ORDER BY position
+                """,
+                tenant_id,
+                user_id,
+                context,
+            )
+
+        # Fetch each dashboard
+        dashboards: list[Dashboard] = []
+        for row in rows:
+            dashboard = await self.get_dashboard(str(row["dashboard_id"]), tenant_id)
+            if dashboard:
+                dashboards.append(dashboard)
+
+        return dashboards
+
+    async def get_pin_contexts_for_dashboard(
+        self,
+        dashboard_id: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> list[str]:
+        """Get all contexts where a dashboard is pinned.
+
+        Args:
+            dashboard_id: The dashboard ID.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who owns the pins.
+
+        Returns:
+            List of context names.
+        """
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT context FROM prismiq_pinned_dashboards
+                WHERE tenant_id = $1 AND user_id = $2 AND dashboard_id = $3
+                ORDER BY context
+                """,
+                tenant_id,
+                user_id,
+                uuid.UUID(dashboard_id),
+            )
+            return [row["context"] for row in rows]
+
+    async def reorder_pins(
+        self,
+        context: str,
+        dashboard_ids: list[str],
+        tenant_id: str,
+        user_id: str,
+    ) -> bool:
+        """Reorder pinned dashboards in a context.
+
+        Args:
+            context: The context to reorder.
+            dashboard_ids: Ordered list of dashboard IDs.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who owns the pins.
+
+        Returns:
+            True if reordered, False otherwise.
+        """
+        async with self._pool.acquire() as conn, conn.transaction():
+            for i, d_id in enumerate(dashboard_ids):
+                await conn.execute(
+                    """
+                    UPDATE prismiq_pinned_dashboards
+                    SET position = $1
+                    WHERE tenant_id = $2 AND user_id = $3 AND context = $4 AND dashboard_id = $5
+                    """,
+                    i,
+                    tenant_id,
+                    user_id,
+                    context,
+                    uuid.UUID(d_id),
+                )
+        return True
+
+    async def is_dashboard_pinned(
+        self,
+        dashboard_id: str,
+        context: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> bool:
+        """Check if a dashboard is pinned to a context.
+
+        Args:
+            dashboard_id: The dashboard ID.
+            context: The context to check.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who owns the pins.
+
+        Returns:
+            True if pinned, False otherwise.
+        """
+        async with self._pool.acquire() as conn:
+            result = await conn.fetchval(
+                """
+                SELECT EXISTS (
+                    SELECT 1 FROM prismiq_pinned_dashboards
+                    WHERE tenant_id = $1 AND user_id = $2 AND context = $3 AND dashboard_id = $4
+                )
+                """,
+                tenant_id,
+                user_id,
+                context,
+                uuid.UUID(dashboard_id),
+            )
+            return bool(result)
+
+    async def get_pins_for_context(
+        self,
+        context: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> list[PinnedDashboard]:
+        """Get pin entries for a context (for API responses).
+
+        Args:
+            context: The context to get pins for.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who owns the pins.
+
+        Returns:
+            List of PinnedDashboard entries, ordered by position.
+        """
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT * FROM prismiq_pinned_dashboards
+                WHERE tenant_id = $1 AND user_id = $2 AND context = $3
+                ORDER BY position
+                """,
+                tenant_id,
+                user_id,
+                context,
+            )
+            return [self._row_to_pinned_dashboard(row) for row in rows]
+
+    def _row_to_pinned_dashboard(self, row: Any) -> PinnedDashboard:
+        """Convert a database row to a PinnedDashboard model."""
+        return PinnedDashboard(
+            id=str(row["id"]),
+            dashboard_id=str(row["dashboard_id"]),
+            context=row["context"],
+            position=row["position"],
+            pinned_at=row["pinned_at"],
         )
