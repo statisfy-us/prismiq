@@ -1034,6 +1034,14 @@ class QueryBuilder:
         configured."""
         parts: list[str] = []
 
+        # Build lookup from (table_id, column) to column selection for date_trunc
+        # Only include non-aggregated columns since those are the ones with date_trunc
+        column_lookup: dict[tuple[str, str], ColumnSelection] = {
+            (col.table_id, col.column): col
+            for col in query.columns
+            if col.aggregation == AggregationType.NONE
+        }
+
         # If time series is present and no explicit order by, order by date bucket
         if query.time_series and not query.order_by:
             ts = query.time_series
@@ -1049,6 +1057,12 @@ class QueryBuilder:
                 else:
                     table_ref = table_refs[o.table_id]
                     col_ref = f"{table_ref}.{self._quote_identifier(o.column)}"
+
+                    # Apply date_trunc if the column has it (must match SELECT/GROUP BY)
+                    col_sel = column_lookup.get((o.table_id, o.column))
+                    if col_sel and col_sel.date_trunc:
+                        col_ref = f"date_trunc('{col_sel.date_trunc}', {col_ref})"
+
                 parts.append(f"{col_ref} {o.direction.value}")
 
         return ", ".join(parts)
