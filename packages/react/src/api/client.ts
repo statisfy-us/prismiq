@@ -7,9 +7,12 @@
 import type {
   Dashboard,
   DashboardCreate,
+  DashboardPinContextsResponse,
   DashboardUpdate,
   DatabaseSchema,
   ExecuteSQLRequest,
+  PinnedDashboard,
+  PinnedDashboardsResponse,
   QueryDefinition,
   QueryResult,
   SavedQuery,
@@ -609,5 +612,89 @@ export class PrismiqClient {
         method: 'DELETE',
       }
     );
+  }
+
+  // ============================================================================
+  // Pin Methods
+  // ============================================================================
+
+  /**
+   * Pin a dashboard to a context.
+   *
+   * @param dashboardId - The dashboard ID to pin.
+   * @param context - The context to pin to (e.g., "accounts", "dashboard").
+   * @param position - Optional position in the list (appends at end if not provided).
+   * @returns The created pin entry.
+   */
+  async pinDashboard(
+    dashboardId: string,
+    context: string,
+    position?: number
+  ): Promise<PinnedDashboard> {
+    return this.request<PinnedDashboard>('/pins', {
+      method: 'POST',
+      body: JSON.stringify({
+        dashboard_id: dashboardId,
+        context,
+        position,
+      }),
+    });
+  }
+
+  /**
+   * Unpin a dashboard from a context.
+   *
+   * @param dashboardId - The dashboard ID to unpin.
+   * @param context - The context to unpin from.
+   */
+  async unpinDashboard(dashboardId: string, context: string): Promise<void> {
+    await this.request<void>('/pins', {
+      method: 'DELETE',
+      body: JSON.stringify({
+        dashboard_id: dashboardId,
+        context,
+      }),
+    });
+  }
+
+  /**
+   * Get all dashboards pinned to a context.
+   *
+   * @param context - The context to get pins for (e.g., "accounts", "dashboard").
+   * @returns Response with dashboards and pin metadata.
+   */
+  async getPinnedDashboards(context: string): Promise<PinnedDashboardsResponse> {
+    return this.request<PinnedDashboardsResponse>(
+      `/pins?context=${encodeURIComponent(context)}`
+    );
+  }
+
+  /**
+   * Get all contexts where a dashboard is pinned.
+   *
+   * @param dashboardId - The dashboard ID.
+   * @returns List of context names.
+   */
+  async getDashboardPinContexts(dashboardId: string): Promise<string[]> {
+    const response = await this.request<DashboardPinContextsResponse>(
+      `/dashboards/${encodeURIComponent(dashboardId)}/pins`
+    );
+    return response.contexts;
+  }
+
+  /**
+   * Reorder pinned dashboards within a context.
+   *
+   * @param context - The context to reorder pins in.
+   * @param dashboardIds - Ordered list of dashboard IDs (new order).
+   */
+  async reorderPins(context: string, dashboardIds: string[]): Promise<void> {
+    await this.request<void>('/pins/order', {
+      method: 'PUT',
+      body: JSON.stringify({
+        context,
+        dashboard_ids: dashboardIds,
+      }),
+    });
   }
 }

@@ -65,6 +65,10 @@ export type {
   // Custom SQL types
   ExecuteSQLRequest,
   SQLValidationResult,
+  // Pin types
+  PinnedDashboard,
+  PinnedDashboardsResponse,
+  DashboardPinContextsResponse,
 } from './types';
 
 // ============================================================================
