@@ -439,7 +439,8 @@ def build_sql_from_dict(
             # For subquery filters (used in RLS filtering).
             # SECURITY: The SQL in value["sql"] is interpolated directly without
             # parameterization. Callers MUST ensure the SQL is safely generated
-            # (e.g., from trusted internal code, not user input).
+            # (e.g., from trusted internal code, not user input). This is by design
+            # since subqueries cannot be parameterized.
             if not isinstance(value, dict):
                 raise ValueError(
                     f"IN_SUBQUERY filter on column '{column}' requires "
