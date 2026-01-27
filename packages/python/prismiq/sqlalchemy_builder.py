@@ -436,10 +436,24 @@ def build_sql_from_dict(
                 param_counter += 1
             where_parts.append(f"({col_ref} IN ({', '.join(param_names)}) OR {col_ref} IS NULL)")
         elif operator == "in_subquery":
-            # For subquery filters (used in RLS filtering)
-            subquery_sql = value.get("sql", "").strip()
-            if subquery_sql:
-                where_parts.append(f"{col_ref} IN ({subquery_sql})")
+            # For subquery filters (used in RLS filtering).
+            # SECURITY: The SQL in value["sql"] is interpolated directly without
+            # parameterization. Callers MUST ensure the SQL is safely generated
+            # (e.g., from trusted internal code, not user input).
+            if not isinstance(value, dict):
+                raise ValueError(
+                    f"IN_SUBQUERY filter on column '{column}' requires "
+                    f"value={{'sql': '...'}}, got {type(value).__name__}"
+                )
+            if "sql" not in value:
+                raise ValueError(
+                    f"IN_SUBQUERY filter on column '{column}' requires "
+                    f"value={{'sql': '...'}}, missing 'sql' key"
+                )
+            subquery_sql = value["sql"].strip()
+            if not subquery_sql:
+                raise ValueError(f"IN_SUBQUERY filter on column '{column}' has empty SQL")
+            where_parts.append(f"{col_ref} IN ({subquery_sql})")
         elif operator == "like":
             param_name = f"param_{param_counter}"
             where_parts.append(f"{col_ref} LIKE :{param_name}")
