@@ -17,6 +17,7 @@ from sqlalchemy import (
     exists,
     func,
     insert,
+    not_,
     select,
     update,
 )
@@ -42,17 +43,19 @@ if TYPE_CHECKING:
     from asyncpg import Pool  # type: ignore[import-not-found]
 
 # SQLAlchemy Table definition for pinned dashboards (used for query generation)
+# quote=True ensures all identifiers are double-quoted in generated SQL
 _metadata = MetaData()
 _pinned_dashboards_table = Table(
     "prismiq_pinned_dashboards",
     _metadata,
-    Column("id", UUID(as_uuid=True), primary_key=True),
-    Column("tenant_id", String(255), nullable=False),
-    Column("user_id", String(255), nullable=False),
-    Column("dashboard_id", UUID(as_uuid=True), nullable=False),
-    Column("context", String(100), nullable=False),
-    Column("position", Integer, nullable=False),
-    Column("pinned_at", TIMESTAMP(timezone=True), nullable=False),
+    Column("id", UUID(as_uuid=True), primary_key=True, quote=True),
+    Column("tenant_id", String(255), nullable=False, quote=True),
+    Column("user_id", String(255), nullable=False, quote=True),
+    Column("dashboard_id", UUID(as_uuid=True), nullable=False, quote=True),
+    Column("context", String(100), nullable=False, quote=True),
+    Column("position", Integer, nullable=False, quote=True),
+    Column("pinned_at", TIMESTAMP(timezone=True), nullable=False, quote=True),
+    quote=True,
 )
 
 
@@ -804,9 +807,13 @@ class PostgresDashboardStore:
     ) -> bool:
         """Reorder pinned dashboards in a context.
 
+        Pins specified in dashboard_ids get positions 0..N-1 in that order.
+        Any remaining pins not in dashboard_ids retain their relative order
+        and get positions starting at N.
+
         Args:
             context: The context to reorder.
-            dashboard_ids: Ordered list of dashboard IDs.
+            dashboard_ids: Ordered list of dashboard IDs for the new order.
             tenant_id: Tenant ID for isolation.
             user_id: User ID who owns the pins.
 
@@ -815,20 +822,56 @@ class PostgresDashboardStore:
         """
         t = _pinned_dashboards_table
 
+        # Convert provided IDs to UUIDs
+        provided_uuids = [uuid.UUID(d_id) for d_id in dashboard_ids]
+
         async with self._pool.acquire() as conn, conn.transaction():
-            for i, d_id in enumerate(dashboard_ids):
+            # First, get any remaining pins not in dashboard_ids, ordered by current position
+            if provided_uuids:
+                remaining_stmt = (
+                    select(t.c.dashboard_id)
+                    .where(
+                        t.c.tenant_id == tenant_id,
+                        t.c.user_id == user_id,
+                        t.c.context == context,
+                        not_(t.c.dashboard_id.in_(provided_uuids)),
+                    )
+                    .order_by(t.c.position)
+                )
+            else:
+                # No provided IDs, get all pins ordered by position
+                remaining_stmt = (
+                    select(t.c.dashboard_id)
+                    .where(
+                        t.c.tenant_id == tenant_id,
+                        t.c.user_id == user_id,
+                        t.c.context == context,
+                    )
+                    .order_by(t.c.position)
+                )
+
+            remaining_sql, remaining_params = self._compile_query(remaining_stmt)
+            remaining_rows = await conn.fetch(remaining_sql, *remaining_params)
+            remaining_uuids = [row["dashboard_id"] for row in remaining_rows]
+
+            # Build combined list: provided IDs first, then remaining IDs
+            all_uuids = provided_uuids + remaining_uuids
+
+            # Update positions for all pins
+            for i, d_uuid in enumerate(all_uuids):
                 stmt = (
                     update(t)
                     .where(
                         t.c.tenant_id == tenant_id,
                         t.c.user_id == user_id,
                         t.c.context == context,
-                        t.c.dashboard_id == uuid.UUID(d_id),
+                        t.c.dashboard_id == d_uuid,
                     )
                     .values(position=i)
                 )
                 sql, params = self._compile_query(stmt)
                 await conn.execute(sql, *params)
+
         return True
 
     async def is_dashboard_pinned(
