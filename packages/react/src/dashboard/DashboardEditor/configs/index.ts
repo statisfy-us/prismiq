@@ -16,3 +16,6 @@ export type { TableConfigProps } from './TableConfig';
 
 export { HyperlinkSection } from './HyperlinkSection';
 export type { HyperlinkSectionProps } from './HyperlinkSection';
+
+export { ReferenceLinesSection } from './ReferenceLinesSection';
+export type { ReferenceLinesSectionProps } from './ReferenceLinesSection';

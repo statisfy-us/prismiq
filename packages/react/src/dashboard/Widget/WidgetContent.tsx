@@ -426,6 +426,7 @@ export function WidgetContent({
           currencySymbol={widget.config.currencySymbol}
           compactNotation={widget.config.compactNotation}
           decimalDigits={widget.config.decimalDigits}
+          referenceLines={widget.config.referenceLines}
           height="100%"
           crossFilter={crossFilterConfig}
           selectedValue={selectedValue}
@@ -445,6 +446,7 @@ export function WidgetContent({
           showDataLabels={showDataLabels}
           colors={colors}
           xAxisFormat={widget.config.dateFormats?.[xAxis]}
+          referenceLines={widget.config.referenceLines}
           height="100%"
           crossFilter={crossFilterConfig}
           selectedValue={selectedValue}

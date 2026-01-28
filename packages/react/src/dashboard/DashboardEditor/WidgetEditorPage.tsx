@@ -27,6 +27,7 @@ import { DisplayConfigSection } from './configs/DisplayConfigSection';
 import { DateFormattingSection } from './configs/DateFormattingSection';
 import { TrendConfigSection } from './configs/TrendConfigSection';
 import { HyperlinkSection } from './configs/HyperlinkSection';
+import { ReferenceLinesSection } from './configs/ReferenceLinesSection';
 import type { Widget, WidgetConfig, WidgetType, WidgetHyperlink } from '../types';
 import type {
   DatabaseSchema,
@@ -419,6 +420,11 @@ export function WidgetEditorPage({
               showCompact={true}
               defaultOpen={false}
             />
+            <ReferenceLinesSection
+              lines={config.referenceLines ?? []}
+              onChange={(lines) => updateConfig('referenceLines', lines.length > 0 ? lines : undefined)}
+              defaultOpen={false}
+            />
             <DateFormattingSection
               config={config}
               onChange={updateConfig}
@@ -452,6 +458,11 @@ export function WidgetEditorPage({
               onChange={updateConfig}
               showCurrency={true}
               showCompact={true}
+              defaultOpen={false}
+            />
+            <ReferenceLinesSection
+              lines={config.referenceLines ?? []}
+              onChange={(lines) => updateConfig('referenceLines', lines.length > 0 ? lines : undefined)}
               defaultOpen={false}
             />
             <DateFormattingSection

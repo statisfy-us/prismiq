@@ -89,6 +89,18 @@ export interface WidgetConfig {
   /** Number of decimal digits to show. */
   decimalDigits?: number;
 
+  /** Reference lines for charts (thresholds, goals). */
+  referenceLines?: Array<{
+    /** Y-axis value where line should appear. */
+    value: number;
+    /** Optional label displayed on the line. */
+    label?: string;
+    /** Line color (hex). */
+    color?: string;
+    /** Line style. */
+    lineStyle?: 'solid' | 'dashed' | 'dotted';
+  }>;
+
   // Cross-filter options
   /** Cross-filter configuration for this widget. */
   cross_filter?: WidgetCrossFilterConfig;
