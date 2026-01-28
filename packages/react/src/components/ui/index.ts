@@ -31,3 +31,6 @@ export type { DialogProps, DialogHeaderProps, DialogFooterProps } from './Dialog
 
 export { CollapsibleSection } from './CollapsibleSection';
 export type { CollapsibleSectionProps } from './CollapsibleSection';
+
+export { ColorPaletteSelector } from './ColorPaletteSelector';
+export type { ColorPaletteSelectorProps } from './ColorPaletteSelector';

@@ -23,6 +23,7 @@ import { WidgetTypeSelector } from './WidgetTypeSelector';
 import { WidgetPreview } from './WidgetPreview';
 import { GuidedDataConfig } from './GuidedDataConfig';
 import { ValueFormattingSection } from './configs/ValueFormattingSection';
+import { DisplayConfigSection } from './configs/DisplayConfigSection';
 import type { Widget, WidgetConfig, WidgetType } from '../types';
 import type {
   DatabaseSchema,
@@ -366,12 +367,6 @@ export function WidgetEditorPage({
     marginBottom: theme.spacing.xs,
   };
 
-  const rowStyle: React.CSSProperties = {
-    display: 'flex',
-    gap: theme.spacing.md,
-    flexWrap: 'wrap',
-  };
-
   // Render config fields based on widget type
   const renderConfigFields = () => {
     switch (type) {
@@ -407,42 +402,12 @@ export function WidgetEditorPage({
                 options={[{ value: '', label: 'Auto-detect' }, ...columnSelectOptions]}
               />
             </div>
-            <div style={fieldStyle}>
-              <label style={labelStyle}>Orientation</label>
-              <Select
-                value={config.orientation || 'vertical'}
-                onChange={(value) =>
-                  updateConfig('orientation', value as 'vertical' | 'horizontal')
-                }
-                options={[
-                  { value: 'vertical', label: 'Vertical' },
-                  { value: 'horizontal', label: 'Horizontal' },
-                ]}
-              />
-            </div>
-            <div style={rowStyle}>
-              <Checkbox
-                label="Show Legend"
-                checked={config.show_legend ?? true}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  updateConfig('show_legend', e.target.checked)
-                }
-              />
-              <Checkbox
-                label="Stacked"
-                checked={config.stacked ?? false}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  updateConfig('stacked', e.target.checked)
-                }
-              />
-              <Checkbox
-                label="Data Labels"
-                checked={config.show_data_labels ?? false}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  updateConfig('show_data_labels', e.target.checked)
-                }
-              />
-            </div>
+            <DisplayConfigSection
+              widgetType={type}
+              config={config}
+              onChange={updateConfig}
+              defaultOpen={true}
+            />
             <ValueFormattingSection
               config={config}
               onChange={updateConfig}
@@ -465,22 +430,12 @@ export function WidgetEditorPage({
                 options={[{ value: '', label: 'Auto-detect' }, ...columnSelectOptions]}
               />
             </div>
-            <div style={rowStyle}>
-              <Checkbox
-                label="Show Legend"
-                checked={config.show_legend ?? true}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  updateConfig('show_legend', e.target.checked)
-                }
-              />
-              <Checkbox
-                label="Data Labels"
-                checked={config.show_data_labels ?? false}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  updateConfig('show_data_labels', e.target.checked)
-                }
-              />
-            </div>
+            <DisplayConfigSection
+              widgetType={type}
+              config={config}
+              onChange={updateConfig}
+              defaultOpen={true}
+            />
             <ValueFormattingSection
               config={config}
               onChange={updateConfig}
@@ -493,22 +448,12 @@ export function WidgetEditorPage({
 
       case 'pie_chart':
         return (
-          <div style={rowStyle}>
-            <Checkbox
-              label="Show Legend"
-              checked={config.show_legend ?? true}
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                updateConfig('show_legend', e.target.checked)
-              }
-            />
-            <Checkbox
-              label="Show Labels"
-              checked={config.show_data_labels ?? true}
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                updateConfig('show_data_labels', e.target.checked)
-              }
-            />
-          </div>
+          <DisplayConfigSection
+            widgetType={type}
+            config={config}
+            onChange={updateConfig}
+            defaultOpen={true}
+          />
         );
 
       case 'table':
