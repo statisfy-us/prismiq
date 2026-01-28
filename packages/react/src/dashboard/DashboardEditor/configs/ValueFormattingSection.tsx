@@ -108,7 +108,7 @@ export function ValueFormattingSection({
         <div style={fieldStyle}>
           <label style={labelStyle}>Currency Symbol</label>
           <Input
-            value={config.currencySymbol || '$'}
+            value={config.currencySymbol ?? '$'}
             onChange={(e) => onChange('currencySymbol', e.target.value)}
             placeholder="$"
             style={{ width: '80px' }}
