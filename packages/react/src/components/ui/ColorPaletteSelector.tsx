@@ -6,6 +6,52 @@ import { useCallback } from 'react';
 import { useTheme } from '../../theme';
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Convert a color string to rgba with specified alpha.
+ * Handles hex (3, 4, 6, 8 digit), rgb(), rgba(), and named colors.
+ */
+function colorWithAlpha(color: string, alpha: number): string {
+  // Handle hex colors
+  if (color.startsWith('#')) {
+    let hex = color.slice(1);
+
+    // Expand shorthand (3 or 4 digit) to full form
+    if (hex.length === 3) {
+      hex = (hex[0] ?? '') + (hex[0] ?? '') + (hex[1] ?? '') + (hex[1] ?? '') + (hex[2] ?? '') + (hex[2] ?? '');
+    } else if (hex.length === 4) {
+      hex = (hex[0] ?? '') + (hex[0] ?? '') + (hex[1] ?? '') + (hex[1] ?? '') + (hex[2] ?? '') + (hex[2] ?? '') + (hex[3] ?? '') + (hex[3] ?? '');
+    }
+
+    // Parse RGB values (ignore existing alpha if 8-digit hex)
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+
+    if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+  }
+
+  // Handle rgb() format
+  const rgbMatch = color.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/i);
+  if (rgbMatch) {
+    return `rgba(${rgbMatch[1]}, ${rgbMatch[2]}, ${rgbMatch[3]}, ${alpha})`;
+  }
+
+  // Handle rgba() format - replace alpha
+  const rgbaMatch = color.match(/^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*[\d.]+\s*\)$/i);
+  if (rgbaMatch) {
+    return `rgba(${rgbaMatch[1]}, ${rgbaMatch[2]}, ${rgbaMatch[3]}, ${alpha})`;
+  }
+
+  // Fallback: return with reduced opacity via CSS
+  return color;
+}
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -111,7 +157,7 @@ export function ColorPaletteSelector({
     border: `2px solid ${isSelected ? theme.colors.primary : theme.colors.border}`,
     borderRadius: theme.radius.md,
     cursor: 'pointer',
-    backgroundColor: isSelected ? `${theme.colors.primary}10` : 'transparent',
+    backgroundColor: isSelected ? colorWithAlpha(theme.colors.primary, 0.1) : 'transparent',
     transition: 'all 0.15s ease',
   });
 

@@ -93,7 +93,13 @@ export function ValueFormattingSection({
         <label style={labelStyle}>Format</label>
         <Select
           value={config.valueFormat || config.format || 'number'}
-          onChange={(value) => onChange('valueFormat', value as WidgetConfig['valueFormat'])}
+          onChange={(value) => {
+            const formatValue = value as WidgetConfig['valueFormat'];
+            // Set both valueFormat and format to keep them in sync
+            // (MetricCard reads from config.format, other components may use valueFormat)
+            onChange('valueFormat', formatValue);
+            onChange('format', formatValue);
+          }}
           options={FORMAT_OPTIONS}
         />
       </div>
