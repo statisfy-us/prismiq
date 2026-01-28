@@ -26,7 +26,8 @@ import { ValueFormattingSection } from './configs/ValueFormattingSection';
 import { DisplayConfigSection } from './configs/DisplayConfigSection';
 import { DateFormattingSection } from './configs/DateFormattingSection';
 import { TrendConfigSection } from './configs/TrendConfigSection';
-import type { Widget, WidgetConfig, WidgetType } from '../types';
+import { HyperlinkSection } from './configs/HyperlinkSection';
+import type { Widget, WidgetConfig, WidgetType, WidgetHyperlink } from '../types';
 import type {
   DatabaseSchema,
   QueryDefinition,
@@ -125,6 +126,7 @@ export function WidgetEditorPage({
     widget?.config ?? getDefaultConfig(widget?.type ?? 'bar_chart')
   );
   const [query, setQuery] = useState<QueryDefinition | null>(widget?.query ?? null);
+  const [hyperlink, setHyperlink] = useState<WidgetHyperlink | undefined>(widget?.hyperlink);
 
   // Data source mode - default to guided for new widgets
   const [dataSourceMode, setDataSourceMode] = useState<DataSourceMode>(
@@ -215,9 +217,10 @@ export function WidgetEditorPage({
       config,
       query,
       position: widget?.position ?? { x: 0, y: 0, w: 6, h: 4, minW: 2, minH: 2 },
+      hyperlink,
     };
     onSave(savedWidget);
-  }, [widget, type, title, config, query, onSave]);
+  }, [widget, type, title, config, query, hyperlink, onSave]);
 
   // Column select options for config
   const columnSelectOptions = useMemo(() => {
@@ -662,6 +665,13 @@ export function WidgetEditorPage({
             <h3 style={sectionTitleStyle}>Configuration</h3>
             {renderConfigFields()}
           </div>
+
+          {/* Hyperlink */}
+          <HyperlinkSection
+            hyperlink={hyperlink}
+            onChange={setHyperlink}
+            defaultOpen={!!hyperlink}
+          />
         </div>
 
         {/* Main Panel - Preview & Data Source */}

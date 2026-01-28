@@ -13,3 +13,6 @@ export type { PieConfigProps } from './PieConfig';
 
 export { TableConfig } from './TableConfig';
 export type { TableConfigProps } from './TableConfig';
+
+export { HyperlinkSection } from './HyperlinkSection';
+export type { HyperlinkSectionProps } from './HyperlinkSection';
