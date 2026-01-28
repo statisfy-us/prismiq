@@ -399,7 +399,7 @@ export function WidgetEditorPage({
               <label style={labelStyle}>X-Axis Column</label>
               <Select
                 value={config.x_axis || ''}
-                onChange={(value) => updateConfig('x_axis', value)}
+                onChange={(value) => updateConfig('x_axis', value || undefined)}
                 options={[{ value: '', label: 'Auto-detect' }, ...columnSelectOptions]}
               />
             </div>
@@ -434,7 +434,7 @@ export function WidgetEditorPage({
               <label style={labelStyle}>X-Axis Column</label>
               <Select
                 value={config.x_axis || ''}
-                onChange={(value) => updateConfig('x_axis', value)}
+                onChange={(value) => updateConfig('x_axis', value || undefined)}
                 options={[{ value: '', label: 'Auto-detect' }, ...columnSelectOptions]}
               />
             </div>
@@ -478,7 +478,7 @@ export function WidgetEditorPage({
               <label style={labelStyle}>X-Axis Column</label>
               <Select
                 value={config.x_axis || ''}
-                onChange={(value) => updateConfig('x_axis', value)}
+                onChange={(value) => updateConfig('x_axis', value || undefined)}
                 options={[{ value: '', label: 'Auto-detect' }, ...columnSelectOptions]}
               />
             </div>
