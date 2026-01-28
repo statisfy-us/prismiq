@@ -471,6 +471,41 @@ export function WidgetEditorPage({
           />
         );
 
+      case 'scatter_chart':
+        return (
+          <>
+            <div style={fieldStyle}>
+              <label style={labelStyle}>X-Axis Column</label>
+              <Select
+                value={config.x_axis || ''}
+                onChange={(value) => updateConfig('x_axis', value)}
+                options={[{ value: '', label: 'Auto-detect' }, ...columnSelectOptions]}
+              />
+            </div>
+            <div style={fieldStyle}>
+              <label style={labelStyle}>Y-Axis Column</label>
+              <Select
+                value={config.y_axis?.[0] || ''}
+                onChange={(value) => updateConfig('y_axis', value ? [value] : undefined)}
+                options={[{ value: '', label: 'Auto-detect' }, ...columnSelectOptions]}
+              />
+            </div>
+            <DisplayConfigSection
+              widgetType={type}
+              config={config}
+              onChange={updateConfig}
+              defaultOpen={true}
+            />
+            <ValueFormattingSection
+              config={config}
+              onChange={updateConfig}
+              showCurrency={true}
+              showCompact={true}
+              defaultOpen={false}
+            />
+          </>
+        );
+
       case 'table':
         return (
           <>
