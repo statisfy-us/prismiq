@@ -5,6 +5,7 @@ from __future__ import annotations
 from prismiq.persistence.models import (
     PrismiqBase,
     PrismiqDashboard,
+    PrismiqPinnedDashboard,
     PrismiqSavedQuery,
     PrismiqWidget,
 )
@@ -28,6 +29,7 @@ __all__ = [
     "PostgresDashboardStore",
     "PrismiqBase",
     "PrismiqDashboard",
+    "PrismiqPinnedDashboard",
     "PrismiqSavedQuery",
     "PrismiqWidget",
     "SavedQueryStore",

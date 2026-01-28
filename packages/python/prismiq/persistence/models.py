@@ -28,7 +28,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import Boolean, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TIMESTAMP, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -164,4 +164,46 @@ class PrismiqSavedQuery(PrismiqBase):
     __table_args__ = (
         UniqueConstraint("tenant_id", "name", name="unique_query_name_per_tenant"),
         Index("idx_saved_queries_tenant", "tenant_id"),
+    )
+
+
+class PrismiqPinnedDashboard(PrismiqBase):
+    """Tracks which dashboards are pinned to which contexts.
+
+    Pins allow users to save dashboards to system-defined contexts
+    (e.g., "dashboard", "accounts", "home") for quick access.
+
+    Attributes:
+        id: Unique pin identifier (UUID)
+        tenant_id: Tenant identifier for multi-tenancy
+        user_id: User who created the pin
+        dashboard_id: Dashboard that is pinned (foreign key)
+        context: Context identifier (e.g., "dashboard", "accounts")
+        position: Order position within the context (0-based)
+        pinned_at: Timestamp when the pin was created
+    """
+
+    __tablename__ = "prismiq_pinned_dashboards"
+
+    id: Mapped[Any] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    user_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    dashboard_id: Mapped[Any] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("prismiq_dashboards.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    context: Mapped[str] = mapped_column(String(100), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    pinned_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, default=_utcnow
+    )
+
+    __table_args__ = (
+        # Each user can only pin a dashboard once per context
+        UniqueConstraint(
+            "tenant_id", "user_id", "dashboard_id", "context", name="unique_pin_per_context"
+        ),
+        Index("idx_pinned_tenant_user_context", "tenant_id", "user_id", "context"),
+        Index("idx_pinned_dashboard", "dashboard_id"),
     )

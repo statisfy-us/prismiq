@@ -585,3 +585,41 @@ export interface SQLValidationResult {
   /** List of tables referenced in the query. */
   tables: string[];
 }
+
+// ============================================================================
+// Pin Types
+// ============================================================================
+
+/**
+ * A pinned dashboard entry.
+ */
+export interface PinnedDashboard {
+  /** Unique pin ID. */
+  id: string;
+  /** Dashboard ID that is pinned. */
+  dashboard_id: string;
+  /** Context the dashboard is pinned to (e.g., "accounts", "dashboard"). */
+  context: string;
+  /** Position in the pinned list (0-based). */
+  position: number;
+  /** Timestamp when the dashboard was pinned. */
+  pinned_at: string;
+}
+
+/**
+ * Response from getting pinned dashboards for a context.
+ */
+export interface PinnedDashboardsResponse {
+  /** List of pinned dashboards, ordered by position. */
+  dashboards: Dashboard[];
+  /** Pin metadata for each dashboard. */
+  pins: PinnedDashboard[];
+}
+
+/**
+ * Response from getting contexts where a dashboard is pinned.
+ */
+export interface DashboardPinContextsResponse {
+  /** List of context names where the dashboard is pinned. */
+  contexts: string[];
+}

@@ -22,6 +22,7 @@
 - **🗄️ Direct Database Access** — Query PostgreSQL tables without a semantic layer
 - **🎨 Visual Query Builder** — Joins, filters, aggregations — all from the UI
 - **📊 Apache ECharts** — Beautiful, performant visualizations (100K+ data points)
+- **📌 Dashboard Pinning** — Let users save dashboards to different areas of your app
 - **🔒 Row-Level Security** — Filter data per-user with context injection
 - **⚡ Fast** — Async Python, connection pooling, result caching
 
@@ -73,7 +74,7 @@ function SalesChart() {
   });
 
   if (loading) return <div>Loading...</div>;
-  
+
   return <BarChart data={data} />;
 }
 ```
@@ -81,6 +82,8 @@ function SalesChart() {
 ## Documentation
 
 - [Getting Started](./docs/getting-started.md)
+- [Dashboard Pinning](./docs/dashboard-pinning.md)
+- [Multi-Tenant Integration](./docs/multi-tenant-integration.md)
 - [API Reference](./docs/api-reference.md) *(coming soon)*
 - [Security & Access Control](./docs/security.md) *(coming soon)*
 

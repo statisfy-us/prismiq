@@ -1,4 +1,4 @@
-import { useState, CSSProperties } from 'react'
+import { useState, CSSProperties, ReactNode } from 'react'
 import {
   useTheme,
   useDashboards,
@@ -6,8 +6,24 @@ import {
   DashboardEditor,
   DashboardList,
   DashboardDialog,
+  DashboardCard,
+  PinMenu,
+  Button,
+  Icon,
+  Dropdown,
+  DropdownItem,
+  DropdownSeparator,
 } from '@prismiq/react'
-import type { Dashboard as DashboardType, DashboardCreate, DashboardUpdate } from '@prismiq/react'
+import type { DashboardCreate, DashboardUpdate, DashboardCardProps } from '@prismiq/react'
+
+// Use the same Dashboard type that DashboardList uses
+type Dashboard = NonNullable<Parameters<NonNullable<React.ComponentProps<typeof DashboardList>['onDashboardClick']>>[0]>
+
+// Pin contexts available in the demo
+const PIN_CONTEXTS = [
+  { id: 'demo-favorites', label: 'Favorites' },
+  { id: 'demo-home', label: 'Home Page' },
+]
 
 export function DashboardPage() {
   const { resolvedMode } = useTheme()
@@ -16,7 +32,7 @@ export function DashboardPage() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingDashboard, setEditingDashboard] = useState<DashboardType | null>(null)
+  const [editingDashboard, setEditingDashboard] = useState<Dashboard | null>(null)
 
   const error = fetchError?.message ?? null
 
@@ -32,12 +48,6 @@ export function DashboardPage() {
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: '24px',
-  }
-
-  const titleStyle: CSSProperties = {
-    fontSize: '24px',
-    fontWeight: 600,
-    color: resolvedMode === 'dark' ? '#f4f4f5' : '#111827',
   }
 
   const selectStyle: CSSProperties = {
@@ -88,18 +98,18 @@ export function DashboardPage() {
   }
 
   // Handle dashboard click
-  const handleDashboardClick = (dashboard: DashboardType) => {
+  const handleDashboardClick = (dashboard: Dashboard) => {
     setSelectedId(dashboard.id)
   }
 
   // Handle edit
-  const handleEdit = (dashboard: DashboardType) => {
+  const handleEdit = (dashboard: Dashboard) => {
     setEditingDashboard(dashboard)
     setDialogOpen(true)
   }
 
   // Handle delete
-  const handleDelete = async (dashboard: DashboardType) => {
+  const handleDelete = async (dashboard: Dashboard) => {
     if (window.confirm(`Are you sure you want to delete "${dashboard.name}"?`)) {
       await deleteDashboard(dashboard.id)
       if (selectedId === dashboard.id) {
@@ -113,6 +123,51 @@ export function DashboardPage() {
   const handleCreate = () => {
     setEditingDashboard(null)
     setDialogOpen(true)
+  }
+
+  // Custom card renderer with PinMenu
+  const renderDashboardCard = (dashboard: Dashboard, props: DashboardCardProps): ReactNode => {
+    const actionsStyle: CSSProperties = {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '4px',
+    }
+
+    return (
+      <DashboardCard
+        key={dashboard.id}
+        {...props}
+        actions={
+          <div style={actionsStyle} onClick={(e) => e.stopPropagation()}>
+            <PinMenu
+              dashboardId={dashboard.id}
+              contexts={PIN_CONTEXTS}
+            />
+            <Dropdown
+              trigger={
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Dashboard actions"
+                >
+                  <Icon name="more-vertical" size={16} />
+                </Button>
+              }
+            >
+              <DropdownItem onClick={() => handleEdit(dashboard)}>
+                <Icon name="edit" size={14} />
+                Edit
+              </DropdownItem>
+              <DropdownSeparator />
+              <DropdownItem onClick={() => handleDelete(dashboard)}>
+                <Icon name="trash" size={14} />
+                Delete
+              </DropdownItem>
+            </Dropdown>
+          </div>
+        }
+      />
+    )
   }
 
   // Handle back to list
@@ -195,6 +250,7 @@ export function DashboardPage() {
         onDelete={handleDelete}
         onCreate={handleCreate}
         columns={3}
+        renderCard={renderDashboardCard}
       />
 
       <DashboardDialog

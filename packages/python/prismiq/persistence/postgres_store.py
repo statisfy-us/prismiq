@@ -7,6 +7,22 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy import (
+    Column,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    delete,
+    exists,
+    func,
+    insert,
+    not_,
+    select,
+    update,
+)
+from sqlalchemy.dialects.postgresql import TIMESTAMP, UUID
+
 from prismiq.dashboards import (
     Dashboard,
     DashboardCreate,
@@ -20,10 +36,27 @@ from prismiq.dashboards import (
     WidgetType,
     WidgetUpdate,
 )
+from prismiq.pins import PinnedDashboard
 from prismiq.types import QueryDefinition
 
 if TYPE_CHECKING:
     from asyncpg import Pool  # type: ignore[import-not-found]
+
+# SQLAlchemy Table definition for pinned dashboards (used for query generation)
+# quote=True ensures all identifiers are double-quoted in generated SQL
+_metadata = MetaData()
+_pinned_dashboards_table = Table(
+    "prismiq_pinned_dashboards",
+    _metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True, quote=True),
+    Column("tenant_id", String(255), nullable=False, quote=True),
+    Column("user_id", String(255), nullable=False, quote=True),
+    Column("dashboard_id", UUID(as_uuid=True), nullable=False, quote=True),
+    Column("context", String(100), nullable=False, quote=True),
+    Column("position", Integer, nullable=False, quote=True),
+    Column("pinned_at", TIMESTAMP(timezone=True), nullable=False, quote=True),
+    quote=True,
+)
 
 
 class PostgresDashboardStore:
@@ -583,3 +616,363 @@ class PostgresDashboardStore:
             created_at=data.get("created_at") or now,
             updated_at=data.get("updated_at") or now,
         )
+
+    # -------------------------------------------------------------------------
+    # Pin Operations
+    # -------------------------------------------------------------------------
+
+    async def pin_dashboard(
+        self,
+        dashboard_id: str,
+        context: str,
+        tenant_id: str,
+        user_id: str,
+        position: int | None = None,
+    ) -> PinnedDashboard:
+        """Pin a dashboard to a context.
+
+        Args:
+            dashboard_id: The dashboard ID to pin.
+            context: The context to pin to.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who is pinning.
+            position: Optional position. If None, appends at end.
+
+        Returns:
+            The created PinnedDashboard entry.
+
+        Raises:
+            ValueError: If dashboard not found or already pinned.
+        """
+        # Verify dashboard exists and belongs to tenant
+        dashboard = await self.get_dashboard(dashboard_id, tenant_id)
+        if not dashboard:
+            raise ValueError(f"Dashboard '{dashboard_id}' not found")
+
+        t = _pinned_dashboards_table
+
+        async with self._pool.acquire() as conn:
+            # Determine position if not provided using SQLAlchemy Core
+            if position is None:
+                max_pos_query = select(func.coalesce(func.max(t.c.position) + 1, 0)).where(
+                    t.c.tenant_id == tenant_id,
+                    t.c.user_id == user_id,
+                    t.c.context == context,
+                )
+                sql, params = self._compile_query(max_pos_query)
+                result = await conn.fetchval(sql, *params)
+                position = int(result)
+
+            pin_id = uuid.uuid4()
+            now = datetime.now(timezone.utc)
+
+            # Build INSERT using SQLAlchemy Core
+            insert_stmt = (
+                insert(t)
+                .values(
+                    id=pin_id,
+                    tenant_id=tenant_id,
+                    user_id=user_id,
+                    dashboard_id=uuid.UUID(dashboard_id),
+                    context=context,
+                    position=position,
+                    pinned_at=now,
+                )
+                .returning(*t.c)
+            )
+            insert_sql, insert_params = self._compile_query(insert_stmt)
+
+            try:
+                row = await conn.fetchrow(insert_sql, *insert_params)
+            except Exception as e:
+                # Unique constraint violation means already pinned
+                if "unique_pin_per_context" in str(e):
+                    raise ValueError(
+                        f"Dashboard '{dashboard_id}' already pinned to context '{context}'"
+                    ) from e
+                raise
+
+            return self._row_to_pinned_dashboard(row)
+
+    async def unpin_dashboard(
+        self,
+        dashboard_id: str,
+        context: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> bool:
+        """Unpin a dashboard from a context.
+
+        Args:
+            dashboard_id: The dashboard ID to unpin.
+            context: The context to unpin from.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who owns the pin.
+
+        Returns:
+            True if unpinned, False if not found.
+        """
+        t = _pinned_dashboards_table
+        stmt = delete(t).where(
+            t.c.tenant_id == tenant_id,
+            t.c.user_id == user_id,
+            t.c.dashboard_id == uuid.UUID(dashboard_id),
+            t.c.context == context,
+        )
+        sql, params = self._compile_query(stmt)
+
+        async with self._pool.acquire() as conn:
+            result = await conn.execute(sql, *params)
+            return result == "DELETE 1"
+
+    async def get_pinned_dashboards(
+        self,
+        context: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> list[Dashboard]:
+        """Get all dashboards pinned to a context.
+
+        Args:
+            context: The context to get pins for.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who owns the pins.
+
+        Returns:
+            List of Dashboard objects, ordered by position.
+        """
+        # Get pinned dashboard IDs in order
+        t = _pinned_dashboards_table
+        stmt = (
+            select(t.c.dashboard_id)
+            .where(
+                t.c.tenant_id == tenant_id,
+                t.c.user_id == user_id,
+                t.c.context == context,
+            )
+            .order_by(t.c.position)
+        )
+        sql, params = self._compile_query(stmt)
+
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(sql, *params)
+
+        # Fetch each dashboard
+        dashboards: list[Dashboard] = []
+        for row in rows:
+            dashboard = await self.get_dashboard(str(row["dashboard_id"]), tenant_id)
+            if dashboard:
+                dashboards.append(dashboard)
+
+        return dashboards
+
+    async def get_pin_contexts_for_dashboard(
+        self,
+        dashboard_id: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> list[str]:
+        """Get all contexts where a dashboard is pinned.
+
+        Args:
+            dashboard_id: The dashboard ID.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who owns the pins.
+
+        Returns:
+            List of context names.
+        """
+        t = _pinned_dashboards_table
+        stmt = (
+            select(t.c.context)
+            .where(
+                t.c.tenant_id == tenant_id,
+                t.c.user_id == user_id,
+                t.c.dashboard_id == uuid.UUID(dashboard_id),
+            )
+            .order_by(t.c.context)
+        )
+        sql, params = self._compile_query(stmt)
+
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(sql, *params)
+            return [row["context"] for row in rows]
+
+    async def reorder_pins(
+        self,
+        context: str,
+        dashboard_ids: list[str],
+        tenant_id: str,
+        user_id: str,
+    ) -> bool:
+        """Reorder pinned dashboards in a context.
+
+        Pins specified in dashboard_ids get positions 0..N-1 in that order.
+        Any remaining pins not in dashboard_ids retain their relative order
+        and get positions starting at N.
+
+        Args:
+            context: The context to reorder.
+            dashboard_ids: Ordered list of dashboard IDs for the new order.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who owns the pins.
+
+        Returns:
+            True if reordered, False otherwise.
+        """
+        t = _pinned_dashboards_table
+
+        # Convert provided IDs to UUIDs
+        provided_uuids = [uuid.UUID(d_id) for d_id in dashboard_ids]
+
+        async with self._pool.acquire() as conn, conn.transaction():
+            # First, get any remaining pins not in dashboard_ids, ordered by current position
+            if provided_uuids:
+                remaining_stmt = (
+                    select(t.c.dashboard_id)
+                    .where(
+                        t.c.tenant_id == tenant_id,
+                        t.c.user_id == user_id,
+                        t.c.context == context,
+                        not_(t.c.dashboard_id.in_(provided_uuids)),
+                    )
+                    .order_by(t.c.position)
+                )
+            else:
+                # No provided IDs, get all pins ordered by position
+                remaining_stmt = (
+                    select(t.c.dashboard_id)
+                    .where(
+                        t.c.tenant_id == tenant_id,
+                        t.c.user_id == user_id,
+                        t.c.context == context,
+                    )
+                    .order_by(t.c.position)
+                )
+
+            remaining_sql, remaining_params = self._compile_query(remaining_stmt)
+            remaining_rows = await conn.fetch(remaining_sql, *remaining_params)
+            remaining_uuids = [row["dashboard_id"] for row in remaining_rows]
+
+            # Build combined list: provided IDs first, then remaining IDs
+            all_uuids = provided_uuids + remaining_uuids
+
+            # Update positions for all pins
+            for i, d_uuid in enumerate(all_uuids):
+                stmt = (
+                    update(t)
+                    .where(
+                        t.c.tenant_id == tenant_id,
+                        t.c.user_id == user_id,
+                        t.c.context == context,
+                        t.c.dashboard_id == d_uuid,
+                    )
+                    .values(position=i)
+                )
+                sql, params = self._compile_query(stmt)
+                await conn.execute(sql, *params)
+
+        return True
+
+    async def is_dashboard_pinned(
+        self,
+        dashboard_id: str,
+        context: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> bool:
+        """Check if a dashboard is pinned to a context.
+
+        Args:
+            dashboard_id: The dashboard ID.
+            context: The context to check.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who owns the pins.
+
+        Returns:
+            True if pinned, False otherwise.
+        """
+        t = _pinned_dashboards_table
+        subquery = select(t.c.id).where(
+            t.c.tenant_id == tenant_id,
+            t.c.user_id == user_id,
+            t.c.context == context,
+            t.c.dashboard_id == uuid.UUID(dashboard_id),
+        )
+        stmt = select(exists(subquery))
+        sql, params = self._compile_query(stmt)
+
+        async with self._pool.acquire() as conn:
+            result = await conn.fetchval(sql, *params)
+            return bool(result)
+
+    async def get_pins_for_context(
+        self,
+        context: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> list[PinnedDashboard]:
+        """Get pin entries for a context (for API responses).
+
+        Args:
+            context: The context to get pins for.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who owns the pins.
+
+        Returns:
+            List of PinnedDashboard entries, ordered by position.
+        """
+        t = _pinned_dashboards_table
+        stmt = (
+            select(t)
+            .where(
+                t.c.tenant_id == tenant_id,
+                t.c.user_id == user_id,
+                t.c.context == context,
+            )
+            .order_by(t.c.position)
+        )
+        sql, params = self._compile_query(stmt)
+
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(sql, *params)
+            return [self._row_to_pinned_dashboard(row) for row in rows]
+
+    def _row_to_pinned_dashboard(self, row: Any) -> PinnedDashboard:
+        """Convert a database row to a PinnedDashboard model."""
+        return PinnedDashboard(
+            id=str(row["id"]),
+            dashboard_id=str(row["dashboard_id"]),
+            context=row["context"],
+            position=row["position"],
+            pinned_at=row["pinned_at"],
+        )
+
+    @staticmethod
+    def _compile_query(stmt: Any) -> tuple[str, list[Any]]:
+        """Compile a SQLAlchemy statement for asyncpg execution.
+
+        Converts SQLAlchemy Core statements to SQL strings with positional
+        parameters ($1, $2, etc.) compatible with asyncpg.
+
+        Args:
+            stmt: SQLAlchemy Core statement (select, insert, etc.)
+
+        Returns:
+            Tuple of (sql_string, list_of_parameters)
+        """
+        from sqlalchemy.dialects import postgresql
+
+        dialect = postgresql.dialect(paramstyle="numeric")
+        compiled = stmt.compile(dialect=dialect, compile_kwargs={"literal_binds": False})
+        sql = str(compiled)
+
+        # Extract parameters in the order they appear in the SQL
+        # The compiled.positiontup gives param names in order for positional dialects
+        if hasattr(compiled, "positiontup") and compiled.positiontup:
+            params = [compiled.params[name] for name in compiled.positiontup]
+        else:
+            # Fallback: params dict should be ordered in Python 3.7+
+            params = list(compiled.params.values())
+
+        return sql, params

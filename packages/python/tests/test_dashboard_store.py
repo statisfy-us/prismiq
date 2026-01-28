@@ -614,3 +614,361 @@ class TestInMemoryDashboardStoreMultipleWidgets:
         assert updated is not None
         assert len(updated.widgets) == 1
         assert updated.widgets[0].id == w1.id
+
+
+# ============================================================================
+# Pin Operations Tests
+# ============================================================================
+
+TEST_USER_ID = "test_user"
+
+
+class TestInMemoryDashboardStorePinDashboard:
+    """Tests for pinning dashboards to contexts."""
+
+    @pytest.fixture
+    def store(self) -> InMemoryDashboardStore:
+        """Create a fresh store for each test."""
+        return InMemoryDashboardStore()
+
+    async def test_pin_dashboard_success(self, store: InMemoryDashboardStore) -> None:
+        """Test pinning a dashboard to a context."""
+        dashboard = await store.create_dashboard(
+            DashboardCreate(name="Test Dashboard"), TEST_TENANT_ID
+        )
+        pin = await store.pin_dashboard(dashboard.id, "favorites", TEST_TENANT_ID, TEST_USER_ID)
+
+        assert pin is not None
+        assert pin.id is not None
+        assert pin.dashboard_id == dashboard.id
+        assert pin.context == "favorites"
+        assert pin.position == 0
+        assert pin.pinned_at is not None
+
+    async def test_pin_dashboard_appends_at_end(self, store: InMemoryDashboardStore) -> None:
+        """Test that pinning without position appends at end."""
+        d1 = await store.create_dashboard(DashboardCreate(name="D1"), TEST_TENANT_ID)
+        d2 = await store.create_dashboard(DashboardCreate(name="D2"), TEST_TENANT_ID)
+        d3 = await store.create_dashboard(DashboardCreate(name="D3"), TEST_TENANT_ID)
+
+        pin1 = await store.pin_dashboard(d1.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+        pin2 = await store.pin_dashboard(d2.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+        pin3 = await store.pin_dashboard(d3.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+
+        assert pin1.position == 0
+        assert pin2.position == 1
+        assert pin3.position == 2
+
+    async def test_pin_dashboard_with_explicit_position(
+        self, store: InMemoryDashboardStore
+    ) -> None:
+        """Test pinning at a specific position reorders existing pins."""
+        d1 = await store.create_dashboard(DashboardCreate(name="D1"), TEST_TENANT_ID)
+        d2 = await store.create_dashboard(DashboardCreate(name="D2"), TEST_TENANT_ID)
+        d3 = await store.create_dashboard(DashboardCreate(name="D3"), TEST_TENANT_ID)
+
+        await store.pin_dashboard(d1.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+        await store.pin_dashboard(d2.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+        # Pin d3 at position 1 (between d1 and d2)
+        pin3 = await store.pin_dashboard(d3.id, "ctx", TEST_TENANT_ID, TEST_USER_ID, position=1)
+
+        assert pin3.position == 1
+
+        # Verify order
+        pins = await store.get_pins_for_context("ctx", TEST_TENANT_ID, TEST_USER_ID)
+        assert pins[0].dashboard_id == d1.id
+        assert pins[1].dashboard_id == d3.id
+        assert pins[2].dashboard_id == d2.id
+
+    async def test_pin_dashboard_duplicate_raises_error(
+        self, store: InMemoryDashboardStore
+    ) -> None:
+        """Test that pinning same dashboard twice raises ValueError."""
+        dashboard = await store.create_dashboard(DashboardCreate(name="Test"), TEST_TENANT_ID)
+        await store.pin_dashboard(dashboard.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+
+        with pytest.raises(ValueError, match="already pinned"):
+            await store.pin_dashboard(dashboard.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+
+    async def test_pin_nonexistent_dashboard_raises_error(
+        self, store: InMemoryDashboardStore
+    ) -> None:
+        """Test that pinning nonexistent dashboard raises ValueError."""
+        with pytest.raises(ValueError, match="not found"):
+            await store.pin_dashboard("nonexistent", "ctx", TEST_TENANT_ID, TEST_USER_ID)
+
+    async def test_pin_dashboard_to_multiple_contexts(self, store: InMemoryDashboardStore) -> None:
+        """Test pinning same dashboard to multiple contexts."""
+        dashboard = await store.create_dashboard(DashboardCreate(name="Test"), TEST_TENANT_ID)
+
+        pin1 = await store.pin_dashboard(dashboard.id, "ctx1", TEST_TENANT_ID, TEST_USER_ID)
+        pin2 = await store.pin_dashboard(dashboard.id, "ctx2", TEST_TENANT_ID, TEST_USER_ID)
+
+        assert pin1.context == "ctx1"
+        assert pin2.context == "ctx2"
+
+        contexts = await store.get_pin_contexts_for_dashboard(
+            dashboard.id, TEST_TENANT_ID, TEST_USER_ID
+        )
+        assert set(contexts) == {"ctx1", "ctx2"}
+
+
+class TestInMemoryDashboardStoreUnpinDashboard:
+    """Tests for unpinning dashboards."""
+
+    @pytest.fixture
+    def store(self) -> InMemoryDashboardStore:
+        """Create a fresh store for each test."""
+        return InMemoryDashboardStore()
+
+    async def test_unpin_dashboard_success(self, store: InMemoryDashboardStore) -> None:
+        """Test unpinning a dashboard from a context."""
+        dashboard = await store.create_dashboard(DashboardCreate(name="Test"), TEST_TENANT_ID)
+        await store.pin_dashboard(dashboard.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+
+        result = await store.unpin_dashboard(dashboard.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+
+        assert result is True
+        is_pinned = await store.is_dashboard_pinned(
+            dashboard.id, "ctx", TEST_TENANT_ID, TEST_USER_ID
+        )
+        assert is_pinned is False
+
+    async def test_unpin_nonexistent_pin_returns_false(self, store: InMemoryDashboardStore) -> None:
+        """Test unpinning a dashboard that is not pinned returns False."""
+        dashboard = await store.create_dashboard(DashboardCreate(name="Test"), TEST_TENANT_ID)
+
+        result = await store.unpin_dashboard(dashboard.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+
+        assert result is False
+
+    async def test_unpin_reorders_remaining_pins(self, store: InMemoryDashboardStore) -> None:
+        """Test that unpinning reorders remaining pins."""
+        d1 = await store.create_dashboard(DashboardCreate(name="D1"), TEST_TENANT_ID)
+        d2 = await store.create_dashboard(DashboardCreate(name="D2"), TEST_TENANT_ID)
+        d3 = await store.create_dashboard(DashboardCreate(name="D3"), TEST_TENANT_ID)
+
+        await store.pin_dashboard(d1.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+        await store.pin_dashboard(d2.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+        await store.pin_dashboard(d3.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+
+        # Unpin d2 (position 1)
+        await store.unpin_dashboard(d2.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+
+        # d3 should now be at position 1
+        pins = await store.get_pins_for_context("ctx", TEST_TENANT_ID, TEST_USER_ID)
+        assert len(pins) == 2
+        assert pins[0].dashboard_id == d1.id
+        assert pins[0].position == 0
+        assert pins[1].dashboard_id == d3.id
+        assert pins[1].position == 1
+
+
+class TestInMemoryDashboardStoreGetPinnedDashboards:
+    """Tests for getting pinned dashboards."""
+
+    @pytest.fixture
+    def store(self) -> InMemoryDashboardStore:
+        """Create a fresh store for each test."""
+        return InMemoryDashboardStore()
+
+    async def test_get_pinned_dashboards_empty(self, store: InMemoryDashboardStore) -> None:
+        """Test getting pinned dashboards when none exist."""
+        dashboards = await store.get_pinned_dashboards("ctx", TEST_TENANT_ID, TEST_USER_ID)
+        assert dashboards == []
+
+    async def test_get_pinned_dashboards_ordered(self, store: InMemoryDashboardStore) -> None:
+        """Test that pinned dashboards are returned in position order."""
+        d1 = await store.create_dashboard(DashboardCreate(name="D1"), TEST_TENANT_ID)
+        d2 = await store.create_dashboard(DashboardCreate(name="D2"), TEST_TENANT_ID)
+        d3 = await store.create_dashboard(DashboardCreate(name="D3"), TEST_TENANT_ID)
+
+        await store.pin_dashboard(d1.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+        await store.pin_dashboard(d2.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+        await store.pin_dashboard(d3.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+
+        dashboards = await store.get_pinned_dashboards("ctx", TEST_TENANT_ID, TEST_USER_ID)
+
+        assert len(dashboards) == 3
+        assert dashboards[0].id == d1.id
+        assert dashboards[1].id == d2.id
+        assert dashboards[2].id == d3.id
+
+    async def test_get_pinned_dashboards_excludes_deleted(
+        self, store: InMemoryDashboardStore
+    ) -> None:
+        """Test that deleted dashboards are excluded from pinned list."""
+        d1 = await store.create_dashboard(DashboardCreate(name="D1"), TEST_TENANT_ID)
+        d2 = await store.create_dashboard(DashboardCreate(name="D2"), TEST_TENANT_ID)
+
+        await store.pin_dashboard(d1.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+        await store.pin_dashboard(d2.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+
+        # Delete d1
+        await store.delete_dashboard(d1.id, TEST_TENANT_ID)
+
+        dashboards = await store.get_pinned_dashboards("ctx", TEST_TENANT_ID, TEST_USER_ID)
+        assert len(dashboards) == 1
+        assert dashboards[0].id == d2.id
+
+
+class TestInMemoryDashboardStoreReorderPins:
+    """Tests for reordering pinned dashboards."""
+
+    @pytest.fixture
+    def store(self) -> InMemoryDashboardStore:
+        """Create a fresh store for each test."""
+        return InMemoryDashboardStore()
+
+    async def test_reorder_pins_success(self, store: InMemoryDashboardStore) -> None:
+        """Test reordering pinned dashboards."""
+        d1 = await store.create_dashboard(DashboardCreate(name="D1"), TEST_TENANT_ID)
+        d2 = await store.create_dashboard(DashboardCreate(name="D2"), TEST_TENANT_ID)
+        d3 = await store.create_dashboard(DashboardCreate(name="D3"), TEST_TENANT_ID)
+
+        await store.pin_dashboard(d1.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+        await store.pin_dashboard(d2.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+        await store.pin_dashboard(d3.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+
+        # Reorder: d3, d1, d2
+        result = await store.reorder_pins(
+            "ctx", [d3.id, d1.id, d2.id], TEST_TENANT_ID, TEST_USER_ID
+        )
+
+        assert result is True
+
+        pins = await store.get_pins_for_context("ctx", TEST_TENANT_ID, TEST_USER_ID)
+        assert pins[0].dashboard_id == d3.id
+        assert pins[1].dashboard_id == d1.id
+        assert pins[2].dashboard_id == d2.id
+
+    async def test_reorder_empty_context_returns_true(self, store: InMemoryDashboardStore) -> None:
+        """Test reordering empty context returns True (no-op success)."""
+        result = await store.reorder_pins("ctx", ["some_id"], TEST_TENANT_ID, TEST_USER_ID)
+        assert result is True  # Empty reorder is a successful no-op
+
+    async def test_reorder_partial_list_preserves_unlisted(
+        self, store: InMemoryDashboardStore
+    ) -> None:
+        """Test that reordering with partial list preserves unlisted pins at end."""
+        d1 = await store.create_dashboard(DashboardCreate(name="D1"), TEST_TENANT_ID)
+        d2 = await store.create_dashboard(DashboardCreate(name="D2"), TEST_TENANT_ID)
+        d3 = await store.create_dashboard(DashboardCreate(name="D3"), TEST_TENANT_ID)
+
+        await store.pin_dashboard(d1.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+        await store.pin_dashboard(d2.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+        await store.pin_dashboard(d3.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+
+        # Only reorder d2 to first - d1 and d3 should be added at end
+        result = await store.reorder_pins("ctx", [d2.id], TEST_TENANT_ID, TEST_USER_ID)
+
+        assert result is True
+
+        pins = await store.get_pins_for_context("ctx", TEST_TENANT_ID, TEST_USER_ID)
+        assert len(pins) == 3
+        assert pins[0].dashboard_id == d2.id
+
+
+class TestInMemoryDashboardStoreIsDashboardPinned:
+    """Tests for checking pin status."""
+
+    @pytest.fixture
+    def store(self) -> InMemoryDashboardStore:
+        """Create a fresh store for each test."""
+        return InMemoryDashboardStore()
+
+    async def test_is_pinned_true(self, store: InMemoryDashboardStore) -> None:
+        """Test is_dashboard_pinned returns True when pinned."""
+        dashboard = await store.create_dashboard(DashboardCreate(name="Test"), TEST_TENANT_ID)
+        await store.pin_dashboard(dashboard.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+
+        result = await store.is_dashboard_pinned(dashboard.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+        assert result is True
+
+    async def test_is_pinned_false(self, store: InMemoryDashboardStore) -> None:
+        """Test is_dashboard_pinned returns False when not pinned."""
+        dashboard = await store.create_dashboard(DashboardCreate(name="Test"), TEST_TENANT_ID)
+
+        result = await store.is_dashboard_pinned(dashboard.id, "ctx", TEST_TENANT_ID, TEST_USER_ID)
+        assert result is False
+
+    async def test_is_pinned_different_context(self, store: InMemoryDashboardStore) -> None:
+        """Test is_dashboard_pinned returns False for different context."""
+        dashboard = await store.create_dashboard(DashboardCreate(name="Test"), TEST_TENANT_ID)
+        await store.pin_dashboard(dashboard.id, "ctx1", TEST_TENANT_ID, TEST_USER_ID)
+
+        result = await store.is_dashboard_pinned(dashboard.id, "ctx2", TEST_TENANT_ID, TEST_USER_ID)
+        assert result is False
+
+
+class TestInMemoryDashboardStorePinContextsForDashboard:
+    """Tests for getting pin contexts for a dashboard."""
+
+    @pytest.fixture
+    def store(self) -> InMemoryDashboardStore:
+        """Create a fresh store for each test."""
+        return InMemoryDashboardStore()
+
+    async def test_get_pin_contexts_empty(self, store: InMemoryDashboardStore) -> None:
+        """Test getting contexts when dashboard is not pinned anywhere."""
+        dashboard = await store.create_dashboard(DashboardCreate(name="Test"), TEST_TENANT_ID)
+
+        contexts = await store.get_pin_contexts_for_dashboard(
+            dashboard.id, TEST_TENANT_ID, TEST_USER_ID
+        )
+        assert contexts == []
+
+    async def test_get_pin_contexts_multiple(self, store: InMemoryDashboardStore) -> None:
+        """Test getting multiple contexts for a dashboard."""
+        dashboard = await store.create_dashboard(DashboardCreate(name="Test"), TEST_TENANT_ID)
+        await store.pin_dashboard(dashboard.id, "favorites", TEST_TENANT_ID, TEST_USER_ID)
+        await store.pin_dashboard(dashboard.id, "homepage", TEST_TENANT_ID, TEST_USER_ID)
+        await store.pin_dashboard(dashboard.id, "reports", TEST_TENANT_ID, TEST_USER_ID)
+
+        contexts = await store.get_pin_contexts_for_dashboard(
+            dashboard.id, TEST_TENANT_ID, TEST_USER_ID
+        )
+        assert set(contexts) == {"favorites", "homepage", "reports"}
+
+
+class TestInMemoryDashboardStorePinUserIsolation:
+    """Tests for pin isolation between users."""
+
+    @pytest.fixture
+    def store(self) -> InMemoryDashboardStore:
+        """Create a fresh store for each test."""
+        return InMemoryDashboardStore()
+
+    async def test_pins_isolated_between_users(self, store: InMemoryDashboardStore) -> None:
+        """Test that pins are isolated between different users."""
+        dashboard = await store.create_dashboard(DashboardCreate(name="Test"), TEST_TENANT_ID)
+
+        # User 1 pins the dashboard
+        await store.pin_dashboard(dashboard.id, "ctx", TEST_TENANT_ID, "user_1")
+
+        # User 2 should not see user 1's pin
+        user2_pinned = await store.is_dashboard_pinned(
+            dashboard.id, "ctx", TEST_TENANT_ID, "user_2"
+        )
+        assert user2_pinned is False
+
+        # User 2 can pin the same dashboard
+        pin = await store.pin_dashboard(dashboard.id, "ctx", TEST_TENANT_ID, "user_2")
+        assert pin is not None
+
+        # Each user sees their own pins
+        user1_dashboards = await store.get_pinned_dashboards("ctx", TEST_TENANT_ID, "user_1")
+        user2_dashboards = await store.get_pinned_dashboards("ctx", TEST_TENANT_ID, "user_2")
+
+        assert len(user1_dashboards) == 1
+        assert len(user2_dashboards) == 1
+
+    async def test_pins_isolated_between_tenants(self, store: InMemoryDashboardStore) -> None:
+        """Test that pins are isolated between different tenants."""
+        # Create dashboard in tenant_1
+        dashboard = await store.create_dashboard(DashboardCreate(name="Test"), "tenant_1")
+        await store.pin_dashboard(dashboard.id, "ctx", "tenant_1", TEST_USER_ID)
+
+        # Tenant_2 should not see tenant_1's pins
+        tenant2_dashboards = await store.get_pinned_dashboards("ctx", "tenant_2", TEST_USER_ID)
+        assert tenant2_dashboards == []

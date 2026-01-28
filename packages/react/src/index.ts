@@ -65,6 +65,13 @@ export type {
   // Custom SQL types
   ExecuteSQLRequest,
   SQLValidationResult,
+  // Pin types
+  PinnedDashboard,
+  PinnedDashboardsResponse,
+  DashboardPinContextsResponse,
+  // Dashboard mutation types
+  DashboardCreate,
+  DashboardUpdate,
 } from './types';
 
 // ============================================================================
@@ -111,6 +118,9 @@ export {
   useDashboardMutations,
   useSavedQueries,
   useCustomSQL,
+  usePinnedDashboards,
+  usePinMutations,
+  useDashboardPinStatus,
 } from './hooks';
 export type {
   UseSchemaResult,
@@ -126,6 +136,12 @@ export type {
   UseSavedQueriesResult,
   UseCustomSQLOptions,
   UseCustomSQLResult,
+  UsePinnedDashboardsOptions,
+  UsePinnedDashboardsResult,
+  PinMutationState,
+  UsePinMutationsResult,
+  UseDashboardPinStatusOptions,
+  UseDashboardPinStatusResult,
 } from './hooks';
 
 // ============================================================================
@@ -480,6 +496,26 @@ export type {
   WindowSize,
   Breakpoint,
 } from './ssr';
+
+// ============================================================================
+// Pin Components
+// ============================================================================
+
+export {
+  PinButton,
+  PinMenu,
+  PinnedDashboardList,
+  PinnedDashboardView,
+} from './pins';
+
+export type {
+  PinButtonProps,
+  PinMenuProps,
+  PinContextOption,
+  PinnedDashboardListProps,
+  PinnedDashboardItemActions,
+  PinnedDashboardViewProps,
+} from './pins';
 
 // ============================================================================
 // Version

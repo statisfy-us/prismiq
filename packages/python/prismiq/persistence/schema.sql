@@ -53,6 +53,22 @@ CREATE TABLE IF NOT EXISTS prismiq_saved_queries (
 
 CREATE INDEX IF NOT EXISTS idx_saved_queries_tenant ON prismiq_saved_queries(tenant_id);
 
+-- Pinned dashboards for context-based quick access
+CREATE TABLE IF NOT EXISTS prismiq_pinned_dashboards (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id VARCHAR(255) NOT NULL,
+    user_id VARCHAR(255) NOT NULL,
+    dashboard_id UUID NOT NULL REFERENCES prismiq_dashboards(id) ON DELETE CASCADE,
+    context VARCHAR(100) NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0,
+    pinned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT unique_pin_per_context UNIQUE (tenant_id, user_id, dashboard_id, context)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pinned_tenant_user_context ON prismiq_pinned_dashboards(tenant_id, user_id, context);
+CREATE INDEX IF NOT EXISTS idx_pinned_dashboard ON prismiq_pinned_dashboards(dashboard_id);
+
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION prismiq_update_timestamp()
 RETURNS TRIGGER AS $$

@@ -23,6 +23,7 @@ from prismiq.dashboards import (
     WidgetPosition,
     WidgetUpdate,
 )
+from prismiq.pins import PinnedDashboard
 
 
 def _utc_now() -> datetime:
@@ -189,6 +190,149 @@ class DashboardStore(Protocol):
         """
         ...
 
+    # =========================================================================
+    # Pin Operations
+    # =========================================================================
+
+    async def pin_dashboard(
+        self,
+        dashboard_id: str,
+        context: str,
+        tenant_id: str,
+        user_id: str,
+        position: int | None = None,
+    ) -> PinnedDashboard:
+        """Pin a dashboard to a context.
+
+        Args:
+            dashboard_id: The dashboard ID to pin.
+            context: The context to pin to (e.g., "accounts", "dashboard").
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who is pinning.
+            position: Optional position. If None, appends at end.
+
+        Returns:
+            The created PinnedDashboard entry.
+
+        Raises:
+            ValueError: If dashboard not found or already pinned to context.
+        """
+        ...
+
+    async def unpin_dashboard(
+        self,
+        dashboard_id: str,
+        context: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> bool:
+        """Unpin a dashboard from a context.
+
+        Args:
+            dashboard_id: The dashboard ID to unpin.
+            context: The context to unpin from.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who owns the pin.
+
+        Returns:
+            True if unpinned, False if pin not found.
+        """
+        ...
+
+    async def get_pinned_dashboards(
+        self,
+        context: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> list[Dashboard]:
+        """Get all dashboards pinned to a context.
+
+        Args:
+            context: The context to get pins for.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who owns the pins.
+
+        Returns:
+            List of Dashboard objects, ordered by position.
+        """
+        ...
+
+    async def get_pin_contexts_for_dashboard(
+        self,
+        dashboard_id: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> list[str]:
+        """Get all contexts where a dashboard is pinned.
+
+        Args:
+            dashboard_id: The dashboard ID.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who owns the pins.
+
+        Returns:
+            List of context names where the dashboard is pinned.
+        """
+        ...
+
+    async def reorder_pins(
+        self,
+        context: str,
+        dashboard_ids: list[str],
+        tenant_id: str,
+        user_id: str,
+    ) -> bool:
+        """Reorder pinned dashboards in a context.
+
+        Args:
+            context: The context to reorder.
+            dashboard_ids: Ordered list of dashboard IDs (new order).
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who owns the pins.
+
+        Returns:
+            True if reordered successfully, False otherwise.
+        """
+        ...
+
+    async def is_dashboard_pinned(
+        self,
+        dashboard_id: str,
+        context: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> bool:
+        """Check if a dashboard is pinned to a context.
+
+        Args:
+            dashboard_id: The dashboard ID.
+            context: The context to check.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who owns the pins.
+
+        Returns:
+            True if pinned, False otherwise.
+        """
+        ...
+
+    async def get_pins_for_context(
+        self,
+        context: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> list[PinnedDashboard]:
+        """Get pin entries for a context (for API responses).
+
+        Args:
+            context: The context to get pins for.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who owns the pins.
+
+        Returns:
+            List of PinnedDashboard entries, ordered by position.
+        """
+        ...
+
 
 class InMemoryDashboardStore:
     """In-memory implementation of DashboardStore.
@@ -216,6 +360,8 @@ class InMemoryDashboardStore:
         self._dashboards: dict[str, Dashboard] = {}
         self._dashboard_tenants: dict[str, str] = {}  # dashboard_id -> tenant_id
         self._widget_to_dashboard: dict[str, str] = {}
+        # Pins storage: key = (tenant_id, user_id, context), value = list of PinnedDashboard
+        self._pins: dict[tuple[str, str, str], list[PinnedDashboard]] = {}
         self._lock = asyncio.Lock()
 
     async def list_dashboards(self, tenant_id: str, owner_id: str | None = None) -> list[Dashboard]:
@@ -652,3 +798,278 @@ class InMemoryDashboardStore:
     def _copy_widget(self, widget: Widget) -> Widget:
         """Create a deep copy of a widget."""
         return Widget.model_validate(widget.model_dump())
+
+    # =========================================================================
+    # Pin Operations
+    # =========================================================================
+
+    async def pin_dashboard(
+        self,
+        dashboard_id: str,
+        context: str,
+        tenant_id: str,
+        user_id: str,
+        position: int | None = None,
+    ) -> PinnedDashboard:
+        """Pin a dashboard to a context.
+
+        Args:
+            dashboard_id: The dashboard ID to pin.
+            context: The context to pin to.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who is pinning.
+            position: Optional position. If None, appends at end.
+
+        Returns:
+            The created PinnedDashboard entry.
+
+        Raises:
+            ValueError: If dashboard not found or already pinned.
+        """
+        async with self._lock:
+            # Verify dashboard exists and belongs to tenant
+            dashboard = self._dashboards.get(dashboard_id)
+            if dashboard is None or self._dashboard_tenants.get(dashboard_id) != tenant_id:
+                raise ValueError(f"Dashboard '{dashboard_id}' not found")
+
+            key = (tenant_id, user_id, context)
+            pins = self._pins.get(key, [])
+
+            # Check if already pinned
+            for pin in pins:
+                if pin.dashboard_id == dashboard_id:
+                    raise ValueError(
+                        f"Dashboard '{dashboard_id}' already pinned to context '{context}'"
+                    )
+
+            # Determine position
+            position = len(pins) if position is None else max(0, min(position, len(pins)))
+
+            # Create pin
+            now = _utc_now()
+            pin = PinnedDashboard(
+                id=str(uuid.uuid4()),
+                dashboard_id=dashboard_id,
+                context=context,
+                position=position,
+                pinned_at=now,
+            )
+
+            # Insert at position and reorder
+            pins.insert(position, pin)
+            for i, p in enumerate(pins):
+                if p.id != pin.id:
+                    pins[i] = PinnedDashboard(
+                        id=p.id,
+                        dashboard_id=p.dashboard_id,
+                        context=p.context,
+                        position=i,
+                        pinned_at=p.pinned_at,
+                    )
+
+            self._pins[key] = pins
+            return pin
+
+    async def unpin_dashboard(
+        self,
+        dashboard_id: str,
+        context: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> bool:
+        """Unpin a dashboard from a context.
+
+        Args:
+            dashboard_id: The dashboard ID to unpin.
+            context: The context to unpin from.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who owns the pin.
+
+        Returns:
+            True if unpinned, False if not found.
+        """
+        async with self._lock:
+            key = (tenant_id, user_id, context)
+            pins = self._pins.get(key, [])
+
+            # Find and remove the pin
+            new_pins = [p for p in pins if p.dashboard_id != dashboard_id]
+            if len(new_pins) == len(pins):
+                return False
+
+            # Reorder remaining pins
+            for i, p in enumerate(new_pins):
+                new_pins[i] = PinnedDashboard(
+                    id=p.id,
+                    dashboard_id=p.dashboard_id,
+                    context=p.context,
+                    position=i,
+                    pinned_at=p.pinned_at,
+                )
+
+            self._pins[key] = new_pins
+            return True
+
+    async def get_pinned_dashboards(
+        self,
+        context: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> list[Dashboard]:
+        """Get all dashboards pinned to a context.
+
+        Args:
+            context: The context to get pins for.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who owns the pins.
+
+        Returns:
+            List of Dashboard objects, ordered by position.
+        """
+        async with self._lock:
+            key = (tenant_id, user_id, context)
+            pins = self._pins.get(key, [])
+
+            # Sort by position and fetch dashboards
+            sorted_pins = sorted(pins, key=lambda p: p.position)
+            dashboards: list[Dashboard] = []
+
+            for pin in sorted_pins:
+                dashboard = self._dashboards.get(pin.dashboard_id)
+                if dashboard is not None:
+                    dashboards.append(self._copy_dashboard(dashboard))
+
+            return dashboards
+
+    async def get_pin_contexts_for_dashboard(
+        self,
+        dashboard_id: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> list[str]:
+        """Get all contexts where a dashboard is pinned.
+
+        Args:
+            dashboard_id: The dashboard ID.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who owns the pins.
+
+        Returns:
+            List of context names.
+        """
+        async with self._lock:
+            contexts: list[str] = []
+
+            for (t_id, u_id, ctx), pins in self._pins.items():
+                if t_id == tenant_id and u_id == user_id:
+                    for pin in pins:
+                        if pin.dashboard_id == dashboard_id:
+                            contexts.append(ctx)
+                            break
+
+            return contexts
+
+    async def reorder_pins(
+        self,
+        context: str,
+        dashboard_ids: list[str],
+        tenant_id: str,
+        user_id: str,
+    ) -> bool:
+        """Reorder pinned dashboards in a context.
+
+        Args:
+            context: The context to reorder.
+            dashboard_ids: Ordered list of dashboard IDs.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who owns the pins.
+
+        Returns:
+            True if reordered, False otherwise.
+        """
+        async with self._lock:
+            key = (tenant_id, user_id, context)
+            pins = self._pins.get(key, [])
+
+            # Empty pins list is a successful no-op (matches Postgres store semantics)
+            if not pins:
+                return True
+
+            # Build map of dashboard_id -> pin
+            pin_map = {p.dashboard_id: p for p in pins}
+
+            # Reorder based on dashboard_ids
+            new_pins: list[PinnedDashboard] = []
+            for i, d_id in enumerate(dashboard_ids):
+                if d_id in pin_map:
+                    old_pin = pin_map[d_id]
+                    new_pins.append(
+                        PinnedDashboard(
+                            id=old_pin.id,
+                            dashboard_id=old_pin.dashboard_id,
+                            context=old_pin.context,
+                            position=i,
+                            pinned_at=old_pin.pinned_at,
+                        )
+                    )
+
+            # Add any pins not in dashboard_ids at the end
+            for d_id, pin in pin_map.items():
+                if d_id not in dashboard_ids:
+                    new_pins.append(
+                        PinnedDashboard(
+                            id=pin.id,
+                            dashboard_id=pin.dashboard_id,
+                            context=pin.context,
+                            position=len(new_pins),
+                            pinned_at=pin.pinned_at,
+                        )
+                    )
+
+            self._pins[key] = new_pins
+            return True
+
+    async def is_dashboard_pinned(
+        self,
+        dashboard_id: str,
+        context: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> bool:
+        """Check if a dashboard is pinned to a context.
+
+        Args:
+            dashboard_id: The dashboard ID.
+            context: The context to check.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who owns the pins.
+
+        Returns:
+            True if pinned, False otherwise.
+        """
+        async with self._lock:
+            key = (tenant_id, user_id, context)
+            pins = self._pins.get(key, [])
+
+            return any(pin.dashboard_id == dashboard_id for pin in pins)
+
+    async def get_pins_for_context(
+        self,
+        context: str,
+        tenant_id: str,
+        user_id: str,
+    ) -> list[PinnedDashboard]:
+        """Get pin entries for a context (for API responses).
+
+        Args:
+            context: The context to get pins for.
+            tenant_id: Tenant ID for isolation.
+            user_id: User ID who owns the pins.
+
+        Returns:
+            List of PinnedDashboard entries, ordered by position.
+        """
+        async with self._lock:
+            key = (tenant_id, user_id, context)
+            pins = self._pins.get(key, [])
+            return sorted(pins, key=lambda p: p.position)

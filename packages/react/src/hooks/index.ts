@@ -43,3 +43,21 @@ export type {
   UseCustomSQLOptions,
   UseCustomSQLResult,
 } from './useCustomSQL';
+
+export { usePinnedDashboards } from './usePinnedDashboards';
+export type {
+  UsePinnedDashboardsOptions,
+  UsePinnedDashboardsResult,
+} from './usePinnedDashboards';
+
+export { usePinMutations } from './usePinMutations';
+export type {
+  PinMutationState,
+  UsePinMutationsResult,
+} from './usePinMutations';
+
+export { useDashboardPinStatus } from './useDashboardPinStatus';
+export type {
+  UseDashboardPinStatusOptions,
+  UseDashboardPinStatusResult,
+} from './useDashboardPinStatus';

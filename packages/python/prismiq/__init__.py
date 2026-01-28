@@ -95,6 +95,9 @@ from prismiq.permissions import (
     can_view_dashboard,
 )
 
+# Pin models (no external dependencies)
+from prismiq.pins import PinnedDashboard, PinRequest, ReorderPinsRequest, UnpinRequest
+
 # Schema configuration (no external dependencies)
 from prismiq.schema_config import (
     ColumnConfig,
@@ -215,6 +218,7 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     "PrismiqBase": ("prismiq.persistence", "PrismiqBase"),
     "PrismiqDashboard": ("prismiq.persistence", "PrismiqDashboard"),
     "PrismiqSavedQuery": ("prismiq.persistence", "PrismiqSavedQuery"),
+    "PrismiqPinnedDashboard": ("prismiq.persistence", "PrismiqPinnedDashboard"),
     "PrismiqWidget": ("prismiq.persistence", "PrismiqWidget"),
     "TableCreationError": ("prismiq.persistence", "TableCreationError"),
     "drop_tables": ("prismiq.persistence", "drop_tables"),
@@ -328,6 +332,7 @@ if TYPE_CHECKING:
         PostgresDashboardStore,
         PrismiqBase,
         PrismiqDashboard,
+        PrismiqPinnedDashboard,
         PrismiqSavedQuery,
         PrismiqWidget,
         TableCreationError,
@@ -401,6 +406,9 @@ __all__ = [
     "Metrics",
     # Formatting utilities (lightweight)
     "NumberFormat",
+    # Pin models (lightweight)
+    "PinRequest",
+    "PinnedDashboard",
     # Persistence (asyncpg for async, sqlalchemy for sync)
     "PostgresDashboardStore",
     "PrismiqBase",
@@ -409,6 +417,7 @@ __all__ = [
     # Engine (asyncpg)
     "PrismiqEngine",
     "PrismiqError",
+    "PrismiqPinnedDashboard",
     "PrismiqSavedQuery",
     "PrismiqWidget",
     # Query builder (asyncpg)
@@ -431,6 +440,7 @@ __all__ = [
     "ReadinessResponse",
     "RedisCache",
     "Relationship",
+    "ReorderPinsRequest",
     "RequestLoggingMiddleware",
     # SQL validator (sqlglot)
     "SQLValidationError",
@@ -459,6 +469,7 @@ __all__ = [
     "TokenBucket",
     "TrendDirection",
     "TrendResult",
+    "UnpinRequest",
     "ValidationError",
     "ValidationResult",
     "Widget",
