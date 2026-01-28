@@ -113,6 +113,32 @@ const DATE_TRUNC_OPTIONS: { value: DateTruncInterval | ''; label: string }[] = [
 ];
 
 /**
+ * Parse a column reference in "tableId.column" format.
+ * Returns null if the format is invalid, with a console warning.
+ */
+function parseColumnRef(
+  ref: string,
+  defaultTableId: string
+): { tableId: string; column: string } | null {
+  if (!ref || ref.trim() === '') {
+    return null;
+  }
+
+  if (!ref.includes('.')) {
+    // Simple column name without table prefix
+    return { tableId: defaultTableId, column: ref };
+  }
+
+  const parts = ref.split('.');
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    console.warn(`Invalid column reference format: "${ref}". Expected "tableId.column"`);
+    return null;
+  }
+
+  return { tableId: parts[0], column: parts[1] };
+}
+
+/**
  * Guided chart configuration component.
  */
 export function ChartConfig({
@@ -247,24 +273,20 @@ export function ChartConfig({
         date_trunc: dateTrunc || undefined,
       },
       // Measure columns (with aggregation) - parse table_id.column format
-      ...validMeasures.map((m, i) => {
-        let measureTableId: string;
-        let measureColumn: string;
-        if (m.column.includes('.')) {
-          const parts = m.column.split('.');
-          measureTableId = parts[0] ?? tables[0]?.id ?? 't1';
-          measureColumn = parts[1] ?? m.column;
-        } else {
-          measureTableId = tables[0]?.id ?? 't1';
-          measureColumn = m.column;
-        }
-        return {
-          table_id: measureTableId,
-          column: measureColumn,
-          aggregation: m.aggregation,
-          alias: validMeasures.length > 1 ? `value_${i + 1}` : undefined,
-        };
-      }),
+      ...validMeasures
+        .map((m, i) => {
+          const parsed = parseColumnRef(m.column, tables[0]?.id ?? 't1');
+          if (!parsed) {
+            return null;
+          }
+          return {
+            table_id: parsed.tableId,
+            column: parsed.column,
+            aggregation: m.aggregation,
+            alias: validMeasures.length > 1 ? `value_${i + 1}` : undefined,
+          };
+        })
+        .filter((col): col is NonNullable<typeof col> => col !== null),
     ];
 
     // Group by the dimension column
@@ -316,17 +338,19 @@ export function ChartConfig({
 
   // Handle group by column change (now includes table_id)
   const handleGroupByChange = useCallback((value: string) => {
-    if (value.includes('.')) {
-      const parts = value.split('.');
-      const tableId = parts[0] ?? 't1';
-      const column = parts[1] ?? '';
-      setGroupByTableId(tableId);
-      setGroupByColumn(column);
-    } else {
-      setGroupByColumn(value);
+    if (!value) {
+      setGroupByColumn('');
+      setDateTrunc('');
+      return;
+    }
+
+    const parsed = parseColumnRef(value, groupByTableId);
+    if (parsed) {
+      setGroupByTableId(parsed.tableId);
+      setGroupByColumn(parsed.column);
     }
     setDateTrunc(''); // Reset date truncation when column changes
-  }, []);
+  }, [groupByTableId]);
 
   // Handle measure change
   const updateMeasure = useCallback((index: number, updates: Partial<MeasureConfig>) => {

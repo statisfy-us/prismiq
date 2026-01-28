@@ -65,6 +65,32 @@ function isDateType(dataType: string): boolean {
   return type.includes('date') || type.includes('time') || type.includes('timestamp');
 }
 
+/**
+ * Parse a column reference in "tableId.column" format.
+ * Returns null if the format is invalid, with a console warning.
+ */
+function parseColumnRef(
+  ref: string,
+  defaultTableId: string
+): { tableId: string; column: string } | null {
+  if (!ref || ref.trim() === '') {
+    return null;
+  }
+
+  if (!ref.includes('.')) {
+    // Simple column name without table prefix
+    return { tableId: defaultTableId, column: ref };
+  }
+
+  const parts = ref.split('.');
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    console.warn(`Invalid column reference format: "${ref}". Expected "tableId.column"`);
+    return null;
+  }
+
+  return { tableId: parts[0], column: parts[1] };
+}
+
 // ============================================================================
 // Component
 // ============================================================================
@@ -119,31 +145,43 @@ export function TimeSeriesConfig({
 
   // Handle enabling/disabling time series
   const handleToggle = (e: ChangeEvent<HTMLInputElement>) => {
-    if (e.target.checked && currentDateColumn) {
-      const parts = currentDateColumn.split('.');
-      const tableId = parts[0] ?? 't1';
-      const column = parts[1] ?? '';
-      onChange({
-        table_id: tableId,
-        date_column: column,
-        interval: 'day',
-        fill_missing: false,
-      });
-    } else {
+    if (!e.target.checked) {
       onChange(undefined);
+      return;
     }
+
+    if (!currentDateColumn) {
+      console.warn('Cannot enable time series: no date column available');
+      return;
+    }
+
+    const parsed = parseColumnRef(currentDateColumn, 't1');
+    if (!parsed) {
+      console.warn('Cannot enable time series: invalid date column reference');
+      return;
+    }
+
+    onChange({
+      table_id: parsed.tableId,
+      date_column: parsed.column,
+      interval: 'day',
+      fill_missing: false,
+    });
   };
 
   // Handle date column change
   const handleDateColumnChange = (value: string) => {
     if (!config || !value) return;
-    const parts = value.split('.');
-    const tableId = parts[0] ?? config.table_id;
-    const column = parts[1] ?? config.date_column;
+
+    const parsed = parseColumnRef(value, config.table_id);
+    if (!parsed) {
+      return;
+    }
+
     onChange({
       ...config,
-      table_id: tableId,
-      date_column: column,
+      table_id: parsed.tableId,
+      date_column: parsed.column,
     });
   };
 

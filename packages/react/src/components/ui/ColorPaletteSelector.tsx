@@ -165,8 +165,8 @@ export function ColorPaletteSelector({
           >
             <div style={paletteNameStyle}>{palette.name}</div>
             <div style={swatchContainerStyle}>
-              {palette.colors.slice(0, 6).map((color, i) => (
-                <div key={i} style={swatchStyle(color)} />
+              {palette.colors.slice(0, 6).map((color) => (
+                <div key={color} style={swatchStyle(color)} />
               ))}
             </div>
           </button>

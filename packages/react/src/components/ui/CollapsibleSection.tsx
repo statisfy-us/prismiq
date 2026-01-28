@@ -76,6 +76,7 @@ export function CollapsibleSection({
       <button
         type="button"
         onClick={handleToggle}
+        aria-expanded={isOpen}
         style={{
           ...headerStyle,
           background: 'none',
