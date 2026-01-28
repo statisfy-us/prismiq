@@ -6,7 +6,7 @@
  * - Select which column to use for filtering
  */
 
-import type { ChangeEvent } from 'react';
+import type { ChangeEvent, CSSProperties } from 'react';
 import { useMemo } from 'react';
 import { useTheme } from '../../../theme';
 import { Select } from '../../../components/ui/Select';
@@ -48,18 +48,18 @@ export function CrossFilterSection({
 }: CrossFilterSectionProps): JSX.Element {
   const { theme } = useTheme();
 
-  const fieldStyle: React.CSSProperties = {
+  const fieldStyle: CSSProperties = {
     marginBottom: theme.spacing.md,
   };
 
-  const labelStyle: React.CSSProperties = {
+  const labelStyle: CSSProperties = {
     display: 'block',
     fontSize: theme.fontSizes.sm,
     color: theme.colors.text,
     marginBottom: theme.spacing.xs,
   };
 
-  const helpTextStyle: React.CSSProperties = {
+  const helpTextStyle: CSSProperties = {
     fontSize: theme.fontSizes.xs,
     color: theme.colors.textMuted,
     marginTop: theme.spacing.xs,

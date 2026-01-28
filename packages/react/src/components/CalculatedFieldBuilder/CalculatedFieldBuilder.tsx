@@ -8,7 +8,7 @@
  * - Removing fields
  */
 
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { useTheme } from '../../theme';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
@@ -60,6 +60,27 @@ export function CalculatedFieldBuilder({
   maxFields = 10,
 }: CalculatedFieldBuilderProps): JSX.Element {
   const { theme } = useTheme();
+
+  // Counter for generating unique IDs when no stable property exists
+  const idCounter = useRef(0);
+  // Map from stable key (derived from field data) to generated ID
+  const stableIdsRef = useRef<Map<string, string>>(new Map());
+
+  /**
+   * Get or create a stable ID for a field.
+   * Uses field name + index to create a stable key, falling back to counter for duplicates.
+   */
+  const getFieldId = useCallback((field: CalculatedField, index: number): string => {
+    // Create a stable key from field data
+    const stableKey = field.name ? `${field.name}-${index}` : `unnamed-${index}`;
+
+    let id = stableIdsRef.current.get(stableKey);
+    if (!id) {
+      id = `field-${++idCounter.current}`;
+      stableIdsRef.current.set(stableKey, id);
+    }
+    return id;
+  }, []);
 
   const addField = useCallback(() => {
     if (fields.length >= maxFields) return;
@@ -154,9 +175,7 @@ export function CalculatedFieldBuilder({
         </div>
       ) : (
         fields.map((field, index) => (
-          // Using index as key is acceptable here since fields are only added at end
-          // and removed by index (no reordering occurs)
-          <div key={index} style={fieldCardStyle}>
+          <div key={getFieldId(field, index)} style={fieldCardStyle}>
             <div style={fieldHeaderStyle}>
               <span style={fieldIndexStyle}>Calculated Field #{index + 1}</span>
               <Button variant="ghost" size="sm" onClick={() => removeField(index)}>

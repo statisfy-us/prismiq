@@ -132,8 +132,6 @@ const dateTruncOptions: SelectOption<DateTruncInterval | ''>[] = [
   { value: 'month', label: 'Month' },
   { value: 'week', label: 'Week' },
   { value: 'day', label: 'Day' },
-  { value: 'hour', label: 'Hour' },
-  { value: 'minute', label: 'Minute' },
 ];
 
 /**
@@ -316,6 +314,7 @@ export function SelectedColumn({
             onChange={handleDateTruncChange}
             options={dateTruncOptions}
             size="sm"
+            data-testid="date-trunc-select"
           />
         </div>
       )}

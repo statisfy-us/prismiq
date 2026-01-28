@@ -7,7 +7,7 @@
  * - Select value column (values to aggregate)
  */
 
-import { useMemo } from 'react';
+import { useMemo, type CSSProperties } from 'react';
 import { useTheme } from '../../../theme';
 import { Select } from '../../../components/ui/Select';
 import { Checkbox } from '../../../components/ui/Checkbox';
@@ -50,24 +50,24 @@ export function PivotConfigSection({
 
   const isPivotEnabled = !!config.pivot_column;
 
-  const fieldStyle: React.CSSProperties = {
+  const fieldStyle: CSSProperties = {
     marginBottom: theme.spacing.md,
   };
 
-  const labelStyle: React.CSSProperties = {
+  const labelStyle: CSSProperties = {
     display: 'block',
     fontSize: theme.fontSizes.sm,
     color: theme.colors.text,
     marginBottom: theme.spacing.xs,
   };
 
-  const helpTextStyle: React.CSSProperties = {
+  const helpTextStyle: CSSProperties = {
     fontSize: theme.fontSizes.xs,
     color: theme.colors.textMuted,
     marginTop: theme.spacing.xs,
   };
 
-  const previewStyle: React.CSSProperties = {
+  const previewStyle: CSSProperties = {
     padding: theme.spacing.sm,
     backgroundColor: theme.colors.surface,
     borderRadius: theme.radius.sm,
@@ -93,9 +93,12 @@ export function PivotConfigSection({
     // Try to filter to categorical/text columns
     const textTypes = ['text', 'varchar', 'character varying', 'char', 'string'];
     const categoricalCols = query.columns.filter((col) => {
-      // Find table and column in schema
-      const tableName = query.tables[0]?.name;
-      const tableSchema = schema.tables.find((t) => t.name === tableName);
+      // Find the correct table for this column using table_id
+      const queryTable = query.tables.find((t) => t.id === col.table_id);
+      const tableSchema = queryTable
+        ? schema.tables.find((t) => t.name === queryTable.name)
+        : // Fallback: search all tables for the column
+          schema.tables.find((t) => t.columns.some((c) => c.name === col.column));
       const colSchema = tableSchema?.columns.find((c) => c.name === col.column);
 
       if (!colSchema) return true; // Include if unknown
@@ -129,8 +132,12 @@ export function PivotConfigSection({
       'number',
     ];
     const numericCols = query.columns.filter((col) => {
-      const tableName = query.tables[0]?.name;
-      const tableSchema = schema.tables.find((t) => t.name === tableName);
+      // Find the correct table for this column using table_id
+      const queryTable = query.tables.find((t) => t.id === col.table_id);
+      const tableSchema = queryTable
+        ? schema.tables.find((t) => t.name === queryTable.name)
+        : // Fallback: search all tables for the column
+          schema.tables.find((t) => t.columns.some((c) => c.name === col.column));
       const colSchema = tableSchema?.columns.find((c) => c.name === col.column);
 
       if (!colSchema) return true; // Include if unknown

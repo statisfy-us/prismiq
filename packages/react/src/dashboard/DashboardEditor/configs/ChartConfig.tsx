@@ -7,7 +7,7 @@
  * - Optional filters
  */
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useTheme } from '../../../theme';
 import { Select } from '../../../components/ui/Select';
 import { Button } from '../../../components/ui/Button';
@@ -363,6 +363,18 @@ export function ChartConfig({
     }
   }, [groupByTableId]);
 
+  // Stable IDs for measures to avoid key issues with array index
+  const measureIdCounter = useRef(0);
+  const measureIdsRef = useRef<string[]>([]);
+
+  // Ensure we have IDs for all measures
+  while (measureIdsRef.current.length < measures.length) {
+    measureIdsRef.current.push(`measure-${++measureIdCounter.current}`);
+  }
+  if (measureIdsRef.current.length > measures.length) {
+    measureIdsRef.current = measureIdsRef.current.slice(0, measures.length);
+  }
+
   // Handle measure change
   const updateMeasure = useCallback((index: number, updates: Partial<MeasureConfig>) => {
     setMeasures((prev) => prev.map((m, i) => (i === index ? { ...m, ...updates } : m)));
@@ -370,11 +382,13 @@ export function ChartConfig({
 
   // Add a new measure
   const addMeasure = useCallback(() => {
+    measureIdsRef.current.push(`measure-${++measureIdCounter.current}`);
     setMeasures((prev) => [...prev, { column: '', aggregation: 'sum' }]);
   }, []);
 
   // Remove a measure
   const removeMeasure = useCallback((index: number) => {
+    measureIdsRef.current = measureIdsRef.current.filter((_, i) => i !== index);
     setMeasures((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
@@ -510,7 +524,7 @@ export function ChartConfig({
         <div style={fieldStyle}>
           <label style={labelStyle}>Measures (Y-Axis)</label>
           {measures.map((measure, index) => (
-            <div key={index} style={measureRowStyle}>
+            <div key={measureIdsRef.current[index]} style={measureRowStyle}>
               <Select
                 value={measure.aggregation}
                 onChange={(value) => updateMeasure(index, { aggregation: value as AggregationType })}

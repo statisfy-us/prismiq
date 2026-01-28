@@ -4,7 +4,7 @@
  * Allows setting format strings for each date column in the query.
  */
 
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, type CSSProperties } from 'react';
 import { useTheme } from '../../../theme';
 import { Select } from '../../../components/ui/Select';
 import { CollapsibleSection } from '../../../components/ui/CollapsibleSection';
@@ -125,18 +125,18 @@ export function DateFormattingSection({
     return null;
   }
 
-  const fieldStyle: React.CSSProperties = {
+  const fieldStyle: CSSProperties = {
     marginBottom: theme.spacing.md,
   };
 
-  const labelStyle: React.CSSProperties = {
+  const labelStyle: CSSProperties = {
     display: 'block',
     fontSize: theme.fontSizes.sm,
     color: theme.colors.text,
     marginBottom: theme.spacing.xs,
   };
 
-  const columnNameStyle: React.CSSProperties = {
+  const columnNameStyle: CSSProperties = {
     fontFamily: theme.fonts.mono,
     fontSize: theme.fontSizes.sm,
     color: theme.colors.textMuted,

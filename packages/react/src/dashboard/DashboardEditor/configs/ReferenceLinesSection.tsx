@@ -4,6 +4,7 @@
  * Allows users to add threshold/goal lines to bar, line, and area charts.
  */
 
+import { useRef, type CSSProperties } from 'react';
 import { useTheme } from '../../../theme';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
@@ -47,7 +48,21 @@ export function ReferenceLinesSection({
 }: ReferenceLinesSectionProps): JSX.Element {
   const { theme } = useTheme();
 
-  const lineRowStyle: React.CSSProperties = {
+  // Counter for generating unique IDs
+  const idCounter = useRef(0);
+  // Map to track stable IDs for each line (keyed by position)
+  const lineIdsRef = useRef<string[]>([]);
+
+  // Ensure we have IDs for all lines
+  while (lineIdsRef.current.length < lines.length) {
+    lineIdsRef.current.push(`line-${++idCounter.current}`);
+  }
+  // Trim excess IDs if lines were removed
+  if (lineIdsRef.current.length > lines.length) {
+    lineIdsRef.current = lineIdsRef.current.slice(0, lines.length);
+  }
+
+  const lineRowStyle: CSSProperties = {
     display: 'flex',
     alignItems: 'center',
     gap: theme.spacing.sm,
@@ -58,14 +73,14 @@ export function ReferenceLinesSection({
     border: `1px solid ${theme.colors.border}`,
   };
 
-  const addButtonStyle: React.CSSProperties = {
+  const addButtonStyle: CSSProperties = {
     display: 'flex',
     alignItems: 'center',
     gap: theme.spacing.xs,
     marginTop: theme.spacing.sm,
   };
 
-  const colorInputStyle: React.CSSProperties = {
+  const colorInputStyle: CSSProperties = {
     width: '32px',
     height: '32px',
     padding: 0,
@@ -82,6 +97,8 @@ export function ReferenceLinesSection({
       color: DEFAULT_COLORS[lines.length % DEFAULT_COLORS.length],
       lineStyle: 'dashed',
     };
+    // Add a new stable ID for the new line
+    lineIdsRef.current.push(`line-${++idCounter.current}`);
     onChange([...lines, newLine]);
   };
 
@@ -92,6 +109,8 @@ export function ReferenceLinesSection({
   };
 
   const removeLine = (index: number) => {
+    // Remove the corresponding stable ID
+    lineIdsRef.current = lineIdsRef.current.filter((_, i) => i !== index);
     onChange(lines.filter((_, i) => i !== index));
   };
 
@@ -101,9 +120,7 @@ export function ReferenceLinesSection({
       defaultOpen={defaultOpen || lines.length > 0}
     >
       {lines.map((line, index) => (
-        // Using index as key is acceptable since lines are only added at end
-        // and removed by index (no reordering occurs)
-        <div key={index} style={lineRowStyle}>
+        <div key={lineIdsRef.current[index]} style={lineRowStyle}>
           <Input
             type="number"
             value={String(line.value)}

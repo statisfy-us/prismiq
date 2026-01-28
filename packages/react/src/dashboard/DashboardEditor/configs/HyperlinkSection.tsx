@@ -4,7 +4,7 @@
  * Allows users to add a link that appears as an icon in the widget header.
  */
 
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { useTheme } from '../../../theme';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
@@ -74,42 +74,44 @@ export function HyperlinkSection({
   const { theme } = useTheme();
   const [urlError, setUrlError] = useState<string | null>(null);
 
-  const fieldStyle: React.CSSProperties = {
+  const fieldStyle: CSSProperties = {
     marginBottom: theme.spacing.md,
   };
 
-  const labelStyle: React.CSSProperties = {
+  const labelStyle: CSSProperties = {
     display: 'block',
     fontSize: theme.fontSizes.sm,
     color: theme.colors.text,
     marginBottom: theme.spacing.xs,
   };
 
-  const helpTextStyle: React.CSSProperties = {
+  const helpTextStyle: CSSProperties = {
     fontSize: theme.fontSizes.xs,
     color: theme.colors.textMuted,
     marginTop: theme.spacing.xs,
   };
 
-  const errorStyle: React.CSSProperties = {
+  const errorStyle: CSSProperties = {
     fontSize: theme.fontSizes.xs,
     color: theme.colors.error,
     marginTop: theme.spacing.xs,
   };
 
   const handleUrlChange = (url: string) => {
-    const error = validateUrl(url);
+    const trimmedUrl = url.trim();
+    const error = validateUrl(trimmedUrl);
     setUrlError(error);
 
-    if (!url.trim()) {
+    if (!trimmedUrl) {
       onChange(undefined);
     } else if (!error) {
       onChange({
-        url,
+        url: trimmedUrl,
         title: hyperlink?.title,
         target: hyperlink?.target ?? '_blank',
       });
     }
+    // If error, don't call onChange - keep previous valid value
   };
 
   const handleTitleChange = (title: string) => {

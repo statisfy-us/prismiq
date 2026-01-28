@@ -8,6 +8,7 @@
  * - Maximum height (in grid units)
  */
 
+import type { CSSProperties } from 'react';
 import { useTheme } from '../../../theme';
 import { Input } from '../../../components/ui/Input';
 import { CollapsibleSection } from '../../../components/ui/CollapsibleSection';
@@ -24,6 +25,8 @@ export interface LayoutConstraintsSectionProps {
   onChange: (position: WidgetPosition) => void;
   /** Whether the section starts open. */
   defaultOpen?: boolean;
+  /** Maximum number of columns in the grid (for width constraints). */
+  maxColumns?: number;
 }
 
 // ============================================================================
@@ -37,27 +40,28 @@ export function LayoutConstraintsSection({
   position,
   onChange,
   defaultOpen = false,
+  maxColumns = 12,
 }: LayoutConstraintsSectionProps): JSX.Element {
   const { theme } = useTheme();
 
-  const gridStyle: React.CSSProperties = {
+  const gridStyle: CSSProperties = {
     display: 'grid',
     gridTemplateColumns: '1fr 1fr',
     gap: theme.spacing.sm,
   };
 
-  const fieldStyle: React.CSSProperties = {
+  const fieldStyle: CSSProperties = {
     marginBottom: theme.spacing.sm,
   };
 
-  const labelStyle: React.CSSProperties = {
+  const labelStyle: CSSProperties = {
     display: 'block',
     fontSize: theme.fontSizes.sm,
     color: theme.colors.text,
     marginBottom: theme.spacing.xs,
   };
 
-  const helpTextStyle: React.CSSProperties = {
+  const helpTextStyle: CSSProperties = {
     fontSize: theme.fontSizes.xs,
     color: theme.colors.textMuted,
     marginTop: theme.spacing.sm,
@@ -96,7 +100,7 @@ export function LayoutConstraintsSection({
             onChange={(e) => handleChange('minW', e.target.value)}
             placeholder="Auto"
             min={1}
-            max={12}
+            max={maxColumns}
           />
         </div>
         <div style={fieldStyle}>
@@ -107,7 +111,7 @@ export function LayoutConstraintsSection({
             onChange={(e) => handleChange('maxW', e.target.value)}
             placeholder="Auto"
             min={1}
-            max={12}
+            max={maxColumns}
           />
         </div>
         <div style={fieldStyle}>
@@ -131,7 +135,7 @@ export function LayoutConstraintsSection({
           />
         </div>
         <span style={helpTextStyle}>
-          Values are in grid units (1-12 for width). Leave empty for automatic
+          Values are in grid units (1-{maxColumns} for width). Leave empty for automatic
           sizing.
         </span>
       </div>
