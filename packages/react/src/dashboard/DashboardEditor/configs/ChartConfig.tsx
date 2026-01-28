@@ -30,6 +30,7 @@ import type {
   TimeSeriesConfig as TimeSeriesConfigType,
   CalculatedField,
 } from '../../../types';
+import { parseColumnRef } from '../../../utils/columnRef';
 
 export interface ChartConfigProps {
   /** Database schema for table/column selection. */
@@ -111,32 +112,6 @@ const DATE_TRUNC_OPTIONS: { value: DateTruncInterval | ''; label: string }[] = [
   { value: 'hour', label: 'Hour' },
   { value: 'minute', label: 'Minute' },
 ];
-
-/**
- * Parse a column reference in "tableId.column" format.
- * Returns null if the format is invalid, with a console warning.
- */
-function parseColumnRef(
-  ref: string,
-  defaultTableId: string
-): { tableId: string; column: string } | null {
-  if (!ref || ref.trim() === '') {
-    return null;
-  }
-
-  if (!ref.includes('.')) {
-    // Simple column name without table prefix
-    return { tableId: defaultTableId, column: ref };
-  }
-
-  const parts = ref.split('.');
-  if (parts.length !== 2 || !parts[0] || !parts[1]) {
-    console.warn(`Invalid column reference format: "${ref}". Expected "tableId.column"`);
-    return null;
-  }
-
-  return { tableId: parts[0], column: parts[1] };
-}
 
 /**
  * Guided chart configuration component.
@@ -348,8 +323,8 @@ export function ChartConfig({
     if (parsed) {
       setGroupByTableId(parsed.tableId);
       setGroupByColumn(parsed.column);
+      setDateTrunc(''); // Reset date truncation when column changes
     }
-    setDateTrunc(''); // Reset date truncation when column changes
   }, [groupByTableId]);
 
   // Handle measure change

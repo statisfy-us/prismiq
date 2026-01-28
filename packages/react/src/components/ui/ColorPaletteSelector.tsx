@@ -11,7 +11,8 @@ import { useTheme } from '../../theme';
 
 /**
  * Convert a color string to rgba with specified alpha.
- * Handles hex (3, 4, 6, 8 digit), rgb(), rgba(), and named colors.
+ * Supports: hex (3, 4, 6, 8 digit), rgb(), and rgba() formats.
+ * Other formats (named colors, hsl, etc.) are returned unchanged.
  */
 function colorWithAlpha(color: string, alpha: number): string {
   // Handle hex colors
@@ -47,7 +48,7 @@ function colorWithAlpha(color: string, alpha: number): string {
     return `rgba(${rgbaMatch[1]}, ${rgbaMatch[2]}, ${rgbaMatch[3]}, ${alpha})`;
   }
 
-  // Fallback: return with reduced opacity via CSS
+  // Fallback: unsupported format (named colors, hsl, etc.) - return unchanged
   return color;
 }
 
@@ -211,8 +212,8 @@ export function ColorPaletteSelector({
           >
             <div style={paletteNameStyle}>{palette.name}</div>
             <div style={swatchContainerStyle}>
-              {palette.colors.slice(0, 6).map((color) => (
-                <div key={color} style={swatchStyle(color)} />
+              {palette.colors.slice(0, 6).map((color, i) => (
+                <div key={`${color}-${i}`} style={swatchStyle(color)} />
               ))}
             </div>
           </button>
