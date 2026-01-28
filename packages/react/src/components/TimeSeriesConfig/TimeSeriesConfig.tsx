@@ -153,9 +153,11 @@ export function TimeSeriesConfig({
 
     const parsed = parseColumnRef(value, config.table_id);
     if (!parsed) {
+      setError('Invalid column reference. Please select a valid date column.');
       return;
     }
 
+    setError(null);
     onChange({
       ...config,
       table_id: parsed.tableId,

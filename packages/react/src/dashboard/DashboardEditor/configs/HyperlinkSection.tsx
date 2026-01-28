@@ -4,11 +4,38 @@
  * Allows users to add a link that appears as an icon in the widget header.
  */
 
+import { useState } from 'react';
 import { useTheme } from '../../../theme';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
 import { CollapsibleSection } from '../../../components/ui/CollapsibleSection';
 import type { WidgetHyperlink } from '../../types';
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Validate that a URL uses a safe protocol (http or https).
+ * Returns an error message if invalid, or null if valid.
+ */
+function validateUrl(url: string): string | null {
+  if (!url.trim()) return null;
+
+  try {
+    const parsed = new URL(url);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return 'Only http:// and https:// URLs are allowed';
+    }
+    return null;
+  } catch {
+    // Not a valid URL format yet - allow partial input while typing
+    if (url.includes('://') && !url.startsWith('http://') && !url.startsWith('https://')) {
+      return 'Only http:// and https:// URLs are allowed';
+    }
+    return null;
+  }
+}
 
 // ============================================================================
 // Types
@@ -45,6 +72,7 @@ export function HyperlinkSection({
   defaultOpen = false,
 }: HyperlinkSectionProps): JSX.Element {
   const { theme } = useTheme();
+  const [urlError, setUrlError] = useState<string | null>(null);
 
   const fieldStyle: React.CSSProperties = {
     marginBottom: theme.spacing.md,
@@ -63,10 +91,19 @@ export function HyperlinkSection({
     marginTop: theme.spacing.xs,
   };
 
+  const errorStyle: React.CSSProperties = {
+    fontSize: theme.fontSizes.xs,
+    color: theme.colors.error,
+    marginTop: theme.spacing.xs,
+  };
+
   const handleUrlChange = (url: string) => {
+    const error = validateUrl(url);
+    setUrlError(error);
+
     if (!url.trim()) {
       onChange(undefined);
-    } else {
+    } else if (!error) {
       onChange({
         url,
         title: hyperlink?.title,
@@ -100,9 +137,13 @@ export function HyperlinkSection({
           onChange={(e) => handleUrlChange(e.target.value)}
           placeholder="https://example.com/dashboard"
         />
-        <div style={helpTextStyle}>
-          A link icon will appear in the widget header
-        </div>
+        {urlError ? (
+          <div style={errorStyle}>{urlError}</div>
+        ) : (
+          <div style={helpTextStyle}>
+            A link icon will appear in the widget header
+          </div>
+        )}
       </div>
 
       {hyperlink?.url && (

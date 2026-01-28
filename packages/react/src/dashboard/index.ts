@@ -8,6 +8,9 @@ export type {
   WidgetType,
   WidgetPosition,
   WidgetConfig,
+  WidgetCrossFilterConfig,
+  WidgetHyperlink,
+  ReferenceLine,
   Widget as WidgetDefinition,
   // Filter types
   DashboardFilterType,

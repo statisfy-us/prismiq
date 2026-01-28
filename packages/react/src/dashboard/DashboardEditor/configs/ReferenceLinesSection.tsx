@@ -4,20 +4,13 @@
  * Allows users to add threshold/goal lines to bar, line, and area charts.
  */
 
-import { useCallback, useRef } from 'react';
 import { useTheme } from '../../../theme';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
 import { Button } from '../../../components/ui/Button';
 import { Icon } from '../../../components/ui/Icon';
 import { CollapsibleSection } from '../../../components/ui/CollapsibleSection';
-import type { WidgetConfig } from '../../types';
-
-// ============================================================================
-// Types
-// ============================================================================
-
-type ReferenceLine = NonNullable<WidgetConfig['referenceLines']>[number];
+import type { ReferenceLine } from '../../types';
 
 export interface ReferenceLinesSectionProps {
   /** Current reference lines. */
@@ -53,20 +46,6 @@ export function ReferenceLinesSection({
   defaultOpen = false,
 }: ReferenceLinesSectionProps): JSX.Element {
   const { theme } = useTheme();
-
-  // Counter for generating unique IDs
-  const idCounter = useRef(0);
-  const lineIdsRef = useRef<Map<ReferenceLine, string>>(new Map());
-
-  // Get or create a stable ID for a line
-  const getLineId = useCallback((line: ReferenceLine): string => {
-    let id = lineIdsRef.current.get(line);
-    if (!id) {
-      id = `line-${++idCounter.current}`;
-      lineIdsRef.current.set(line, id);
-    }
-    return id;
-  }, []);
 
   const lineRowStyle: React.CSSProperties = {
     display: 'flex',
@@ -122,7 +101,9 @@ export function ReferenceLinesSection({
       defaultOpen={defaultOpen || lines.length > 0}
     >
       {lines.map((line, index) => (
-        <div key={getLineId(line)} style={lineRowStyle}>
+        // Using index as key is acceptable since lines are only added at end
+        // and removed by index (no reordering occurs)
+        <div key={index} style={lineRowStyle}>
           <Input
             type="number"
             value={String(line.value)}

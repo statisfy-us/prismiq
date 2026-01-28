@@ -58,6 +58,20 @@ export interface WidgetCrossFilterConfig {
 }
 
 /**
+ * A reference line (threshold/goal) for charts.
+ */
+export interface ReferenceLine {
+  /** Y-axis value where line should appear. */
+  value: number;
+  /** Optional label displayed on the line. */
+  label?: string;
+  /** Line color (hex). */
+  color?: string;
+  /** Line style. */
+  lineStyle?: 'solid' | 'dashed' | 'dotted';
+}
+
+/**
  * Widget-specific configuration options.
  */
 export interface WidgetConfig {
@@ -90,16 +104,7 @@ export interface WidgetConfig {
   decimalDigits?: number;
 
   /** Reference lines for charts (thresholds, goals). */
-  referenceLines?: Array<{
-    /** Y-axis value where line should appear. */
-    value: number;
-    /** Optional label displayed on the line. */
-    label?: string;
-    /** Line color (hex). */
-    color?: string;
-    /** Line style. */
-    lineStyle?: 'solid' | 'dashed' | 'dotted';
-  }>;
+  referenceLines?: ReferenceLine[];
 
   // Cross-filter options
   /** Cross-filter configuration for this widget. */

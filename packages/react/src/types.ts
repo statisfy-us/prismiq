@@ -232,15 +232,9 @@ export interface CalculatedField {
 
 /**
  * Time series interval options for date bucketing.
+ * Reuses DateTruncInterval since both represent the same concept.
  */
-export type TimeSeriesInterval =
-  | 'minute'
-  | 'hour'
-  | 'day'
-  | 'week'
-  | 'month'
-  | 'quarter'
-  | 'year';
+export type TimeSeriesInterval = DateTruncInterval;
 
 /**
  * Time series configuration for date-based charts.

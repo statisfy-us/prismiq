@@ -156,6 +156,7 @@ export function ChartConfig({
   const [calculatedFields, setCalculatedFields] = useState<CalculatedField[]>(
     query?.calculated_fields ?? []
   );
+  const [invalidMeasureWarning, setInvalidMeasureWarning] = useState<string | null>(null);
 
   // Derived state
   const primaryTable = tables[0];
@@ -263,20 +264,40 @@ export function ChartConfig({
         date_trunc: dateTrunc || undefined,
       },
       // Measure columns (with aggregation) - parse table_id.column format
-      ...validMeasures
-        .map((m, i) => {
+      ...(() => {
+        const parsedMeasures: Array<{
+          table_id: string;
+          column: string;
+          aggregation: AggregationType;
+          alias?: string;
+        }> = [];
+        const invalidColumns: string[] = [];
+
+        validMeasures.forEach((m, i) => {
           const parsed = parseColumnRef(m.column, tables[0]?.id ?? 't1');
           if (!parsed) {
-            return null;
+            invalidColumns.push(m.column);
+            return;
           }
-          return {
+          parsedMeasures.push({
             table_id: parsed.tableId,
             column: parsed.column,
             aggregation: m.aggregation,
             alias: validMeasures.length > 1 ? `value_${i + 1}` : undefined,
-          };
-        })
-        .filter((col): col is NonNullable<typeof col> => col !== null),
+          });
+        });
+
+        // Update warning state based on invalid columns
+        if (invalidColumns.length > 0) {
+          setInvalidMeasureWarning(
+            `Measure "${invalidColumns[0]}" could not be parsed. Please select a valid column.`
+          );
+        } else {
+          setInvalidMeasureWarning(null);
+        }
+
+        return parsedMeasures;
+      })(),
     ];
 
     // Group by the dimension column
@@ -523,6 +544,11 @@ export function ChartConfig({
             <Icon name="plus" size={14} />
             <span style={{ marginLeft: theme.spacing.xs }}>Add measure</span>
           </Button>
+          {invalidMeasureWarning && (
+            <span style={{ fontSize: theme.fontSizes.xs, color: theme.colors.warning ?? theme.colors.error }}>
+              {invalidMeasureWarning}
+            </span>
+          )}
         </div>
       )}
 
