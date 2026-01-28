@@ -32,3 +32,7 @@ export {
 // Pivot transformations
 export { pivotQueryResult } from './pivot';
 export type { PivotConfig } from './pivot';
+
+// Column reference utilities
+export { parseColumnRef } from './columnRef';
+export type { ColumnReference } from './columnRef';

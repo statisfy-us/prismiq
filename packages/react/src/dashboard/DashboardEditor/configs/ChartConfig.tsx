@@ -12,14 +12,25 @@ import { useTheme } from '../../../theme';
 import { Select } from '../../../components/ui/Select';
 import { Button } from '../../../components/ui/Button';
 import { Icon } from '../../../components/ui/Icon';
+import { CollapsibleSection } from '../../../components/ui/CollapsibleSection';
 import { FilterBuilder } from '../../../components/FilterBuilder';
+import { TableSelector } from '../../../components/TableSelector';
+import { JoinBuilder } from '../../../components/JoinBuilder';
+import { TimeSeriesConfig } from '../../../components/TimeSeriesConfig';
+import { CalculatedFieldBuilder } from '../../../components/CalculatedFieldBuilder';
 import type {
   DatabaseSchema,
   QueryDefinition,
+  QueryTable,
+  JoinDefinition,
   AggregationType,
   FilterDefinition,
   ColumnSchema,
+  DateTruncInterval,
+  TimeSeriesConfig as TimeSeriesConfigType,
+  CalculatedField,
 } from '../../../types';
+import { parseColumnRef } from '../../../utils/columnRef';
 
 export interface ChartConfigProps {
   /** Database schema for table/column selection. */
@@ -34,8 +45,11 @@ export interface ChartConfigProps {
  * A measure (aggregated column) definition.
  */
 interface MeasureConfig {
+  /** Column name or table-qualified ref (e.g., "t1.amount"). */
   column: string;
   aggregation: AggregationType;
+  /** Source table ID for multi-table queries. */
+  table_id?: string;
 }
 
 /**
@@ -81,6 +95,28 @@ function isCategoricalColumn(col: ColumnSchema): boolean {
 }
 
 /**
+ * Check if a column is a date/timestamp type.
+ */
+function isDateColumn(col: ColumnSchema): boolean {
+  const type = col.data_type.toLowerCase();
+  return type.includes('date') || type.includes('time') || type.includes('timestamp');
+}
+
+/**
+ * Date truncation options.
+ */
+const DATE_TRUNC_OPTIONS: { value: DateTruncInterval | ''; label: string }[] = [
+  { value: '', label: 'No truncation' },
+  { value: 'year', label: 'Year' },
+  { value: 'quarter', label: 'Quarter' },
+  { value: 'month', label: 'Month' },
+  { value: 'week', label: 'Week' },
+  { value: 'day', label: 'Day' },
+  { value: 'hour', label: 'Hour' },
+  { value: 'minute', label: 'Minute' },
+];
+
+/**
  * Guided chart configuration component.
  */
 export function ChartConfig({
@@ -91,24 +127,41 @@ export function ChartConfig({
   const { theme } = useTheme();
 
   // Extract state from existing query
-  const initialTable = query?.tables[0]?.name ?? '';
-  const initialGroupBy =
-    query?.columns.find((c) => c.aggregation === 'none')?.column ??
-    query?.group_by?.[0]?.column ??
-    '';
+  const initialTables: QueryTable[] = query?.tables ?? [];
+  const groupByCol = query?.columns.find((c) => c.aggregation === 'none');
+  const initialGroupBy = groupByCol?.column ?? query?.group_by?.[0]?.column ?? '';
+  const initialGroupByTableId = groupByCol?.table_id ?? query?.tables?.[0]?.id ?? 't1';
+  const initialDateTrunc = groupByCol?.date_trunc ?? '';
   const initialMeasures: MeasureConfig[] =
     query?.columns
       .filter((c) => c.aggregation !== 'none')
-      .map((c) => ({ column: c.column, aggregation: c.aggregation })) ?? [];
+      .map((c) => ({
+        // Store as table-qualified ref so parseColumnRef can resolve it correctly
+        column: c.table_id ? `${c.table_id}.${c.column}` : c.column,
+        aggregation: c.aggregation,
+        table_id: c.table_id,
+      })) ?? [];
+  const initialJoins: JoinDefinition[] = query?.joins ?? [];
 
-  const [selectedTable, setSelectedTable] = useState(initialTable);
+  const [tables, setTables] = useState<QueryTable[]>(initialTables);
+  const [joins, setJoins] = useState<JoinDefinition[]>(initialJoins);
   const [groupByColumn, setGroupByColumn] = useState(initialGroupBy);
+  const [groupByTableId, setGroupByTableId] = useState(initialGroupByTableId);
+  const [dateTrunc, setDateTrunc] = useState<DateTruncInterval | ''>(initialDateTrunc);
   const [measures, setMeasures] = useState<MeasureConfig[]>(
     initialMeasures.length > 0 ? initialMeasures : [{ column: '', aggregation: 'sum' }]
   );
   const [filters, setFilters] = useState<FilterDefinition[]>(query?.filters ?? []);
+  const [timeSeries, setTimeSeries] = useState<TimeSeriesConfigType | undefined>(query?.time_series);
+  const [calculatedFields, setCalculatedFields] = useState<CalculatedField[]>(
+    query?.calculated_fields ?? []
+  );
 
-  // Get table options
+  // Derived state
+  const primaryTable = tables[0];
+  const selectedTable = primaryTable?.name ?? '';
+
+  // Get table options for the primary table dropdown
   const tableOptions = useMemo(() => {
     return schema.tables.map((t) => ({
       value: t.name,
@@ -116,86 +169,178 @@ export function ChartConfig({
     }));
   }, [schema.tables]);
 
-  // Get current table schema
+  // Get current primary table schema
   const currentTable = useMemo(() => {
     return schema.tables.find((t) => t.name === selectedTable);
   }, [schema.tables, selectedTable]);
 
-  // Get categorical columns for grouping
+  // Get categorical columns for grouping (from all selected tables)
   const groupByOptions = useMemo(() => {
-    if (!currentTable) return [];
-    // Include categorical columns and also date/timestamp columns
-    const cols = currentTable.columns.filter(
-      (c) =>
-        isCategoricalColumn(c) ||
-        c.data_type.toLowerCase().includes('date') ||
-        c.data_type.toLowerCase().includes('timestamp')
-    );
-    return cols.map((c) => ({
-      value: c.name,
-      label: `${c.name} (${c.data_type})`,
-    }));
-  }, [currentTable]);
+    const options: { value: string; label: string; tableId: string }[] = [];
 
-  // Get numeric columns for measures
+    for (const table of tables) {
+      const tableSchema = schema.tables.find((t) => t.name === table.name);
+      if (!tableSchema) continue;
+
+      const cols = tableSchema.columns.filter(
+        (c) =>
+          isCategoricalColumn(c) ||
+          c.data_type.toLowerCase().includes('date') ||
+          c.data_type.toLowerCase().includes('timestamp')
+      );
+
+      for (const col of cols) {
+        options.push({
+          value: `${table.id}.${col.name}`,
+          label: tables.length > 1
+            ? `${table.alias ?? table.name}.${col.name} (${col.data_type})`
+            : `${col.name} (${col.data_type})`,
+          tableId: table.id,
+        });
+      }
+    }
+
+    return options;
+  }, [tables, schema.tables]);
+
+  // Get numeric columns for measures (from all selected tables)
   const measureColumnOptions = useMemo(() => {
-    if (!currentTable) return [];
-    const numericCols = currentTable.columns.filter(isNumericColumn);
-    return numericCols.map((c) => ({
-      value: c.name,
-      label: `${c.name} (${c.data_type})`,
-    }));
-  }, [currentTable]);
+    const options: { value: string; label: string }[] = [];
+
+    for (const table of tables) {
+      const tableSchema = schema.tables.find((t) => t.name === table.name);
+      if (!tableSchema) continue;
+
+      const numericCols = tableSchema.columns.filter(isNumericColumn);
+
+      for (const col of numericCols) {
+        options.push({
+          value: `${table.id}.${col.name}`,
+          label: tables.length > 1
+            ? `${table.alias ?? table.name}.${col.name} (${col.data_type})`
+            : `${col.name} (${col.data_type})`,
+        });
+      }
+    }
+
+    return options;
+  }, [tables, schema.tables]);
+
+  // Check if selected group by column is a date type
+  const groupByColumnSchema = useMemo(() => {
+    if (!groupByColumn || !groupByTableId) return null;
+    const table = tables.find((t) => t.id === groupByTableId);
+    if (!table) return null;
+    const tableSchema = schema.tables.find((t) => t.name === table.name);
+    if (!tableSchema) return null;
+    return tableSchema.columns.find((c) => c.name === groupByColumn) ?? null;
+  }, [tables, schema.tables, groupByColumn, groupByTableId]);
+
+  const isGroupByDate = groupByColumnSchema ? isDateColumn(groupByColumnSchema) : false;
+
+  // Clear time series config when group by column is not a date type
+  useEffect(() => {
+    if (!isGroupByDate && timeSeries !== undefined) {
+      setTimeSeries(undefined);
+    }
+  }, [isGroupByDate, timeSeries]);
 
   // Build and emit query when config changes
   useEffect(() => {
-    if (!selectedTable || !groupByColumn) return;
+    if (tables.length === 0 || !groupByColumn) return;
 
     // Check if we have at least one valid measure
     const validMeasures = measures.filter((m) => m.column);
     if (validMeasures.length === 0) return;
 
-    const tableId = 't1';
-    const tables = [{ id: tableId, name: selectedTable }];
-
     // Build columns: group by column + measure columns
     const columns = [
-      // Group by column (no aggregation)
+      // Group by column (no aggregation, with optional date truncation)
       {
-        table_id: tableId,
+        table_id: groupByTableId,
         column: groupByColumn,
         aggregation: 'none' as AggregationType,
+        date_trunc: dateTrunc || undefined,
       },
-      // Measure columns (with aggregation)
-      ...validMeasures.map((m, i) => ({
-        table_id: tableId,
-        column: m.column,
-        aggregation: m.aggregation,
-        alias: validMeasures.length > 1 ? `value_${i + 1}` : undefined,
-      })),
+      // Measure columns (with aggregation) - parse table_id.column format
+      ...validMeasures
+        .map((m, i) => {
+          const parsed = parseColumnRef(m.column, tables[0]?.id ?? 't1');
+          if (!parsed) {
+            return null;
+          }
+          return {
+            table_id: parsed.tableId,
+            column: parsed.column,
+            aggregation: m.aggregation,
+            alias: validMeasures.length > 1 ? `value_${i + 1}` : undefined,
+          };
+        })
+        .filter((col): col is NonNullable<typeof col> => col !== null),
     ];
 
     // Group by the dimension column
-    const groupBy = [{ table_id: tableId, column: groupByColumn }];
+    const groupBy = [{ table_id: groupByTableId, column: groupByColumn }];
 
     const queryDef: QueryDefinition = {
       tables,
+      joins: joins.length > 0 ? joins : undefined,
       columns,
       group_by: groupBy,
       filters: filters.length > 0 ? filters : undefined,
-      order_by: [{ table_id: tableId, column: groupByColumn, direction: 'ASC' }],
+      order_by: [{ table_id: groupByTableId, column: groupByColumn, direction: 'ASC' }],
+      time_series: timeSeries,
+      calculated_fields: calculatedFields.length > 0 ? calculatedFields : undefined,
     };
 
     onChange(queryDef);
-  }, [selectedTable, groupByColumn, measures, filters, onChange]);
+  }, [tables, joins, groupByColumn, groupByTableId, dateTrunc, measures, filters, timeSeries, calculatedFields, onChange]);
 
-  // Handle table change
+  // Handle primary table change
   const handleTableChange = useCallback((value: string) => {
-    setSelectedTable(value);
+    if (!value) {
+      setTables([]);
+    } else {
+      setTables([{ id: 't1', name: value }]);
+    }
+    setJoins([]);
     setGroupByColumn('');
+    setGroupByTableId('t1');
+    setDateTrunc('');
     setMeasures([{ column: '', aggregation: 'sum' }]);
     setFilters([]);
   }, []);
+
+  // Handle tables change (for multi-table selection)
+  const handleTablesChange = useCallback((newTables: QueryTable[]) => {
+    setTables(newTables);
+    // Clear joins that reference removed tables
+    const tableIds = new Set(newTables.map((t) => t.id));
+    setJoins((prev) =>
+      prev.filter((j) => tableIds.has(j.from_table_id) && tableIds.has(j.to_table_id))
+    );
+    // Clear group by if its table was removed
+    if (!tableIds.has(groupByTableId)) {
+      setGroupByColumn('');
+      setGroupByTableId(newTables[0]?.id ?? 't1');
+    }
+  }, [groupByTableId]);
+
+  // Handle group by column change (now includes table_id)
+  const handleGroupByChange = useCallback((value: string) => {
+    if (!value) {
+      setGroupByColumn('');
+      setDateTrunc('');
+      return;
+    }
+
+    const parsed = parseColumnRef(value, groupByTableId);
+    if (parsed) {
+      setGroupByTableId(parsed.tableId);
+      setGroupByColumn(parsed.column);
+      setDateTrunc(''); // Reset date truncation when column changes
+    }
+  }, [groupByTableId]);
 
   // Handle measure change
   const updateMeasure = useCallback((index: number, updates: Partial<MeasureConfig>) => {
@@ -242,9 +387,14 @@ export function ChartConfig({
     color: theme.colors.textMuted,
   };
 
+  // Get current group by value in tableId.column format
+  const groupByValue = groupByColumn && groupByTableId
+    ? `${groupByTableId}.${groupByColumn}`
+    : '';
+
   return (
     <div style={containerStyle}>
-      {/* Table Selection */}
+      {/* Primary Table Selection */}
       <div style={fieldStyle}>
         <label style={labelStyle}>From Table</label>
         <Select
@@ -254,14 +404,47 @@ export function ChartConfig({
         />
       </div>
 
+      {/* Additional Tables and Joins */}
+      {selectedTable && (
+        <CollapsibleSection title="Join Tables" defaultOpen={tables.length > 1}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: theme.spacing.md }}>
+            <TableSelector
+              schema={schema}
+              tables={tables}
+              onChange={handleTablesChange}
+              maxTables={5}
+              showRelationships={true}
+            />
+
+            {/* Show JoinBuilder when 2+ tables selected */}
+            {tables.length >= 2 && (
+              <div style={fieldStyle}>
+                <label style={labelStyle}>Join Conditions</label>
+                <JoinBuilder
+                  schema={schema}
+                  tables={tables}
+                  joins={joins}
+                  onChange={setJoins}
+                />
+                {joins.length === 0 && tables.length >= 2 && (
+                  <span style={helpTextStyle}>
+                    Define how tables relate to each other
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </CollapsibleSection>
+      )}
+
       {/* Group By (X-Axis) */}
       {selectedTable && (
         <div style={fieldStyle}>
           <label style={labelStyle}>Group By (X-Axis)</label>
           {groupByOptions.length > 0 ? (
             <Select
-              value={groupByColumn}
-              onChange={setGroupByColumn}
+              value={groupByValue}
+              onChange={handleGroupByChange}
               options={[{ value: '', label: 'Select a column...' }, ...groupByOptions]}
             />
           ) : (
@@ -269,6 +452,36 @@ export function ChartConfig({
           )}
           <span style={helpTextStyle}>Categories to group data by</span>
         </div>
+      )}
+
+      {/* Date Truncation (for date columns) */}
+      {selectedTable && groupByColumn && isGroupByDate && (
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Date Granularity</label>
+          <Select
+            value={dateTrunc}
+            onChange={(value) => setDateTrunc(value as DateTruncInterval | '')}
+            options={DATE_TRUNC_OPTIONS}
+          />
+          <span style={helpTextStyle}>Truncate dates to this interval</span>
+        </div>
+      )}
+
+      {/* Time Series Configuration (for date-based charts) */}
+      {selectedTable && isGroupByDate && (
+        <CollapsibleSection title="Time Series Options" defaultOpen={timeSeries !== undefined}>
+          <TimeSeriesConfig
+            schema={schema}
+            tables={tables}
+            config={timeSeries}
+            onChange={setTimeSeries}
+            selectedDateColumn={
+              groupByColumn && groupByTableId
+                ? { table_id: groupByTableId, column: groupByColumn }
+                : undefined
+            }
+          />
+        </CollapsibleSection>
       )}
 
       {/* Measures (Y-Axis) */}
@@ -318,12 +531,28 @@ export function ChartConfig({
         <div style={fieldStyle}>
           <label style={labelStyle}>Filters (optional)</label>
           <FilterBuilder
-            tables={[{ id: 't1', name: selectedTable }]}
+            tables={tables}
             filters={filters}
             onChange={setFilters}
             schema={schema}
           />
         </div>
+      )}
+
+      {/* Calculated Fields */}
+      {selectedTable && (
+        <CollapsibleSection
+          title="Calculated Fields"
+          defaultOpen={calculatedFields.length > 0}
+        >
+          <CalculatedFieldBuilder
+            fields={calculatedFields}
+            onChange={setCalculatedFields}
+            tables={tables}
+            schema={schema}
+            maxFields={5}
+          />
+        </CollapsibleSection>
       )}
     </div>
   );

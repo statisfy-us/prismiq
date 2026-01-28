@@ -22,6 +22,10 @@ import { QueryBuilder } from '../../components/QueryBuilder';
 import { WidgetTypeSelector } from './WidgetTypeSelector';
 import { WidgetPreview } from './WidgetPreview';
 import { GuidedDataConfig } from './GuidedDataConfig';
+import { ValueFormattingSection } from './configs/ValueFormattingSection';
+import { DisplayConfigSection } from './configs/DisplayConfigSection';
+import { DateFormattingSection } from './configs/DateFormattingSection';
+import { TrendConfigSection } from './configs/TrendConfigSection';
 import type { Widget, WidgetConfig, WidgetType } from '../types';
 import type {
   DatabaseSchema,
@@ -365,39 +369,26 @@ export function WidgetEditorPage({
     marginBottom: theme.spacing.xs,
   };
 
-  const rowStyle: React.CSSProperties = {
-    display: 'flex',
-    gap: theme.spacing.md,
-    flexWrap: 'wrap',
-  };
-
   // Render config fields based on widget type
   const renderConfigFields = () => {
     switch (type) {
       case 'metric':
         return (
           <>
-            <div style={fieldStyle}>
-              <label style={labelStyle}>Format</label>
-              <Select
-                value={config.format || 'number'}
-                onChange={(value) => updateConfig('format', value as WidgetConfig['format'])}
-                options={[
-                  { value: 'number', label: 'Number' },
-                  { value: 'currency', label: 'Currency' },
-                  { value: 'percent', label: 'Percentage' },
-                  { value: 'compact', label: 'Compact' },
-                ]}
-              />
-            </div>
-            <div style={fieldStyle}>
-              <label style={labelStyle}>Trend Comparison</label>
-              <Select
-                value={config.trend_comparison || ''}
-                onChange={(value) => updateConfig('trend_comparison', value || undefined)}
-                options={[{ value: '', label: 'None' }, ...columnSelectOptions]}
-              />
-            </div>
+            <ValueFormattingSection
+              config={config}
+              onChange={updateConfig}
+              showCurrency={true}
+              showCompact={true}
+              defaultOpen={true}
+            />
+            <TrendConfigSection
+              config={config}
+              onChange={updateConfig}
+              query={query}
+              schema={schema}
+              defaultOpen={false}
+            />
           </>
         );
 
@@ -408,39 +399,30 @@ export function WidgetEditorPage({
               <label style={labelStyle}>X-Axis Column</label>
               <Select
                 value={config.x_axis || ''}
-                onChange={(value) => updateConfig('x_axis', value)}
+                onChange={(value) => updateConfig('x_axis', value || undefined)}
                 options={[{ value: '', label: 'Auto-detect' }, ...columnSelectOptions]}
               />
             </div>
-            <div style={fieldStyle}>
-              <label style={labelStyle}>Orientation</label>
-              <Select
-                value={config.orientation || 'vertical'}
-                onChange={(value) =>
-                  updateConfig('orientation', value as 'vertical' | 'horizontal')
-                }
-                options={[
-                  { value: 'vertical', label: 'Vertical' },
-                  { value: 'horizontal', label: 'Horizontal' },
-                ]}
-              />
-            </div>
-            <div style={rowStyle}>
-              <Checkbox
-                label="Show Legend"
-                checked={config.show_legend ?? true}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  updateConfig('show_legend', e.target.checked)
-                }
-              />
-              <Checkbox
-                label="Stacked"
-                checked={config.stacked ?? false}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  updateConfig('stacked', e.target.checked)
-                }
-              />
-            </div>
+            <DisplayConfigSection
+              widgetType={type}
+              config={config}
+              onChange={updateConfig}
+              defaultOpen={true}
+            />
+            <ValueFormattingSection
+              config={config}
+              onChange={updateConfig}
+              showCurrency={true}
+              showCompact={true}
+              defaultOpen={false}
+            />
+            <DateFormattingSection
+              config={config}
+              onChange={updateConfig}
+              query={query}
+              schema={schema}
+              defaultOpen={false}
+            />
           </>
         );
 
@@ -452,47 +434,76 @@ export function WidgetEditorPage({
               <label style={labelStyle}>X-Axis Column</label>
               <Select
                 value={config.x_axis || ''}
-                onChange={(value) => updateConfig('x_axis', value)}
+                onChange={(value) => updateConfig('x_axis', value || undefined)}
                 options={[{ value: '', label: 'Auto-detect' }, ...columnSelectOptions]}
               />
             </div>
-            <div style={rowStyle}>
-              <Checkbox
-                label="Show Legend"
-                checked={config.show_legend ?? true}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  updateConfig('show_legend', e.target.checked)
-                }
-              />
-              <Checkbox
-                label="Data Labels"
-                checked={config.show_data_labels ?? false}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  updateConfig('show_data_labels', e.target.checked)
-                }
-              />
-            </div>
+            <DisplayConfigSection
+              widgetType={type}
+              config={config}
+              onChange={updateConfig}
+              defaultOpen={true}
+            />
+            <ValueFormattingSection
+              config={config}
+              onChange={updateConfig}
+              showCurrency={true}
+              showCompact={true}
+              defaultOpen={false}
+            />
+            <DateFormattingSection
+              config={config}
+              onChange={updateConfig}
+              query={query}
+              schema={schema}
+              defaultOpen={false}
+            />
           </>
         );
 
       case 'pie_chart':
         return (
-          <div style={rowStyle}>
-            <Checkbox
-              label="Show Legend"
-              checked={config.show_legend ?? true}
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                updateConfig('show_legend', e.target.checked)
-              }
+          <DisplayConfigSection
+            widgetType={type}
+            config={config}
+            onChange={updateConfig}
+            defaultOpen={true}
+          />
+        );
+
+      case 'scatter_chart':
+        return (
+          <>
+            <div style={fieldStyle}>
+              <label style={labelStyle}>X-Axis Column</label>
+              <Select
+                value={config.x_axis || ''}
+                onChange={(value) => updateConfig('x_axis', value || undefined)}
+                options={[{ value: '', label: 'Auto-detect' }, ...columnSelectOptions]}
+              />
+            </div>
+            <div style={fieldStyle}>
+              <label style={labelStyle}>Y-Axis Column</label>
+              <Select
+                value={config.y_axis?.[0] || ''}
+                onChange={(value) => updateConfig('y_axis', value ? [value] : undefined)}
+                options={[{ value: '', label: 'Auto-detect' }, ...columnSelectOptions]}
+              />
+            </div>
+            <DisplayConfigSection
+              widgetType={type}
+              config={config}
+              onChange={updateConfig}
+              defaultOpen={true}
             />
-            <Checkbox
-              label="Show Labels"
-              checked={config.show_data_labels ?? true}
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                updateConfig('show_data_labels', e.target.checked)
-              }
+            <ValueFormattingSection
+              config={config}
+              onChange={updateConfig}
+              showCurrency={true}
+              showCompact={true}
+              defaultOpen={false}
             />
-          </div>
+          </>
         );
 
       case 'table':
@@ -517,6 +528,13 @@ export function WidgetEditorPage({
               onChange={(e: ChangeEvent<HTMLInputElement>) =>
                 updateConfig('sortable', e.target.checked)
               }
+            />
+            <DateFormattingSection
+              config={config}
+              onChange={updateConfig}
+              query={query}
+              schema={schema}
+              defaultOpen={false}
             />
           </>
         );

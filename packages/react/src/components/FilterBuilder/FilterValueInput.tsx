@@ -161,8 +161,8 @@ export function FilterValueInput({
     );
   }
 
-  // IN and NOT IN operators need comma-separated values
-  if (operator === 'in_' || operator === 'not_in') {
+  // IN, NOT IN, and IN OR NULL operators need comma-separated values
+  if (operator === 'in_' || operator === 'not_in' || operator === 'in_or_null') {
     const handleMultiChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const values = e.target.value
         .split(',')
