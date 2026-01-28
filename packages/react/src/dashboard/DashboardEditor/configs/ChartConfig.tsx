@@ -45,8 +45,11 @@ export interface ChartConfigProps {
  * A measure (aggregated column) definition.
  */
 interface MeasureConfig {
+  /** Column name or table-qualified ref (e.g., "t1.amount"). */
   column: string;
   aggregation: AggregationType;
+  /** Source table ID for multi-table queries. */
+  table_id?: string;
 }
 
 /**
@@ -132,7 +135,12 @@ export function ChartConfig({
   const initialMeasures: MeasureConfig[] =
     query?.columns
       .filter((c) => c.aggregation !== 'none')
-      .map((c) => ({ column: c.column, aggregation: c.aggregation })) ?? [];
+      .map((c) => ({
+        // Store as table-qualified ref so parseColumnRef can resolve it correctly
+        column: c.table_id ? `${c.table_id}.${c.column}` : c.column,
+        aggregation: c.aggregation,
+        table_id: c.table_id,
+      })) ?? [];
   const initialJoins: JoinDefinition[] = query?.joins ?? [];
 
   const [tables, setTables] = useState<QueryTable[]>(initialTables);
@@ -229,6 +237,13 @@ export function ChartConfig({
   }, [tables, schema.tables, groupByColumn, groupByTableId]);
 
   const isGroupByDate = groupByColumnSchema ? isDateColumn(groupByColumnSchema) : false;
+
+  // Clear time series config when group by column is not a date type
+  useEffect(() => {
+    if (!isGroupByDate && timeSeries !== undefined) {
+      setTimeSeries(undefined);
+    }
+  }, [isGroupByDate, timeSeries]);
 
   // Build and emit query when config changes
   useEffect(() => {
