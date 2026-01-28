@@ -22,3 +22,6 @@ export type { ReferenceLinesSectionProps } from './ReferenceLinesSection';
 
 export { TextFormattingSection } from './TextFormattingSection';
 export type { TextFormattingSectionProps } from './TextFormattingSection';
+
+export { PivotConfigSection } from './PivotConfigSection';
+export type { PivotConfigSectionProps } from './PivotConfigSection';

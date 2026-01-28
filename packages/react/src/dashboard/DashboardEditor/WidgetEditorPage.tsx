@@ -29,6 +29,7 @@ import { TrendConfigSection } from './configs/TrendConfigSection';
 import { HyperlinkSection } from './configs/HyperlinkSection';
 import { ReferenceLinesSection } from './configs/ReferenceLinesSection';
 import { TextFormattingSection } from './configs/TextFormattingSection';
+import { PivotConfigSection } from './configs/PivotConfigSection';
 import type { Widget, WidgetConfig, WidgetType, WidgetHyperlink } from '../types';
 import type {
   DatabaseSchema,
@@ -543,6 +544,13 @@ export function WidgetEditorPage({
               onChange={(e: ChangeEvent<HTMLInputElement>) =>
                 updateConfig('sortable', e.target.checked)
               }
+            />
+            <PivotConfigSection
+              config={config}
+              onChange={updateConfig}
+              query={query}
+              schema={schema}
+              defaultOpen={false}
             />
             <DateFormattingSection
               config={config}
