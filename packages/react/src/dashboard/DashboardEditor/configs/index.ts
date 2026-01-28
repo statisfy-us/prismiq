@@ -25,3 +25,6 @@ export type { TextFormattingSectionProps } from './TextFormattingSection';
 
 export { PivotConfigSection } from './PivotConfigSection';
 export type { PivotConfigSectionProps } from './PivotConfigSection';
+
+export { LayoutConstraintsSection } from './LayoutConstraintsSection';
+export type { LayoutConstraintsSectionProps } from './LayoutConstraintsSection';

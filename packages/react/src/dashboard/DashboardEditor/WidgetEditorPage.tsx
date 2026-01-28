@@ -30,7 +30,8 @@ import { HyperlinkSection } from './configs/HyperlinkSection';
 import { ReferenceLinesSection } from './configs/ReferenceLinesSection';
 import { TextFormattingSection } from './configs/TextFormattingSection';
 import { PivotConfigSection } from './configs/PivotConfigSection';
-import type { Widget, WidgetConfig, WidgetType, WidgetHyperlink } from '../types';
+import { LayoutConstraintsSection } from './configs/LayoutConstraintsSection';
+import type { Widget, WidgetConfig, WidgetType, WidgetHyperlink, WidgetPosition } from '../types';
 import type {
   DatabaseSchema,
   QueryDefinition,
@@ -130,6 +131,9 @@ export function WidgetEditorPage({
   );
   const [query, setQuery] = useState<QueryDefinition | null>(widget?.query ?? null);
   const [hyperlink, setHyperlink] = useState<WidgetHyperlink | undefined>(widget?.hyperlink);
+  const [position, setPosition] = useState<WidgetPosition>(
+    widget?.position ?? { x: 0, y: 0, w: 6, h: 4, minW: 2, minH: 2 }
+  );
 
   // Data source mode - default to guided for new widgets
   const [dataSourceMode, setDataSourceMode] = useState<DataSourceMode>(
@@ -219,11 +223,11 @@ export function WidgetEditorPage({
       title,
       config,
       query,
-      position: widget?.position ?? { x: 0, y: 0, w: 6, h: 4, minW: 2, minH: 2 },
+      position,
       hyperlink,
     };
     onSave(savedWidget);
-  }, [widget, type, title, config, query, hyperlink, onSave]);
+  }, [widget, type, title, config, query, position, hyperlink, onSave]);
 
   // Column select options for config
   const columnSelectOptions = useMemo(() => {
@@ -662,6 +666,13 @@ export function WidgetEditorPage({
             hyperlink={hyperlink}
             onChange={setHyperlink}
             defaultOpen={!!hyperlink}
+          />
+
+          {/* Layout Constraints */}
+          <LayoutConstraintsSection
+            position={position}
+            onChange={setPosition}
+            defaultOpen={false}
           />
         </div>
 
