@@ -4,7 +4,7 @@
  * Displays a list of dashboards pinned to a context.
  */
 
-import { useCallback, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useState, type CSSProperties, type ReactNode } from 'react';
 
 import { usePinnedDashboards, usePinMutations } from '../hooks';
 import type { Dashboard } from '../types';
@@ -15,8 +15,8 @@ import type { Dashboard } from '../types';
 
 /** Props for custom rendering of a list item. */
 export interface PinnedDashboardItemActions {
-  /** Unpin this dashboard from the context. */
-  unpin: () => void;
+  /** Unpin this dashboard from the context. Returns a promise. */
+  unpin: () => Promise<void>;
 }
 
 export interface PinnedDashboardListProps {
@@ -216,17 +216,39 @@ export function PinnedDashboardList({
 }: PinnedDashboardListProps): ReactNode {
   const { dashboards, isLoading, error, refetch } = usePinnedDashboards({ context });
   const { unpin, state: mutationState } = usePinMutations();
+  const [unpinError, setUnpinError] = useState<Error | null>(null);
 
   const handleUnpin = useCallback(
     (dashboardId: string) => {
       return async (event: React.MouseEvent) => {
         event.stopPropagation();
+        setUnpinError(null);
         try {
           await unpin(dashboardId, context);
           await refetch();
         } catch (err) {
-          // Log error for debugging - usePinMutations also stores it in state
+          const error = err instanceof Error ? err : new Error(String(err));
+          setUnpinError(error);
           console.error('Failed to unpin dashboard:', dashboardId, err);
+        }
+      };
+    },
+    [context, unpin, refetch]
+  );
+
+  // Create async unpin handler for renderItem actions
+  const createUnpinAction = useCallback(
+    (dashboardId: string): (() => Promise<void>) => {
+      return async () => {
+        setUnpinError(null);
+        try {
+          await unpin(dashboardId, context);
+          await refetch();
+        } catch (err) {
+          const error = err instanceof Error ? err : new Error(String(err));
+          setUnpinError(error);
+          console.error('Failed to unpin dashboard:', dashboardId, err);
+          throw error; // Re-throw so caller can handle if needed
         }
       };
     },
@@ -263,6 +285,28 @@ export function PinnedDashboardList({
     );
   }
 
+  // Show unpin error as a dismissible message
+  const errorBanner = unpinError ? (
+    <div style={{ ...errorStyles, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <span>Failed to unpin: {unpinError.message}</span>
+      <button
+        type="button"
+        onClick={() => setUnpinError(null)}
+        style={{
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          color: 'inherit',
+          fontSize: 'var(--prismiq-font-size-lg)',
+          lineHeight: 1,
+        }}
+        aria-label="Dismiss error"
+      >
+        ×
+      </button>
+    </div>
+  ) : null;
+
   if (!dashboards || dashboards.length === 0) {
     return (
       <div className={className} style={{ ...containerStyles, ...style }}>
@@ -280,11 +324,10 @@ export function PinnedDashboardList({
 
   return (
     <div className={className} style={{ ...containerStyles, ...style }}>
+      {errorBanner}
       {dashboards.map((dashboard) => {
         const actions: PinnedDashboardItemActions = {
-          unpin: () => {
-            void unpin(dashboard.id, context).then(() => refetch());
-          },
+          unpin: createUnpinAction(dashboard.id),
         };
 
         if (renderItem) {

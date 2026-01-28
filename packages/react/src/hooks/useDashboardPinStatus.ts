@@ -97,27 +97,37 @@ export function useDashboardPinStatus(
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  const fetchPinStatus = useCallback(async () => {
-    if (!enabled || !dashboardId) return;
+  const fetchPinStatus = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!enabled || !dashboardId) return;
 
-    setIsLoading(true);
-    setError(null);
+      setIsLoading(true);
+      setError(null);
 
-    try {
-      const allContexts = await client.getDashboardPinContexts(dashboardId);
-      // Filter to only requested contexts if specified
-      const filteredContexts = filterContexts
-        ? allContexts.filter((ctx) => filterContexts.includes(ctx))
-        : allContexts;
-      setPinnedContexts(filteredContexts);
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      setError(error);
-      setPinnedContexts(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [client, dashboardId, filterContexts, enabled]);
+      try {
+        const allContexts = await client.getDashboardPinContexts(dashboardId);
+        // Check if request was cancelled before updating state
+        if (signal?.aborted) return;
+        // Filter to only requested contexts if specified
+        const filteredContexts = filterContexts
+          ? allContexts.filter((ctx) => filterContexts.includes(ctx))
+          : allContexts;
+        setPinnedContexts(filteredContexts);
+      } catch (err) {
+        // Don't update state if request was cancelled
+        if (signal?.aborted) return;
+        const error = err instanceof Error ? err : new Error(String(err));
+        setError(error);
+        setPinnedContexts(null);
+      } finally {
+        // Don't update loading state if request was cancelled
+        if (!signal?.aborted) {
+          setIsLoading(false);
+        }
+      }
+    },
+    [client, dashboardId, filterContexts, enabled]
+  );
 
   const refetch = useCallback(async () => {
     await fetchPinStatus();
@@ -130,7 +140,9 @@ export function useDashboardPinStatus(
 
   useEffect(() => {
     if (enabled && dashboardId) {
-      void fetchPinStatus();
+      const controller = new AbortController();
+      void fetchPinStatus(controller.signal);
+      return () => controller.abort();
     }
   }, [enabled, dashboardId, fetchPinStatus]);
 

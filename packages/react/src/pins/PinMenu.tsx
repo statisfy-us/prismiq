@@ -16,6 +16,20 @@ import {
 import { useDashboardPinStatus, usePinMutations } from '../hooks';
 
 // ============================================================================
+// Error Banner Styles
+// ============================================================================
+
+const errorBannerStyles: CSSProperties = {
+  padding: 'var(--prismiq-spacing-sm)',
+  backgroundColor: 'var(--prismiq-color-error-light, #ffebee)',
+  color: 'var(--prismiq-color-error)',
+  borderRadius: 'var(--prismiq-radius-sm)',
+  fontFamily: 'var(--prismiq-font-sans)',
+  fontSize: 'var(--prismiq-font-size-xs)',
+  marginBottom: 'var(--prismiq-spacing-xs)',
+};
+
+// ============================================================================
 // Types
 // ============================================================================
 
@@ -192,6 +206,7 @@ export function PinMenu({
   style,
 }: PinMenuProps): ReactNode {
   const [isOpen, setIsOpen] = useState(false);
+  const [toggleError, setToggleError] = useState<Error | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const { isPinned, refetch, isLoading: statusLoading } = useDashboardPinStatus({
@@ -200,6 +215,13 @@ export function PinMenu({
   const { pin, unpin, state: mutationState } = usePinMutations();
 
   const isLoading = statusLoading || mutationState.isLoading;
+
+  // Clear error when menu closes
+  useEffect(() => {
+    if (!isOpen) {
+      setToggleError(null);
+    }
+  }, [isOpen]);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -233,6 +255,7 @@ export function PinMenu({
     return async () => {
       if (isLoading) return;
 
+      setToggleError(null);
       try {
         const pinned = isPinned(ctx);
         if (pinned) {
@@ -244,7 +267,8 @@ export function PinMenu({
         }
         await refetch();
       } catch (err) {
-        // Log error for debugging - usePinMutations also stores it in state
+        const error = err instanceof Error ? err : new Error(String(err));
+        setToggleError(error);
         console.error('Failed to toggle pin for context:', ctx, err);
       }
     };
@@ -273,6 +297,11 @@ export function PinMenu({
 
       {isOpen && (
         <div style={menuStyles} role="menu">
+          {toggleError && (
+            <div style={errorBannerStyles}>
+              Failed: {toggleError.message}
+            </div>
+          )}
           {contexts.map((ctx) => {
             const pinned = isPinned(ctx.id);
             return (

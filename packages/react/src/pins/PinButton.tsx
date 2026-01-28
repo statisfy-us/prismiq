@@ -4,7 +4,7 @@
  * A button to pin/unpin a dashboard to a specific context.
  */
 
-import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useState, type CSSProperties, type ReactNode } from 'react';
 
 import { useDashboardPinStatus, usePinMutations } from '../hooks';
 
@@ -147,47 +147,52 @@ export function PinButton({
     dashboardId,
   });
   const { pin, unpin, state: mutationState } = usePinMutations();
+  const [actionError, setActionError] = useState<Error | null>(null);
 
-  const [isPinned, setIsPinned] = useState(false);
-
-  // Sync local state with fetched status
-  useEffect(() => {
-    setIsPinned(checkIsPinned(context));
-  }, [checkIsPinned, context]);
-
+  // Use fetched state directly to avoid race conditions with optimistic updates
+  const isPinned = checkIsPinned(context);
   const isLoading = statusLoading || mutationState.isLoading;
 
   const handleClick = useCallback(async () => {
     if (isLoading) return;
 
+    setActionError(null);
     try {
       if (isPinned) {
         await unpin(dashboardId, context);
-        setIsPinned(false);
         onPinChange?.(false);
       } else {
         await pin(dashboardId, context);
-        setIsPinned(true);
         onPinChange?.(true);
       }
       // Refresh status after mutation
       await refetch();
     } catch (err) {
-      // Log error for debugging - usePinMutations also stores it in state
+      const error = err instanceof Error ? err : new Error(String(err));
+      setActionError(error);
       console.error('Failed to toggle pin:', err);
     }
   }, [dashboardId, context, isPinned, isLoading, pin, unpin, onPinChange, refetch]);
+
+  const errorStyles: CSSProperties = {
+    borderColor: 'var(--prismiq-color-error)',
+    color: 'var(--prismiq-color-error)',
+  };
 
   const combinedStyles: CSSProperties = {
     ...baseStyles,
     ...sizeStyles[size],
     ...(isPinned ? pinnedStyles : {}),
     ...(isLoading ? disabledStyles : {}),
+    ...(actionError ? errorStyles : {}),
     ...style,
   };
 
   const iconSize = iconSizes[size];
   const displayLabel = isPinned ? unpinLabel : label;
+  const errorMessage = actionError ? `Error: ${actionError.message}` : undefined;
+  const accessibleLabel = errorMessage ?? (iconOnly ? displayLabel : undefined);
+  const tooltipTitle = errorMessage ?? (iconOnly ? displayLabel : undefined);
 
   return (
     <>
@@ -207,8 +212,9 @@ export function PinButton({
         className={className}
         style={combinedStyles}
         aria-pressed={isPinned}
-        aria-label={iconOnly ? displayLabel : undefined}
-        title={iconOnly ? displayLabel : undefined}
+        aria-label={accessibleLabel}
+        aria-invalid={actionError ? true : undefined}
+        title={tooltipTitle}
       >
         {isLoading ? (
           <span

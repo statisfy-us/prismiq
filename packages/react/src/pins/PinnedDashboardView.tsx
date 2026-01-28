@@ -4,7 +4,7 @@
  * Full view with pinned dashboard list and selected dashboard display.
  */
 
-import { type CSSProperties, type ReactNode } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 
 import { Dashboard } from '../dashboard';
 import { usePinMutations } from '../hooks';
@@ -147,6 +147,17 @@ const listContainerStyles: CSSProperties = {
   padding: 'var(--prismiq-spacing-md)',
 };
 
+const errorBannerStyles: CSSProperties = {
+  padding: 'var(--prismiq-spacing-sm) var(--prismiq-spacing-md)',
+  backgroundColor: 'var(--prismiq-color-error-light, #ffebee)',
+  color: 'var(--prismiq-color-error)',
+  fontFamily: 'var(--prismiq-font-sans)',
+  fontSize: 'var(--prismiq-font-size-sm)',
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+};
+
 // ============================================================================
 // Component
 // ============================================================================
@@ -187,14 +198,17 @@ export function PinnedDashboardView({
   style,
 }: PinnedDashboardViewProps): ReactNode {
   const { unpin, state: mutationState } = usePinMutations();
+  const [unpinError, setUnpinError] = useState<Error | null>(null);
 
   const handleUnpin = async () => {
     if (!selectedDashboard) return;
+    setUnpinError(null);
     try {
       await unpin(selectedDashboard.id, context);
       onBack();
     } catch (err) {
-      // Log error for debugging - usePinMutations also stores it in state
+      const error = err instanceof Error ? err : new Error(String(err));
+      setUnpinError(error);
       console.error('Failed to unpin dashboard:', selectedDashboard.id, err);
     }
   };
@@ -217,6 +231,26 @@ export function PinnedDashboardView({
   // Show selected dashboard with header
   return (
     <div className={className} style={{ ...containerStyles, ...style }}>
+      {unpinError && (
+        <div style={errorBannerStyles}>
+          <span>Failed to unpin: {unpinError.message}</span>
+          <button
+            type="button"
+            onClick={() => setUnpinError(null)}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'inherit',
+              fontSize: 'var(--prismiq-font-size-lg)',
+              lineHeight: 1,
+            }}
+            aria-label="Dismiss error"
+          >
+            ×
+          </button>
+        </div>
+      )}
       <div style={headerStyles}>
         <button
           type="button"
