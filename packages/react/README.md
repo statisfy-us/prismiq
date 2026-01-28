@@ -49,7 +49,35 @@ function Dashboard() {
 - **React hooks** - `useSchema`, `useQuery` for data fetching
 - **Provider pattern** - Configure once, use everywhere
 - **TypeScript** - Full type safety
-- **Apache ECharts** - High-performance charting (coming soon)
+- **Apache ECharts** - High-performance charting
+- **Dashboard Pinning** - Let users save dashboards to contexts for quick access
+
+## Dashboard Pinning
+
+Pin dashboards to different areas of your application:
+
+```tsx
+import { PinButton, PinnedDashboardList, PinnedDashboardView } from '@prismiq/react';
+
+// Simple pin button
+<PinButton dashboardId={dashboard.id} context="favorites" />
+
+// List pinned dashboards
+<PinnedDashboardList
+  context="favorites"
+  onSelect={(dashboard) => navigate(`/dashboard/${dashboard.id}`)}
+/>
+
+// Complete view with back navigation
+<PinnedDashboardView
+  context="accounts"
+  selectedDashboard={selected}
+  onSelect={setSelected}
+  onBack={() => setSelected(null)}
+/>
+```
+
+See [Dashboard Pinning Guide](../../docs/dashboard-pinning.md) for full documentation.
 
 ## Documentation
 
