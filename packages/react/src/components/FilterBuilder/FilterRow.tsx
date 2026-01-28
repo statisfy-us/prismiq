@@ -85,8 +85,11 @@ const allOperators: { value: FilterOperator; label: string }[] = [
   { value: 'lte', label: '<=' },
   { value: 'like', label: 'LIKE' },
   { value: 'ilike', label: 'ILIKE' },
+  { value: 'not_like', label: 'NOT LIKE' },
+  { value: 'not_ilike', label: 'NOT ILIKE' },
   { value: 'in_', label: 'IN' },
   { value: 'not_in', label: 'NOT IN' },
+  { value: 'in_or_null', label: 'IN OR NULL' },
   { value: 'between', label: 'BETWEEN' },
   { value: 'is_null', label: 'IS NULL' },
   { value: 'is_not_null', label: 'IS NOT NULL' },
@@ -110,14 +113,14 @@ function getOperatorsForType(dataType?: string): SelectOption<FilterOperator>[] 
     type.includes('real')
   ) {
     return allOperators.filter((op) =>
-      ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in_', 'not_in', 'between', 'is_null', 'is_not_null'].includes(op.value)
+      ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in_', 'not_in', 'in_or_null', 'between', 'is_null', 'is_not_null'].includes(op.value)
     );
   }
 
   // Date/time types
   if (type.includes('date') || type.includes('time') || type.includes('timestamp')) {
     return allOperators.filter((op) =>
-      ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'between', 'is_null', 'is_not_null'].includes(op.value)
+      ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in_', 'not_in', 'in_or_null', 'between', 'is_null', 'is_not_null'].includes(op.value)
     );
   }
 
@@ -128,7 +131,7 @@ function getOperatorsForType(dataType?: string): SelectOption<FilterOperator>[] 
     );
   }
 
-  // String types - all operators
+  // String types - all operators (including not_like, not_ilike)
   return allOperators;
 }
 
