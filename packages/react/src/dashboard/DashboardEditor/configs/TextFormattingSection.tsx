@@ -12,6 +12,7 @@ import { useState } from 'react';
 import { useTheme } from '../../../theme';
 import { Select } from '../../../components/ui/Select';
 import { Checkbox } from '../../../components/ui/Checkbox';
+import { parseMarkdownSafe } from '../../../utils';
 import type { WidgetConfig } from '../../types';
 
 // ============================================================================
@@ -41,25 +42,6 @@ const FONT_SIZE_OPTIONS = [
   { value: 'Large', label: 'Large' },
   { value: 'XLarge', label: 'Extra Large' },
 ];
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-/**
- * Simple markdown parser for preview.
- * Supports headings, bold, italic, code, and line breaks.
- */
-function parseMarkdown(text: string): string {
-  return text
-    .replace(/^### (.+)$/gm, '<h3 style="margin: 0.5em 0;">$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2 style="margin: 0.5em 0;">$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1 style="margin: 0.5em 0;">$1</h1>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`(.+?)`/g, '<code style="background: rgba(0,0,0,0.05); padding: 0.1em 0.3em; border-radius: 3px;">$1</code>')
-    .replace(/\n/g, '<br/>');
-}
 
 // ============================================================================
 // Component
@@ -160,7 +142,7 @@ export function TextFormattingSection({
             </div>
             <div
               dangerouslySetInnerHTML={{
-                __html: parseMarkdown(config.content ?? ''),
+                __html: parseMarkdownSafe(config.content ?? ''),
               }}
             />
           </div>

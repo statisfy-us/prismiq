@@ -4,6 +4,7 @@
  * Allows users to add threshold/goal lines to bar, line, and area charts.
  */
 
+import { useCallback, useRef } from 'react';
 import { useTheme } from '../../../theme';
 import { Input } from '../../../components/ui/Input';
 import { Select } from '../../../components/ui/Select';
@@ -52,6 +53,20 @@ export function ReferenceLinesSection({
   defaultOpen = false,
 }: ReferenceLinesSectionProps): JSX.Element {
   const { theme } = useTheme();
+
+  // Counter for generating unique IDs
+  const idCounter = useRef(0);
+  const lineIdsRef = useRef<Map<ReferenceLine, string>>(new Map());
+
+  // Get or create a stable ID for a line
+  const getLineId = useCallback((line: ReferenceLine): string => {
+    let id = lineIdsRef.current.get(line);
+    if (!id) {
+      id = `line-${++idCounter.current}`;
+      lineIdsRef.current.set(line, id);
+    }
+    return id;
+  }, []);
 
   const lineRowStyle: React.CSSProperties = {
     display: 'flex',
@@ -107,7 +122,7 @@ export function ReferenceLinesSection({
       defaultOpen={defaultOpen || lines.length > 0}
     >
       {lines.map((line, index) => (
-        <div key={index} style={lineRowStyle}>
+        <div key={getLineId(line)} style={lineRowStyle}>
           <Input
             type="number"
             value={String(line.value)}

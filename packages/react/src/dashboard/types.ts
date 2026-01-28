@@ -128,7 +128,7 @@ export interface WidgetConfig {
   value_column?: string;
 
   // Date formatting (used by both tables and charts)
-  /** Date format strings for datetime columns (column name -> .NET format string). Used by tables and chart axes. */
+  /** Date format strings for datetime columns (column name -> date-fns format string). Used by tables and chart axes. */
   dateFormats?: Record<string, string>;
 
   // Text options

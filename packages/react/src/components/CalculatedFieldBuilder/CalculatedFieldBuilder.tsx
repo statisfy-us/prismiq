@@ -8,7 +8,7 @@
  * - Removing fields
  */
 
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { useTheme } from '../../theme';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
@@ -61,7 +61,20 @@ export function CalculatedFieldBuilder({
 }: CalculatedFieldBuilderProps): JSX.Element {
   const { theme } = useTheme();
 
-  // Add a new calculated field
+  // Counter for generating unique IDs
+  const idCounter = useRef(0);
+  const fieldIdsRef = useRef<Map<CalculatedField, string>>(new Map());
+
+  // Get or create a stable ID for a field
+  const getFieldId = useCallback((field: CalculatedField): string => {
+    let id = fieldIdsRef.current.get(field);
+    if (!id) {
+      id = `field-${++idCounter.current}`;
+      fieldIdsRef.current.set(field, id);
+    }
+    return id;
+  }, []);
+
   const addField = useCallback(() => {
     if (fields.length >= maxFields) return;
 
@@ -155,7 +168,7 @@ export function CalculatedFieldBuilder({
         </div>
       ) : (
         fields.map((field, index) => (
-          <div key={index} style={fieldCardStyle}>
+          <div key={getFieldId(field)} style={fieldCardStyle}>
             <div style={fieldHeaderStyle}>
               <span style={fieldIndexStyle}>Calculated Field #{index + 1}</span>
               <Button variant="ghost" size="sm" onClick={() => removeField(index)}>

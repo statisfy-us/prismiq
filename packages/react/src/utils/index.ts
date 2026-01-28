@@ -36,3 +36,6 @@ export type { PivotConfig } from './pivot';
 // Column reference utilities
 export { parseColumnRef } from './columnRef';
 export type { ColumnReference } from './columnRef';
+
+// Safe markdown parsing
+export { parseMarkdownSafe } from './safeMarkdown';

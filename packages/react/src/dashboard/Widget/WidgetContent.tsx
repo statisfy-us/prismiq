@@ -14,7 +14,7 @@ import {
 } from '../../charts';
 import { ResultsTable } from '../../components';
 import { useCrossFilterOptional } from '../../context';
-import { createDateFormatters, pivotQueryResult } from '../../utils';
+import { createDateFormatters, pivotQueryResult, parseMarkdownSafe } from '../../utils';
 import type { Widget, WidgetConfig } from '../types';
 import type { QueryResult } from '../../types';
 import type { ChartDataPoint, ChartClickParams, CrossFilterConfig } from '../../charts/types';
@@ -33,24 +33,6 @@ export interface WidgetContentProps {
   error?: Error | null;
   /** Whether widget is being force-refreshed (shows spinner overlay). */
   isRefreshing?: boolean;
-}
-
-/**
- * Simple markdown parser for text widgets.
- * Supports headings, bold, italic, code, and line breaks.
- */
-function parseMarkdown(text: string, theme: ReturnType<typeof useTheme>['theme']): string {
-  return text
-    .replace(/^### (.+)$/gm, '<h3 style="margin: 0.5em 0; font-size: 1.1em;">$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2 style="margin: 0.5em 0; font-size: 1.25em;">$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1 style="margin: 0.5em 0; font-size: 1.5em;">$1</h1>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(
-      /`(.+?)`/g,
-      `<code style="background: ${theme.colors.surface}; padding: 0.1em 0.3em; border-radius: 3px; font-family: ${theme.fonts.mono};">$1</code>`
-    )
-    .replace(/\n/g, '<br/>');
 }
 
 /**
@@ -95,10 +77,11 @@ function TextContent({ config }: { config: WidgetConfig }): JSX.Element {
 
   // Render markdown if enabled
   if (config.markdown) {
+    const codeStyle = `background: ${theme.colors.surface}; padding: 0.1em 0.3em; border-radius: 3px; font-family: ${theme.fonts.mono};`;
     return (
       <div
         style={contentStyle}
-        dangerouslySetInnerHTML={{ __html: parseMarkdown(config.content, theme) }}
+        dangerouslySetInnerHTML={{ __html: parseMarkdownSafe(config.content, codeStyle) }}
       />
     );
   }
