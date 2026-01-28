@@ -17,6 +17,7 @@ import { FilterBuilder } from '../../../components/FilterBuilder';
 import { TableSelector } from '../../../components/TableSelector';
 import { JoinBuilder } from '../../../components/JoinBuilder';
 import { TimeSeriesConfig } from '../../../components/TimeSeriesConfig';
+import { CalculatedFieldBuilder } from '../../../components/CalculatedFieldBuilder';
 import type {
   DatabaseSchema,
   QueryDefinition,
@@ -27,6 +28,7 @@ import type {
   ColumnSchema,
   DateTruncInterval,
   TimeSeriesConfig as TimeSeriesConfigType,
+  CalculatedField,
 } from '../../../types';
 
 export interface ChartConfigProps {
@@ -142,6 +144,9 @@ export function ChartConfig({
   );
   const [filters, setFilters] = useState<FilterDefinition[]>(query?.filters ?? []);
   const [timeSeries, setTimeSeries] = useState<TimeSeriesConfigType | undefined>(query?.time_series);
+  const [calculatedFields, setCalculatedFields] = useState<CalculatedField[]>(
+    query?.calculated_fields ?? []
+  );
 
   // Derived state
   const primaryTable = tables[0];
@@ -273,10 +278,11 @@ export function ChartConfig({
       filters: filters.length > 0 ? filters : undefined,
       order_by: [{ table_id: groupByTableId, column: groupByColumn, direction: 'ASC' }],
       time_series: timeSeries,
+      calculated_fields: calculatedFields.length > 0 ? calculatedFields : undefined,
     };
 
     onChange(queryDef);
-  }, [tables, joins, groupByColumn, groupByTableId, dateTrunc, measures, filters, timeSeries, onChange]);
+  }, [tables, joins, groupByColumn, groupByTableId, dateTrunc, measures, filters, timeSeries, calculatedFields, onChange]);
 
   // Handle primary table change
   const handleTableChange = useCallback((value: string) => {
@@ -517,6 +523,22 @@ export function ChartConfig({
             schema={schema}
           />
         </div>
+      )}
+
+      {/* Calculated Fields */}
+      {selectedTable && (
+        <CollapsibleSection
+          title="Calculated Fields"
+          defaultOpen={calculatedFields.length > 0}
+        >
+          <CalculatedFieldBuilder
+            fields={calculatedFields}
+            onChange={setCalculatedFields}
+            tables={tables}
+            schema={schema}
+            maxFields={5}
+          />
+        </CollapsibleSection>
       )}
     </div>
   );

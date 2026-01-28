@@ -224,3 +224,14 @@ export type { TableSelectorProps } from './TableSelector';
 export { TimeSeriesConfig } from './TimeSeriesConfig';
 
 export type { TimeSeriesConfigProps } from './TimeSeriesConfig';
+
+// ============================================================================
+// Calculated Field Builder
+// ============================================================================
+
+export { CalculatedFieldBuilder, ExpressionEditor } from './CalculatedFieldBuilder';
+
+export type {
+  CalculatedFieldBuilderProps,
+  ExpressionEditorProps,
+} from './CalculatedFieldBuilder';
