@@ -24,6 +24,7 @@ import { WidgetPreview } from './WidgetPreview';
 import { GuidedDataConfig } from './GuidedDataConfig';
 import { ValueFormattingSection } from './configs/ValueFormattingSection';
 import { DisplayConfigSection } from './configs/DisplayConfigSection';
+import { DateFormattingSection } from './configs/DateFormattingSection';
 import type { Widget, WidgetConfig, WidgetType } from '../types';
 import type {
   DatabaseSchema,
@@ -415,6 +416,13 @@ export function WidgetEditorPage({
               showCompact={true}
               defaultOpen={false}
             />
+            <DateFormattingSection
+              config={config}
+              onChange={updateConfig}
+              query={query}
+              schema={schema}
+              defaultOpen={false}
+            />
           </>
         );
 
@@ -441,6 +449,13 @@ export function WidgetEditorPage({
               onChange={updateConfig}
               showCurrency={true}
               showCompact={true}
+              defaultOpen={false}
+            />
+            <DateFormattingSection
+              config={config}
+              onChange={updateConfig}
+              query={query}
+              schema={schema}
               defaultOpen={false}
             />
           </>
@@ -478,6 +493,13 @@ export function WidgetEditorPage({
               onChange={(e: ChangeEvent<HTMLInputElement>) =>
                 updateConfig('sortable', e.target.checked)
               }
+            />
+            <DateFormattingSection
+              config={config}
+              onChange={updateConfig}
+              query={query}
+              schema={schema}
+              defaultOpen={false}
             />
           </>
         );
