@@ -28,3 +28,6 @@ export type { PivotConfigSectionProps } from './PivotConfigSection';
 
 export { LayoutConstraintsSection } from './LayoutConstraintsSection';
 export type { LayoutConstraintsSectionProps } from './LayoutConstraintsSection';
+
+export { CrossFilterSection } from './CrossFilterSection';
+export type { CrossFilterSectionProps } from './CrossFilterSection';

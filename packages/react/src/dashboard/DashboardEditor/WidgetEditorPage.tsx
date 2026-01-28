@@ -31,6 +31,7 @@ import { ReferenceLinesSection } from './configs/ReferenceLinesSection';
 import { TextFormattingSection } from './configs/TextFormattingSection';
 import { PivotConfigSection } from './configs/PivotConfigSection';
 import { LayoutConstraintsSection } from './configs/LayoutConstraintsSection';
+import { CrossFilterSection } from './configs/CrossFilterSection';
 import type { Widget, WidgetConfig, WidgetType, WidgetHyperlink, WidgetPosition } from '../types';
 import type {
   DatabaseSchema,
@@ -431,6 +432,12 @@ export function WidgetEditorPage({
               onChange={(lines) => updateConfig('referenceLines', lines.length > 0 ? lines : undefined)}
               defaultOpen={false}
             />
+            <CrossFilterSection
+              config={config}
+              onChange={updateConfig}
+              query={query}
+              defaultOpen={false}
+            />
             <DateFormattingSection
               config={config}
               onChange={updateConfig}
@@ -471,6 +478,12 @@ export function WidgetEditorPage({
               onChange={(lines) => updateConfig('referenceLines', lines.length > 0 ? lines : undefined)}
               defaultOpen={false}
             />
+            <CrossFilterSection
+              config={config}
+              onChange={updateConfig}
+              query={query}
+              defaultOpen={false}
+            />
             <DateFormattingSection
               config={config}
               onChange={updateConfig}
@@ -483,12 +496,20 @@ export function WidgetEditorPage({
 
       case 'pie_chart':
         return (
-          <DisplayConfigSection
-            widgetType={type}
-            config={config}
-            onChange={updateConfig}
-            defaultOpen={true}
-          />
+          <>
+            <DisplayConfigSection
+              widgetType={type}
+              config={config}
+              onChange={updateConfig}
+              defaultOpen={true}
+            />
+            <CrossFilterSection
+              config={config}
+              onChange={updateConfig}
+              query={query}
+              defaultOpen={false}
+            />
+          </>
         );
 
       case 'scatter_chart':
