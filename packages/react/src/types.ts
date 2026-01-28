@@ -113,6 +113,18 @@ export type AggregationType =
   | 'max';
 
 /**
+ * Date truncation intervals for date/timestamp columns.
+ */
+export type DateTruncInterval =
+  | 'year'
+  | 'quarter'
+  | 'month'
+  | 'week'
+  | 'day'
+  | 'hour'
+  | 'minute';
+
+/**
  * A column to select in a query.
  */
 export interface ColumnSelection {
@@ -124,6 +136,8 @@ export interface ColumnSelection {
   aggregation: AggregationType;
   /** Optional alias for the result column. */
   alias?: string;
+  /** Date truncation unit for date/timestamp columns. */
+  date_trunc?: DateTruncInterval;
 }
 
 /**

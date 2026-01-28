@@ -19,6 +19,7 @@ import type {
   AggregationType,
   FilterDefinition,
   ColumnSchema,
+  DateTruncInterval,
 } from '../../../types';
 
 export interface ChartConfigProps {
@@ -81,6 +82,28 @@ function isCategoricalColumn(col: ColumnSchema): boolean {
 }
 
 /**
+ * Check if a column is a date/timestamp type.
+ */
+function isDateColumn(col: ColumnSchema): boolean {
+  const type = col.data_type.toLowerCase();
+  return type.includes('date') || type.includes('time') || type.includes('timestamp');
+}
+
+/**
+ * Date truncation options.
+ */
+const DATE_TRUNC_OPTIONS: { value: DateTruncInterval | ''; label: string }[] = [
+  { value: '', label: 'No truncation' },
+  { value: 'year', label: 'Year' },
+  { value: 'quarter', label: 'Quarter' },
+  { value: 'month', label: 'Month' },
+  { value: 'week', label: 'Week' },
+  { value: 'day', label: 'Day' },
+  { value: 'hour', label: 'Hour' },
+  { value: 'minute', label: 'Minute' },
+];
+
+/**
  * Guided chart configuration component.
  */
 export function ChartConfig({
@@ -92,10 +115,9 @@ export function ChartConfig({
 
   // Extract state from existing query
   const initialTable = query?.tables[0]?.name ?? '';
-  const initialGroupBy =
-    query?.columns.find((c) => c.aggregation === 'none')?.column ??
-    query?.group_by?.[0]?.column ??
-    '';
+  const groupByCol = query?.columns.find((c) => c.aggregation === 'none');
+  const initialGroupBy = groupByCol?.column ?? query?.group_by?.[0]?.column ?? '';
+  const initialDateTrunc = groupByCol?.date_trunc ?? '';
   const initialMeasures: MeasureConfig[] =
     query?.columns
       .filter((c) => c.aggregation !== 'none')
@@ -103,6 +125,7 @@ export function ChartConfig({
 
   const [selectedTable, setSelectedTable] = useState(initialTable);
   const [groupByColumn, setGroupByColumn] = useState(initialGroupBy);
+  const [dateTrunc, setDateTrunc] = useState<DateTruncInterval | ''>(initialDateTrunc);
   const [measures, setMeasures] = useState<MeasureConfig[]>(
     initialMeasures.length > 0 ? initialMeasures : [{ column: '', aggregation: 'sum' }]
   );
@@ -147,6 +170,14 @@ export function ChartConfig({
     }));
   }, [currentTable]);
 
+  // Check if selected group by column is a date type
+  const groupByColumnSchema = useMemo(() => {
+    if (!currentTable || !groupByColumn) return null;
+    return currentTable.columns.find((c) => c.name === groupByColumn) ?? null;
+  }, [currentTable, groupByColumn]);
+
+  const isGroupByDate = groupByColumnSchema ? isDateColumn(groupByColumnSchema) : false;
+
   // Build and emit query when config changes
   useEffect(() => {
     if (!selectedTable || !groupByColumn) return;
@@ -160,11 +191,12 @@ export function ChartConfig({
 
     // Build columns: group by column + measure columns
     const columns = [
-      // Group by column (no aggregation)
+      // Group by column (no aggregation, with optional date truncation)
       {
         table_id: tableId,
         column: groupByColumn,
         aggregation: 'none' as AggregationType,
+        date_trunc: dateTrunc || undefined,
       },
       // Measure columns (with aggregation)
       ...validMeasures.map((m, i) => ({
@@ -187,14 +219,21 @@ export function ChartConfig({
     };
 
     onChange(queryDef);
-  }, [selectedTable, groupByColumn, measures, filters, onChange]);
+  }, [selectedTable, groupByColumn, dateTrunc, measures, filters, onChange]);
 
   // Handle table change
   const handleTableChange = useCallback((value: string) => {
     setSelectedTable(value);
     setGroupByColumn('');
+    setDateTrunc('');
     setMeasures([{ column: '', aggregation: 'sum' }]);
     setFilters([]);
+  }, []);
+
+  // Handle group by column change
+  const handleGroupByChange = useCallback((value: string) => {
+    setGroupByColumn(value);
+    setDateTrunc(''); // Reset date truncation when column changes
   }, []);
 
   // Handle measure change
@@ -261,13 +300,26 @@ export function ChartConfig({
           {groupByOptions.length > 0 ? (
             <Select
               value={groupByColumn}
-              onChange={setGroupByColumn}
+              onChange={handleGroupByChange}
               options={[{ value: '', label: 'Select a column...' }, ...groupByOptions]}
             />
           ) : (
             <span style={helpTextStyle}>No categorical columns available</span>
           )}
           <span style={helpTextStyle}>Categories to group data by</span>
+        </div>
+      )}
+
+      {/* Date Truncation (for date columns) */}
+      {selectedTable && groupByColumn && isGroupByDate && (
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Date Granularity</label>
+          <Select
+            value={dateTrunc}
+            onChange={(value) => setDateTrunc(value as DateTruncInterval | '')}
+            options={DATE_TRUNC_OPTIONS}
+          />
+          <span style={helpTextStyle}>Truncate dates to this interval</span>
         </div>
       )}
 

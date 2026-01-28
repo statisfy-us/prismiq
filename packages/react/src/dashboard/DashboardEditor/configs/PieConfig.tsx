@@ -17,6 +17,7 @@ import type {
   AggregationType,
   FilterDefinition,
   ColumnSchema,
+  DateTruncInterval,
 } from '../../../types';
 
 export interface PieConfigProps {
@@ -68,6 +69,26 @@ function isCategoricalColumn(col: ColumnSchema): boolean {
 }
 
 /**
+ * Check if a column is a date/timestamp type.
+ */
+function isDateColumn(col: ColumnSchema): boolean {
+  const type = col.data_type.toLowerCase();
+  return type.includes('date') || type.includes('time') || type.includes('timestamp');
+}
+
+/**
+ * Date truncation options.
+ */
+const DATE_TRUNC_OPTIONS: { value: DateTruncInterval | ''; label: string }[] = [
+  { value: '', label: 'No truncation' },
+  { value: 'year', label: 'Year' },
+  { value: 'quarter', label: 'Quarter' },
+  { value: 'month', label: 'Month' },
+  { value: 'week', label: 'Week' },
+  { value: 'day', label: 'Day' },
+];
+
+/**
  * Guided pie chart configuration component.
  */
 export function PieConfig({
@@ -79,13 +100,16 @@ export function PieConfig({
 
   // Extract state from existing query
   const initialTable = query?.tables[0]?.name ?? '';
-  const initialLabel = query?.columns.find((c) => c.aggregation === 'none')?.column ?? '';
+  const labelCol = query?.columns.find((c) => c.aggregation === 'none');
+  const initialLabel = labelCol?.column ?? '';
+  const initialDateTrunc = labelCol?.date_trunc ?? '';
   const measureCol = query?.columns.find((c) => c.aggregation !== 'none');
   const initialValueColumn = measureCol?.column ?? '';
   const initialAggregation = measureCol?.aggregation ?? 'sum';
 
   const [selectedTable, setSelectedTable] = useState(initialTable);
   const [labelColumn, setLabelColumn] = useState(initialLabel);
+  const [dateTrunc, setDateTrunc] = useState<DateTruncInterval | ''>(initialDateTrunc);
   const [valueColumn, setValueColumn] = useState(initialValueColumn);
   const [aggregation, setAggregation] = useState<AggregationType>(initialAggregation);
   const [filters, setFilters] = useState<FilterDefinition[]>(query?.filters ?? []);
@@ -103,15 +127,23 @@ export function PieConfig({
     return schema.tables.find((t) => t.name === selectedTable);
   }, [schema.tables, selectedTable]);
 
-  // Get categorical columns for labels
+  // Get categorical columns for labels (including date columns)
   const labelOptions = useMemo(() => {
     if (!currentTable) return [];
-    const cols = currentTable.columns.filter(isCategoricalColumn);
+    const cols = currentTable.columns.filter((c) => isCategoricalColumn(c) || isDateColumn(c));
     return cols.map((c) => ({
       value: c.name,
       label: `${c.name} (${c.data_type})`,
     }));
   }, [currentTable]);
+
+  // Check if selected label column is a date type
+  const labelColumnSchema = useMemo(() => {
+    if (!currentTable || !labelColumn) return null;
+    return currentTable.columns.find((c) => c.name === labelColumn) ?? null;
+  }, [currentTable, labelColumn]);
+
+  const isLabelDate = labelColumnSchema ? isDateColumn(labelColumnSchema) : false;
 
   // Get numeric columns for values
   const valueColumnOptions = useMemo(() => {
@@ -136,11 +168,12 @@ export function PieConfig({
 
     // Build columns: label column + value column
     const columns = [
-      // Label column (no aggregation)
+      // Label column (no aggregation, with optional date truncation)
       {
         table_id: tableId,
         column: labelColumn,
         aggregation: 'none' as AggregationType,
+        date_trunc: dateTrunc || undefined,
       },
       // Value column (with aggregation)
       {
@@ -163,14 +196,21 @@ export function PieConfig({
     };
 
     onChange(queryDef);
-  }, [selectedTable, labelColumn, valueColumn, aggregation, filters, onChange]);
+  }, [selectedTable, labelColumn, dateTrunc, valueColumn, aggregation, filters, onChange]);
 
   // Handle table change
   const handleTableChange = useCallback((value: string) => {
     setSelectedTable(value);
     setLabelColumn('');
+    setDateTrunc('');
     setValueColumn('');
     setFilters([]);
+  }, []);
+
+  // Handle label column change
+  const handleLabelChange = useCallback((value: string) => {
+    setLabelColumn(value);
+    setDateTrunc(''); // Reset date truncation when column changes
   }, []);
 
   // Styles
@@ -222,13 +262,26 @@ export function PieConfig({
           {labelOptions.length > 0 ? (
             <Select
               value={labelColumn}
-              onChange={setLabelColumn}
+              onChange={handleLabelChange}
               options={[{ value: '', label: 'Select a column...' }, ...labelOptions]}
             />
           ) : (
             <span style={helpTextStyle}>No categorical columns available</span>
           )}
           <span style={helpTextStyle}>Each unique value becomes a slice</span>
+        </div>
+      )}
+
+      {/* Date Truncation (for date labels) */}
+      {selectedTable && labelColumn && isLabelDate && (
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Date Granularity</label>
+          <Select
+            value={dateTrunc}
+            onChange={(value) => setDateTrunc(value as DateTruncInterval | '')}
+            options={DATE_TRUNC_OPTIONS}
+          />
+          <span style={helpTextStyle}>Truncate dates to this interval</span>
         </div>
       )}
 

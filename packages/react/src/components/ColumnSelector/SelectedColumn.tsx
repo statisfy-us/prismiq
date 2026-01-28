@@ -4,7 +4,7 @@
 
 import { useCallback, useState, type DragEvent } from 'react';
 
-import type { AggregationType, ColumnSelection, QueryTable, TableSchema } from '../../types';
+import type { AggregationType, ColumnSelection, DateTruncInterval, QueryTable, TableSchema } from '../../types';
 import { Badge, Icon, Input, Select, type SelectOption } from '../ui';
 
 // ============================================================================
@@ -95,6 +95,11 @@ const aliasStyles: React.CSSProperties = {
   flexShrink: 0,
 };
 
+const dateTruncStyles: React.CSSProperties = {
+  width: '100px',
+  flexShrink: 0,
+};
+
 const removeButtonStyles: React.CSSProperties = {
   padding: 'var(--prismiq-spacing-xs)',
   backgroundColor: 'transparent',
@@ -119,6 +124,26 @@ const aggregationOptions: SelectOption<AggregationType>[] = [
   { value: 'min', label: 'Min' },
   { value: 'max', label: 'Max' },
 ];
+
+const dateTruncOptions: SelectOption<DateTruncInterval | ''>[] = [
+  { value: '', label: 'No truncate' },
+  { value: 'year', label: 'Year' },
+  { value: 'quarter', label: 'Quarter' },
+  { value: 'month', label: 'Month' },
+  { value: 'week', label: 'Week' },
+  { value: 'day', label: 'Day' },
+  { value: 'hour', label: 'Hour' },
+  { value: 'minute', label: 'Minute' },
+];
+
+/**
+ * Check if a column is a date/timestamp type.
+ */
+function isDateColumn(dataType: string | undefined): boolean {
+  if (!dataType) return false;
+  const type = dataType.toLowerCase();
+  return type.includes('date') || type.includes('time') || type.includes('timestamp');
+}
 
 /**
  * Get aggregation options based on column data type.
@@ -234,6 +259,17 @@ export function SelectedColumn({
     [column, onUpdate]
   );
 
+  const handleDateTruncChange = useCallback(
+    (value: DateTruncInterval | '') => {
+      const date_trunc = value || undefined;
+      onUpdate({ ...column, date_trunc });
+    },
+    [column, onUpdate]
+  );
+
+  // Check if this column is a date type
+  const isDate = isDateColumn(columnSchema?.data_type);
+
   return (
     <div
       className={className}
@@ -272,6 +308,17 @@ export function SelectedColumn({
           size="sm"
         />
       </div>
+
+      {isDate && (
+        <div style={dateTruncStyles}>
+          <Select
+            value={column.date_trunc ?? ''}
+            onChange={handleDateTruncChange}
+            options={dateTruncOptions}
+            size="sm"
+          />
+        </div>
+      )}
 
       <div style={aliasStyles}>
         <Input
