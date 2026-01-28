@@ -14,7 +14,7 @@ import {
 } from '../../charts';
 import { ResultsTable } from '../../components';
 import { useCrossFilterOptional } from '../../context';
-import { createDateFormatters, pivotQueryResult } from '../../utils';
+import { createDateFormatters, pivotQueryResult, parseMarkdownSafe } from '../../utils';
 import type { Widget, WidgetConfig } from '../types';
 import type { QueryResult } from '../../types';
 import type { ChartDataPoint, ChartClickParams, CrossFilterConfig } from '../../charts/types';
@@ -75,7 +75,18 @@ function TextContent({ config }: { config: WidgetConfig }): JSX.Element {
     return <></>;
   }
 
-  // For now, just render plain text. In the future, could add markdown support.
+  // Render markdown if enabled
+  if (config.markdown) {
+    const codeStyle = `background: ${theme.colors.surface}; padding: 0.1em 0.3em; border-radius: 3px; font-family: ${theme.fonts.mono};`;
+    return (
+      <div
+        style={contentStyle}
+        dangerouslySetInnerHTML={{ __html: parseMarkdownSafe(config.content, codeStyle) }}
+      />
+    );
+  }
+
+  // Plain text with line breaks
   return (
     <div style={contentStyle}>
       {config.content.split('\n').map((line, i) => (
@@ -426,6 +437,7 @@ export function WidgetContent({
           currencySymbol={widget.config.currencySymbol}
           compactNotation={widget.config.compactNotation}
           decimalDigits={widget.config.decimalDigits}
+          referenceLines={widget.config.referenceLines}
           height="100%"
           crossFilter={crossFilterConfig}
           selectedValue={selectedValue}
@@ -445,6 +457,7 @@ export function WidgetContent({
           showDataLabels={showDataLabels}
           colors={colors}
           xAxisFormat={widget.config.dateFormats?.[xAxis]}
+          referenceLines={widget.config.referenceLines}
           height="100%"
           crossFilter={crossFilterConfig}
           selectedValue={selectedValue}

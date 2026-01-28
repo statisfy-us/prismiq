@@ -120,9 +120,7 @@ export type DateTruncInterval =
   | 'quarter'
   | 'month'
   | 'week'
-  | 'day'
-  | 'hour'
-  | 'minute';
+  | 'day';
 
 /**
  * A column to select in a query.
@@ -165,8 +163,8 @@ export type FilterOperator =
  * A filter condition in a query.
  *
  * Value types:
- * - Single value for eq, neq, gt, gte, lt, lte, like, ilike
- * - Array for in_, not_in
+ * - Single value for eq, neq, gt, gte, lt, lte, like, ilike, not_like, not_ilike
+ * - Array for in_, not_in, in_or_null
  * - [min, max] tuple for between
  * - null/undefined for is_null, is_not_null
  */
@@ -232,15 +230,9 @@ export interface CalculatedField {
 
 /**
  * Time series interval options for date bucketing.
+ * Reuses DateTruncInterval since both represent the same concept.
  */
-export type TimeSeriesInterval =
-  | 'minute'
-  | 'hour'
-  | 'day'
-  | 'week'
-  | 'month'
-  | 'quarter'
-  | 'year';
+export type TimeSeriesInterval = DateTruncInterval;
 
 /**
  * Time series configuration for date-based charts.

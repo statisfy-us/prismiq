@@ -7,7 +7,7 @@
  * - Fill value for missing buckets
  */
 
-import { useMemo, type ChangeEvent } from 'react';
+import { useMemo, useState, type ChangeEvent } from 'react';
 import { useTheme } from '../../theme';
 import { Select } from '../ui/Select';
 import { Checkbox } from '../ui/Checkbox';
@@ -45,8 +45,6 @@ export interface TimeSeriesConfigProps {
 // ============================================================================
 
 const INTERVAL_OPTIONS: { value: TimeSeriesInterval; label: string }[] = [
-  { value: 'minute', label: 'Minute' },
-  { value: 'hour', label: 'Hour' },
   { value: 'day', label: 'Day' },
   { value: 'week', label: 'Week' },
   { value: 'month', label: 'Month' },
@@ -81,6 +79,7 @@ export function TimeSeriesConfig({
   selectedDateColumn,
 }: TimeSeriesConfigProps): JSX.Element {
   const { theme } = useTheme();
+  const [error, setError] = useState<string | null>(null);
 
   // Find all date columns from selected tables
   const dateColumnOptions = useMemo(() => {
@@ -120,19 +119,21 @@ export function TimeSeriesConfig({
 
   // Handle enabling/disabling time series
   const handleToggle = (e: ChangeEvent<HTMLInputElement>) => {
+    setError(null);
+
     if (!e.target.checked) {
       onChange(undefined);
       return;
     }
 
     if (!currentDateColumn) {
-      console.warn('Cannot enable time series: no date column available');
+      setError('No date column available. Add a date column to the query first.');
       return;
     }
 
     const parsed = parseColumnRef(currentDateColumn, 't1');
     if (!parsed) {
-      console.warn('Cannot enable time series: invalid date column reference');
+      setError('Invalid date column reference. Please select a valid date column.');
       return;
     }
 
@@ -150,9 +151,11 @@ export function TimeSeriesConfig({
 
     const parsed = parseColumnRef(value, config.table_id);
     if (!parsed) {
+      setError('Invalid column reference. Please select a valid date column.');
       return;
     }
 
+    setError(null);
     onChange({
       ...config,
       table_id: parsed.tableId,
@@ -218,6 +221,12 @@ export function TimeSeriesConfig({
     alignItems: 'center',
   };
 
+  const errorStyle: React.CSSProperties = {
+    fontSize: theme.fontSizes.xs,
+    color: theme.colors.error,
+    marginTop: theme.spacing.xs,
+  };
+
   // No date columns available
   if (dateColumnOptions.length === 0) {
     return (
@@ -240,6 +249,7 @@ export function TimeSeriesConfig({
       <span style={helpTextStyle}>
         Automatically bucket dates and optionally fill missing time periods
       </span>
+      {error && <span style={errorStyle}>{error}</span>}
 
       {isEnabled && (
         <>

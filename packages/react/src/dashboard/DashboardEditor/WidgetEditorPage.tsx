@@ -26,7 +26,13 @@ import { ValueFormattingSection } from './configs/ValueFormattingSection';
 import { DisplayConfigSection } from './configs/DisplayConfigSection';
 import { DateFormattingSection } from './configs/DateFormattingSection';
 import { TrendConfigSection } from './configs/TrendConfigSection';
-import type { Widget, WidgetConfig, WidgetType } from '../types';
+import { HyperlinkSection } from './configs/HyperlinkSection';
+import { ReferenceLinesSection } from './configs/ReferenceLinesSection';
+import { TextFormattingSection } from './configs/TextFormattingSection';
+import { PivotConfigSection } from './configs/PivotConfigSection';
+import { LayoutConstraintsSection } from './configs/LayoutConstraintsSection';
+import { CrossFilterSection } from './configs/CrossFilterSection';
+import type { Widget, WidgetConfig, WidgetType, WidgetHyperlink, WidgetPosition } from '../types';
 import type {
   DatabaseSchema,
   QueryDefinition,
@@ -125,6 +131,10 @@ export function WidgetEditorPage({
     widget?.config ?? getDefaultConfig(widget?.type ?? 'bar_chart')
   );
   const [query, setQuery] = useState<QueryDefinition | null>(widget?.query ?? null);
+  const [hyperlink, setHyperlink] = useState<WidgetHyperlink | undefined>(widget?.hyperlink);
+  const [position, setPosition] = useState<WidgetPosition>(
+    widget?.position ?? { x: 0, y: 0, w: 6, h: 4, minW: 2, minH: 2 }
+  );
 
   // Data source mode - default to guided for new widgets
   const [dataSourceMode, setDataSourceMode] = useState<DataSourceMode>(
@@ -214,10 +224,11 @@ export function WidgetEditorPage({
       title,
       config,
       query,
-      position: widget?.position ?? { x: 0, y: 0, w: 6, h: 4, minW: 2, minH: 2 },
+      position,
+      hyperlink,
     };
     onSave(savedWidget);
-  }, [widget, type, title, config, query, onSave]);
+  }, [widget, type, title, config, query, position, hyperlink, onSave]);
 
   // Column select options for config
   const columnSelectOptions = useMemo(() => {
@@ -416,6 +427,17 @@ export function WidgetEditorPage({
               showCompact={true}
               defaultOpen={false}
             />
+            <ReferenceLinesSection
+              lines={config.referenceLines ?? []}
+              onChange={(lines) => updateConfig('referenceLines', lines.length > 0 ? lines : undefined)}
+              defaultOpen={false}
+            />
+            <CrossFilterSection
+              config={config}
+              onChange={updateConfig}
+              query={query}
+              defaultOpen={false}
+            />
             <DateFormattingSection
               config={config}
               onChange={updateConfig}
@@ -451,6 +473,17 @@ export function WidgetEditorPage({
               showCompact={true}
               defaultOpen={false}
             />
+            <ReferenceLinesSection
+              lines={config.referenceLines ?? []}
+              onChange={(lines) => updateConfig('referenceLines', lines.length > 0 ? lines : undefined)}
+              defaultOpen={false}
+            />
+            <CrossFilterSection
+              config={config}
+              onChange={updateConfig}
+              query={query}
+              defaultOpen={false}
+            />
             <DateFormattingSection
               config={config}
               onChange={updateConfig}
@@ -463,12 +496,20 @@ export function WidgetEditorPage({
 
       case 'pie_chart':
         return (
-          <DisplayConfigSection
-            widgetType={type}
-            config={config}
-            onChange={updateConfig}
-            defaultOpen={true}
-          />
+          <>
+            <DisplayConfigSection
+              widgetType={type}
+              config={config}
+              onChange={updateConfig}
+              defaultOpen={true}
+            />
+            <CrossFilterSection
+              config={config}
+              onChange={updateConfig}
+              query={query}
+              defaultOpen={false}
+            />
+          </>
         );
 
       case 'scatter_chart':
@@ -529,6 +570,13 @@ export function WidgetEditorPage({
                 updateConfig('sortable', e.target.checked)
               }
             />
+            <PivotConfigSection
+              config={config}
+              onChange={updateConfig}
+              query={query}
+              schema={schema}
+              defaultOpen={false}
+            />
             <DateFormattingSection
               config={config}
               onChange={updateConfig}
@@ -540,36 +588,7 @@ export function WidgetEditorPage({
         );
 
       case 'text':
-        return (
-          <>
-            <div style={fieldStyle}>
-              <label style={labelStyle}>Content</label>
-              <textarea
-                value={config.content || ''}
-                onChange={(e) => updateConfig('content', e.target.value)}
-                rows={6}
-                style={{
-                  width: '100%',
-                  padding: theme.spacing.sm,
-                  fontSize: theme.fontSizes.sm,
-                  border: `1px solid ${theme.colors.border}`,
-                  borderRadius: theme.radius.sm,
-                  backgroundColor: theme.colors.background,
-                  color: theme.colors.text,
-                  fontFamily: config.markdown ? theme.fonts.mono : theme.fonts.sans,
-                  resize: 'vertical',
-                }}
-              />
-            </div>
-            <Checkbox
-              label="Enable Markdown"
-              checked={config.markdown ?? true}
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                updateConfig('markdown', e.target.checked)
-              }
-            />
-          </>
-        );
+        return <TextFormattingSection config={config} onChange={updateConfig} />;
 
       default:
         return null;
@@ -662,6 +681,20 @@ export function WidgetEditorPage({
             <h3 style={sectionTitleStyle}>Configuration</h3>
             {renderConfigFields()}
           </div>
+
+          {/* Hyperlink */}
+          <HyperlinkSection
+            hyperlink={hyperlink}
+            onChange={setHyperlink}
+            defaultOpen={!!hyperlink}
+          />
+
+          {/* Layout Constraints */}
+          <LayoutConstraintsSection
+            position={position}
+            onChange={setPosition}
+            defaultOpen={false}
+          />
         </div>
 
         {/* Main Panel - Preview & Data Source */}

@@ -13,3 +13,21 @@ export type { PieConfigProps } from './PieConfig';
 
 export { TableConfig } from './TableConfig';
 export type { TableConfigProps } from './TableConfig';
+
+export { HyperlinkSection } from './HyperlinkSection';
+export type { HyperlinkSectionProps } from './HyperlinkSection';
+
+export { ReferenceLinesSection } from './ReferenceLinesSection';
+export type { ReferenceLinesSectionProps } from './ReferenceLinesSection';
+
+export { TextFormattingSection } from './TextFormattingSection';
+export type { TextFormattingSectionProps } from './TextFormattingSection';
+
+export { PivotConfigSection } from './PivotConfigSection';
+export type { PivotConfigSectionProps } from './PivotConfigSection';
+
+export { LayoutConstraintsSection } from './LayoutConstraintsSection';
+export type { LayoutConstraintsSectionProps } from './LayoutConstraintsSection';
+
+export { CrossFilterSection } from './CrossFilterSection';
+export type { CrossFilterSectionProps } from './CrossFilterSection';

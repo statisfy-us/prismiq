@@ -58,6 +58,20 @@ export interface WidgetCrossFilterConfig {
 }
 
 /**
+ * A reference line (threshold/goal) for charts.
+ */
+export interface ReferenceLine {
+  /** Y-axis value where line should appear. */
+  value: number;
+  /** Optional label displayed on the line. */
+  label?: string;
+  /** Line color (hex). */
+  color?: string;
+  /** Line style. */
+  lineStyle?: 'solid' | 'dashed' | 'dotted';
+}
+
+/**
  * Widget-specific configuration options.
  */
 export interface WidgetConfig {
@@ -89,6 +103,9 @@ export interface WidgetConfig {
   /** Number of decimal digits to show. */
   decimalDigits?: number;
 
+  /** Reference lines for charts (thresholds, goals). */
+  referenceLines?: ReferenceLine[];
+
   // Cross-filter options
   /** Cross-filter configuration for this widget. */
   cross_filter?: WidgetCrossFilterConfig;
@@ -116,7 +133,7 @@ export interface WidgetConfig {
   value_column?: string;
 
   // Date formatting (used by both tables and charts)
-  /** Date format strings for datetime columns (column name -> .NET format string). Used by tables and chart axes. */
+  /** Date format strings for datetime columns (column name -> date-fns format string). Used by tables and chart axes. */
   dateFormats?: Record<string, string>;
 
   // Text options

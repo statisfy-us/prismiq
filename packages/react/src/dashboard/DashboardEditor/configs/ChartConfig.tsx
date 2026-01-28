@@ -7,7 +7,7 @@
  * - Optional filters
  */
 
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useTheme } from '../../../theme';
 import { Select } from '../../../components/ui/Select';
 import { Button } from '../../../components/ui/Button';
@@ -112,8 +112,6 @@ const DATE_TRUNC_OPTIONS: { value: DateTruncInterval | ''; label: string }[] = [
   { value: 'month', label: 'Month' },
   { value: 'week', label: 'Week' },
   { value: 'day', label: 'Day' },
-  { value: 'hour', label: 'Hour' },
-  { value: 'minute', label: 'Minute' },
 ];
 
 /**
@@ -156,6 +154,7 @@ export function ChartConfig({
   const [calculatedFields, setCalculatedFields] = useState<CalculatedField[]>(
     query?.calculated_fields ?? []
   );
+  const [invalidMeasureWarning, setInvalidMeasureWarning] = useState<string | null>(null);
 
   // Derived state
   const primaryTable = tables[0];
@@ -263,20 +262,40 @@ export function ChartConfig({
         date_trunc: dateTrunc || undefined,
       },
       // Measure columns (with aggregation) - parse table_id.column format
-      ...validMeasures
-        .map((m, i) => {
+      ...(() => {
+        const parsedMeasures: Array<{
+          table_id: string;
+          column: string;
+          aggregation: AggregationType;
+          alias?: string;
+        }> = [];
+        const invalidColumns: string[] = [];
+
+        validMeasures.forEach((m, i) => {
           const parsed = parseColumnRef(m.column, tables[0]?.id ?? 't1');
           if (!parsed) {
-            return null;
+            invalidColumns.push(m.column);
+            return;
           }
-          return {
+          parsedMeasures.push({
             table_id: parsed.tableId,
             column: parsed.column,
             aggregation: m.aggregation,
             alias: validMeasures.length > 1 ? `value_${i + 1}` : undefined,
-          };
-        })
-        .filter((col): col is NonNullable<typeof col> => col !== null),
+          });
+        });
+
+        // Update warning state based on invalid columns
+        if (invalidColumns.length > 0) {
+          setInvalidMeasureWarning(
+            `Measure "${invalidColumns[0]}" could not be parsed. Please select a valid column.`
+          );
+        } else {
+          setInvalidMeasureWarning(null);
+        }
+
+        return parsedMeasures;
+      })(),
     ];
 
     // Group by the dimension column
@@ -342,6 +361,18 @@ export function ChartConfig({
     }
   }, [groupByTableId]);
 
+  // Stable IDs for measures to avoid key issues with array index
+  const measureIdCounter = useRef(0);
+  const measureIdsRef = useRef<string[]>([]);
+
+  // Ensure we have IDs for all measures
+  while (measureIdsRef.current.length < measures.length) {
+    measureIdsRef.current.push(`measure-${++measureIdCounter.current}`);
+  }
+  if (measureIdsRef.current.length > measures.length) {
+    measureIdsRef.current = measureIdsRef.current.slice(0, measures.length);
+  }
+
   // Handle measure change
   const updateMeasure = useCallback((index: number, updates: Partial<MeasureConfig>) => {
     setMeasures((prev) => prev.map((m, i) => (i === index ? { ...m, ...updates } : m)));
@@ -349,11 +380,13 @@ export function ChartConfig({
 
   // Add a new measure
   const addMeasure = useCallback(() => {
+    measureIdsRef.current.push(`measure-${++measureIdCounter.current}`);
     setMeasures((prev) => [...prev, { column: '', aggregation: 'sum' }]);
   }, []);
 
   // Remove a measure
   const removeMeasure = useCallback((index: number) => {
+    measureIdsRef.current = measureIdsRef.current.filter((_, i) => i !== index);
     setMeasures((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
@@ -489,7 +522,7 @@ export function ChartConfig({
         <div style={fieldStyle}>
           <label style={labelStyle}>Measures (Y-Axis)</label>
           {measures.map((measure, index) => (
-            <div key={index} style={measureRowStyle}>
+            <div key={measureIdsRef.current[index]} style={measureRowStyle}>
               <Select
                 value={measure.aggregation}
                 onChange={(value) => updateMeasure(index, { aggregation: value as AggregationType })}
@@ -523,6 +556,11 @@ export function ChartConfig({
             <Icon name="plus" size={14} />
             <span style={{ marginLeft: theme.spacing.xs }}>Add measure</span>
           </Button>
+          {invalidMeasureWarning && (
+            <span style={{ fontSize: theme.fontSizes.xs, color: theme.colors.warning ?? theme.colors.error }}>
+              {invalidMeasureWarning}
+            </span>
+          )}
         </div>
       )}
 
