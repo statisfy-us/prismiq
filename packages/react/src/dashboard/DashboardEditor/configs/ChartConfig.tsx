@@ -112,8 +112,6 @@ const DATE_TRUNC_OPTIONS: { value: DateTruncInterval | ''; label: string }[] = [
   { value: 'month', label: 'Month' },
   { value: 'week', label: 'Week' },
   { value: 'day', label: 'Day' },
-  { value: 'hour', label: 'Hour' },
-  { value: 'minute', label: 'Minute' },
 ];
 
 /**

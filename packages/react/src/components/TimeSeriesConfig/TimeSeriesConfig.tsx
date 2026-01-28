@@ -45,8 +45,6 @@ export interface TimeSeriesConfigProps {
 // ============================================================================
 
 const INTERVAL_OPTIONS: { value: TimeSeriesInterval; label: string }[] = [
-  { value: 'minute', label: 'Minute' },
-  { value: 'hour', label: 'Hour' },
   { value: 'day', label: 'Day' },
   { value: 'week', label: 'Week' },
   { value: 'month', label: 'Month' },

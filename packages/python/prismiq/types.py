@@ -184,15 +184,11 @@ class DateTruncInterval(str, Enum):
     MONTH = "month"
     WEEK = "week"
     DAY = "day"
-    HOUR = "hour"
-    MINUTE = "minute"
 
 
 class TimeSeriesInterval(str, Enum):
     """Time series interval options for date bucketing."""
 
-    MINUTE = "minute"
-    HOUR = "hour"
     DAY = "day"
     WEEK = "week"
     MONTH = "month"

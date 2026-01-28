@@ -120,9 +120,7 @@ export type DateTruncInterval =
   | 'quarter'
   | 'month'
   | 'week'
-  | 'day'
-  | 'hour'
-  | 'minute';
+  | 'day';
 
 /**
  * A column to select in a query.
