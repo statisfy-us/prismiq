@@ -25,6 +25,7 @@ import { GuidedDataConfig } from './GuidedDataConfig';
 import { ValueFormattingSection } from './configs/ValueFormattingSection';
 import { DisplayConfigSection } from './configs/DisplayConfigSection';
 import { DateFormattingSection } from './configs/DateFormattingSection';
+import { TrendConfigSection } from './configs/TrendConfigSection';
 import type { Widget, WidgetConfig, WidgetType } from '../types';
 import type {
   DatabaseSchema,
@@ -381,14 +382,13 @@ export function WidgetEditorPage({
               showCompact={true}
               defaultOpen={true}
             />
-            <div style={fieldStyle}>
-              <label style={labelStyle}>Trend Comparison</label>
-              <Select
-                value={config.trend_comparison || ''}
-                onChange={(value) => updateConfig('trend_comparison', value || undefined)}
-                options={[{ value: '', label: 'None' }, ...columnSelectOptions]}
-              />
-            </div>
+            <TrendConfigSection
+              config={config}
+              onChange={updateConfig}
+              query={query}
+              schema={schema}
+              defaultOpen={false}
+            />
           </>
         );
 

@@ -96,8 +96,14 @@ export interface WidgetConfig {
   // MetricCard options
   /** Number format for metric display. */
   format?: 'number' | 'currency' | 'percent' | 'compact';
-  /** Column to use for trend comparison. */
+  /** Column to use for trend comparison (deprecated, use trendDateColumn). */
   trend_comparison?: string;
+  /** Whether to show trend indicator. */
+  showTrend?: boolean;
+  /** Comparison period for trend calculation. */
+  trendPeriod?: 'previous_period' | 'previous_year' | 'previous_month' | 'previous_week';
+  /** Date column to use for trend comparison. */
+  trendDateColumn?: string;
 
   // Table options
   /** Number of rows per page. */
