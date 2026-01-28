@@ -22,6 +22,7 @@ import { QueryBuilder } from '../../components/QueryBuilder';
 import { WidgetTypeSelector } from './WidgetTypeSelector';
 import { WidgetPreview } from './WidgetPreview';
 import { GuidedDataConfig } from './GuidedDataConfig';
+import { ValueFormattingSection } from './configs/ValueFormattingSection';
 import type { Widget, WidgetConfig, WidgetType } from '../types';
 import type {
   DatabaseSchema,
@@ -377,19 +378,13 @@ export function WidgetEditorPage({
       case 'metric':
         return (
           <>
-            <div style={fieldStyle}>
-              <label style={labelStyle}>Format</label>
-              <Select
-                value={config.format || 'number'}
-                onChange={(value) => updateConfig('format', value as WidgetConfig['format'])}
-                options={[
-                  { value: 'number', label: 'Number' },
-                  { value: 'currency', label: 'Currency' },
-                  { value: 'percent', label: 'Percentage' },
-                  { value: 'compact', label: 'Compact' },
-                ]}
-              />
-            </div>
+            <ValueFormattingSection
+              config={config}
+              onChange={updateConfig}
+              showCurrency={true}
+              showCompact={true}
+              defaultOpen={true}
+            />
             <div style={fieldStyle}>
               <label style={labelStyle}>Trend Comparison</label>
               <Select
@@ -440,7 +435,21 @@ export function WidgetEditorPage({
                   updateConfig('stacked', e.target.checked)
                 }
               />
+              <Checkbox
+                label="Data Labels"
+                checked={config.show_data_labels ?? false}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  updateConfig('show_data_labels', e.target.checked)
+                }
+              />
             </div>
+            <ValueFormattingSection
+              config={config}
+              onChange={updateConfig}
+              showCurrency={true}
+              showCompact={true}
+              defaultOpen={false}
+            />
           </>
         );
 
@@ -472,6 +481,13 @@ export function WidgetEditorPage({
                 }
               />
             </div>
+            <ValueFormattingSection
+              config={config}
+              onChange={updateConfig}
+              showCurrency={true}
+              showCompact={true}
+              defaultOpen={false}
+            />
           </>
         );
 
