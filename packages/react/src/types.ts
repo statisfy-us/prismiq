@@ -231,6 +231,39 @@ export interface CalculatedField {
 }
 
 /**
+ * Time series interval options for date bucketing.
+ */
+export type TimeSeriesInterval =
+  | 'minute'
+  | 'hour'
+  | 'day'
+  | 'week'
+  | 'month'
+  | 'quarter'
+  | 'year';
+
+/**
+ * Time series configuration for date-based charts.
+ *
+ * Enables automatic date bucketing and gap filling for continuous
+ * time series data visualization.
+ */
+export interface TimeSeriesConfig {
+  /** ID of the table containing the date column. */
+  table_id: string;
+  /** Column name of the date/timestamp field. */
+  date_column: string;
+  /** Time bucket interval for grouping. */
+  interval: TimeSeriesInterval;
+  /** Whether to fill missing time buckets with a default value. */
+  fill_missing?: boolean;
+  /** Value to use when filling missing buckets (default: 0). */
+  fill_value?: number;
+  /** Optional alias for the bucketed date column. */
+  alias?: string;
+}
+
+/**
  * Complete query definition.
  */
 export interface QueryDefinition {
@@ -252,6 +285,8 @@ export interface QueryDefinition {
   offset?: number;
   /** Calculated field definitions. These fields can be referenced in columns, filters, etc. */
   calculated_fields?: CalculatedField[];
+  /** Time series configuration for automatic date bucketing and gap filling. */
+  time_series?: TimeSeriesConfig;
 }
 
 // ============================================================================

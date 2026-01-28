@@ -16,6 +16,7 @@ import { CollapsibleSection } from '../../../components/ui/CollapsibleSection';
 import { FilterBuilder } from '../../../components/FilterBuilder';
 import { TableSelector } from '../../../components/TableSelector';
 import { JoinBuilder } from '../../../components/JoinBuilder';
+import { TimeSeriesConfig } from '../../../components/TimeSeriesConfig';
 import type {
   DatabaseSchema,
   QueryDefinition,
@@ -25,6 +26,7 @@ import type {
   FilterDefinition,
   ColumnSchema,
   DateTruncInterval,
+  TimeSeriesConfig as TimeSeriesConfigType,
 } from '../../../types';
 
 export interface ChartConfigProps {
@@ -139,6 +141,7 @@ export function ChartConfig({
     initialMeasures.length > 0 ? initialMeasures : [{ column: '', aggregation: 'sum' }]
   );
   const [filters, setFilters] = useState<FilterDefinition[]>(query?.filters ?? []);
+  const [timeSeries, setTimeSeries] = useState<TimeSeriesConfigType | undefined>(query?.time_series);
 
   // Derived state
   const primaryTable = tables[0];
@@ -269,10 +272,11 @@ export function ChartConfig({
       group_by: groupBy,
       filters: filters.length > 0 ? filters : undefined,
       order_by: [{ table_id: groupByTableId, column: groupByColumn, direction: 'ASC' }],
+      time_series: timeSeries,
     };
 
     onChange(queryDef);
-  }, [tables, joins, groupByColumn, groupByTableId, dateTrunc, measures, filters, onChange]);
+  }, [tables, joins, groupByColumn, groupByTableId, dateTrunc, measures, filters, timeSeries, onChange]);
 
   // Handle primary table change
   const handleTableChange = useCallback((value: string) => {
@@ -441,6 +445,23 @@ export function ChartConfig({
           />
           <span style={helpTextStyle}>Truncate dates to this interval</span>
         </div>
+      )}
+
+      {/* Time Series Configuration (for date-based charts) */}
+      {selectedTable && isGroupByDate && (
+        <CollapsibleSection title="Time Series Options" defaultOpen={timeSeries !== undefined}>
+          <TimeSeriesConfig
+            schema={schema}
+            tables={tables}
+            config={timeSeries}
+            onChange={setTimeSeries}
+            selectedDateColumn={
+              groupByColumn && groupByTableId
+                ? { table_id: groupByTableId, column: groupByColumn }
+                : undefined
+            }
+          />
+        </CollapsibleSection>
       )}
 
       {/* Measures (Y-Axis) */}

@@ -208,3 +208,19 @@ export type { SavedQueryPickerProps } from './SavedQueryPicker';
 export { CustomSQLEditor } from './CustomSQLEditor';
 
 export type { CustomSQLEditorProps } from './CustomSQLEditor';
+
+// ============================================================================
+// Table Selector
+// ============================================================================
+
+export { TableSelector } from './TableSelector';
+
+export type { TableSelectorProps } from './TableSelector';
+
+// ============================================================================
+// Time Series Config
+// ============================================================================
+
+export { TimeSeriesConfig } from './TimeSeriesConfig';
+
+export type { TimeSeriesConfigProps } from './TimeSeriesConfig';
