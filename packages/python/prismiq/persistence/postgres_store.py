@@ -1,4 +1,9 @@
-"""PostgreSQL-backed dashboard storage with tenant isolation."""
+"""PostgreSQL-backed dashboard storage with tenant isolation.
+
+This store uses SERIAL (auto-increment integer) primary keys for
+dashboards and widgets, and UUID for pinned_dashboards (which is a
+junction table).
+"""
 
 from __future__ import annotations
 
@@ -7,35 +12,14 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import (
-    Column,
-    Integer,
-    MetaData,
-    String,
-    Table,
-    delete,
-    exists,
-    func,
-    insert,
-    not_,
-    select,
-    update,
-)
+from sqlalchemy import (Column, Integer, MetaData, String, Table, delete,
+                        exists, func, insert, not_, select, update)
 from sqlalchemy.dialects.postgresql import TIMESTAMP, UUID
 
-from prismiq.dashboards import (
-    Dashboard,
-    DashboardCreate,
-    DashboardFilter,
-    DashboardLayout,
-    DashboardUpdate,
-    Widget,
-    WidgetConfig,
-    WidgetCreate,
-    WidgetPosition,
-    WidgetType,
-    WidgetUpdate,
-)
+from prismiq.dashboards import (Dashboard, DashboardCreate, DashboardFilter,
+                                DashboardLayout, DashboardUpdate, Widget,
+                                WidgetConfig, WidgetCreate, WidgetPosition,
+                                WidgetType, WidgetUpdate)
 from prismiq.pins import PinnedDashboard
 from prismiq.types import QueryDefinition
 
@@ -43,7 +27,7 @@ if TYPE_CHECKING:
     from asyncpg import Pool  # type: ignore[import-not-found]
 
 # SQLAlchemy Table definition for pinned dashboards (used for query generation)
-# quote=True ensures all identifiers are double-quoted in generated SQL
+# Note: dashboard_id is Integer (SERIAL FK), but pin id is still UUID
 _metadata = MetaData()
 _pinned_dashboards_table = Table(
     "prismiq_pinned_dashboards",
@@ -51,7 +35,9 @@ _pinned_dashboards_table = Table(
     Column("id", UUID(as_uuid=True), primary_key=True, quote=True),
     Column("tenant_id", String(255), nullable=False, quote=True),
     Column("user_id", String(255), nullable=False, quote=True),
-    Column("dashboard_id", UUID(as_uuid=True), nullable=False, quote=True),
+    Column(
+        "dashboard_id", Integer, nullable=False, quote=True
+    ),  # Integer FK to prismiq_dashboards
     Column("context", String(100), nullable=False, quote=True),
     Column("position", Integer, nullable=False, quote=True),
     Column("pinned_at", TIMESTAMP(timezone=True), nullable=False, quote=True),
@@ -63,6 +49,7 @@ class PostgresDashboardStore:
     """PostgreSQL-backed dashboard storage with tenant isolation.
 
     All operations are scoped to a tenant_id for multi-tenant security.
+    Supports per-tenant schema isolation via schema_name parameter.
     """
 
     def __init__(self, pool: Pool) -> None:
@@ -73,6 +60,17 @@ class PostgresDashboardStore:
         """
         self._pool = pool
 
+    async def _set_schema(self, conn: Any, schema_name: str | None) -> None:
+        """Set the search_path for per-tenant schema isolation.
+
+        Args:
+            conn: asyncpg connection
+            schema_name: PostgreSQL schema name (e.g., tenant_id). If None, uses default.
+        """
+        if schema_name:
+            # Use parameterized identifier quoting for security
+            await conn.execute(f'SET search_path TO "{schema_name}", public')
+
     # -------------------------------------------------------------------------
     # Dashboard Operations
     # -------------------------------------------------------------------------
@@ -81,8 +79,17 @@ class PostgresDashboardStore:
         self,
         tenant_id: str,
         owner_id: str | None = None,
+        schema_name: str | None = None,
+        order_by: str = "updated_at",
     ) -> list[Dashboard]:
-        """List all dashboards for a tenant."""
+        """List all dashboards for a tenant.
+
+        Args:
+            tenant_id: Tenant ID for isolation.
+            owner_id: Optional user ID for permission filtering.
+            schema_name: Optional PostgreSQL schema for per-tenant isolation.
+            order_by: Column to order by ("updated_at" or "name"). Defaults to "updated_at".
+        """
         query = """
             SELECT
                 d.id,
@@ -128,9 +135,14 @@ class PostgresDashboardStore:
             """
             params.append(owner_id)
 
-        query += " GROUP BY d.id ORDER BY d.updated_at DESC"
+        # Validate and apply ordering
+        if order_by == "name":
+            query += " GROUP BY d.id ORDER BY d.name"
+        else:
+            query += " GROUP BY d.id ORDER BY d.updated_at DESC"
 
         async with self._pool.acquire() as conn:
+            await self._set_schema(conn, schema_name)
             rows = await conn.fetch(query, *params)
             return [self._row_to_dashboard(row) for row in rows]
 
@@ -138,8 +150,15 @@ class PostgresDashboardStore:
         self,
         dashboard_id: str,
         tenant_id: str,
+        schema_name: str | None = None,
     ) -> Dashboard | None:
-        """Get a dashboard by ID with tenant check."""
+        """Get a dashboard by ID with tenant check.
+
+        Args:
+            dashboard_id: Dashboard ID (integer as string).
+            tenant_id: Tenant ID for isolation.
+            schema_name: Optional PostgreSQL schema for per-tenant isolation.
+        """
         query = """
             SELECT
                 d.id,
@@ -175,7 +194,9 @@ class PostgresDashboardStore:
             GROUP BY d.id
         """
         async with self._pool.acquire() as conn:
-            row = await conn.fetchrow(query, uuid.UUID(dashboard_id), tenant_id)
+            await self._set_schema(conn, schema_name)
+            # dashboard_id is an integer (SERIAL)
+            row = await conn.fetchrow(query, int(dashboard_id), tenant_id)
             if not row:
                 return None
             return self._row_to_dashboard(row)
@@ -185,22 +206,32 @@ class PostgresDashboardStore:
         dashboard: DashboardCreate,
         tenant_id: str,
         owner_id: str | None = None,
+        schema_name: str | None = None,
     ) -> Dashboard:
-        """Create a new dashboard."""
-        dashboard_id = uuid.uuid4()
+        """Create a new dashboard.
+
+        Uses SERIAL (auto-increment) for dashboard ID.
+
+        Args:
+            dashboard: Dashboard creation data.
+            tenant_id: Tenant ID for isolation.
+            owner_id: Optional owner user ID.
+            schema_name: Optional PostgreSQL schema for per-tenant isolation.
+        """
         now = datetime.now(timezone.utc)
         layout = dashboard.layout or DashboardLayout()
 
+        # Don't specify id - let SERIAL auto-generate it
         query = """
             INSERT INTO prismiq_dashboards
-            (id, tenant_id, name, description, layout, filters, owner_id, is_public, allowed_viewers, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            (tenant_id, name, description, layout, filters, owner_id, is_public, allowed_viewers, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING *
         """
         async with self._pool.acquire() as conn:
+            await self._set_schema(conn, schema_name)
             row = await conn.fetchrow(
                 query,
-                dashboard_id,
                 tenant_id,
                 dashboard.name,
                 dashboard.description,
@@ -219,8 +250,16 @@ class PostgresDashboardStore:
         dashboard_id: str,
         update: DashboardUpdate,
         tenant_id: str,
+        schema_name: str | None = None,
     ) -> Dashboard | None:
-        """Update a dashboard with tenant check."""
+        """Update a dashboard with tenant check.
+
+        Args:
+            dashboard_id: Dashboard ID (integer as string).
+            update: Dashboard update data.
+            tenant_id: Tenant ID for isolation.
+            schema_name: Optional PostgreSQL schema for per-tenant isolation.
+        """
         # Build dynamic UPDATE based on provided fields
         updates: list[str] = []
         params: list[Any] = []
@@ -257,36 +296,41 @@ class PostgresDashboardStore:
             param_num += 1
 
         async with self._pool.acquire() as conn:
+            await self._set_schema(conn, schema_name)
+
             # Handle widgets update if provided (replace all widgets)
             if update.widgets is not None:
                 # Delete existing widgets
                 await conn.execute(
                     "DELETE FROM prismiq_widgets WHERE dashboard_id = $1",
-                    uuid.UUID(dashboard_id),
+                    int(dashboard_id),
                 )
-                # Insert new widgets
+                # Insert new widgets (let SERIAL auto-generate widget IDs)
                 for widget in update.widgets:
                     await conn.execute(
                         """
                         INSERT INTO prismiq_widgets (
-                            id, dashboard_id, title, type, query, config, position
-                        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+                            dashboard_id, title, type, query, config, position
+                        ) VALUES ($1, $2, $3, $4, $5, $6)
                         """,
-                        uuid.UUID(widget.id),
-                        uuid.UUID(dashboard_id),
+                        int(dashboard_id),
                         widget.title,
                         widget.type.value,
                         json.dumps(widget.query.model_dump()) if widget.query else None,
-                        json.dumps(widget.config.model_dump()) if widget.config else None,
-                        json.dumps(widget.position.model_dump()) if widget.position else None,
+                        json.dumps(widget.config.model_dump())
+                        if widget.config
+                        else None,
+                        json.dumps(widget.position.model_dump())
+                        if widget.position
+                        else None,
                     )
 
             if not updates:
                 # No dashboard metadata updates, just return current dashboard
-                return await self.get_dashboard(dashboard_id, tenant_id)
+                return await self.get_dashboard(dashboard_id, tenant_id, schema_name)
 
             # Add dashboard_id and tenant_id as final params
-            params.extend([uuid.UUID(dashboard_id), tenant_id])
+            params.extend([int(dashboard_id), tenant_id])
 
             # Column names in `updates` are hardcoded above, not user input
             query = f"""
@@ -300,20 +344,27 @@ class PostgresDashboardStore:
             if not row:
                 return None
             # Fetch with widgets
-            return await self.get_dashboard(dashboard_id, tenant_id)
+            return await self.get_dashboard(dashboard_id, tenant_id, schema_name)
 
     async def delete_dashboard(
         self,
         dashboard_id: str,
         tenant_id: str,
+        schema_name: str | None = None,
     ) -> bool:
         """Delete a dashboard with tenant check.
 
         Widgets cascade delete.
+
+        Args:
+            dashboard_id: Dashboard ID (integer as string).
+            tenant_id: Tenant ID for isolation.
+            schema_name: Optional PostgreSQL schema for per-tenant isolation.
         """
         query = "DELETE FROM prismiq_dashboards WHERE id = $1 AND tenant_id = $2"
         async with self._pool.acquire() as conn:
-            result = await conn.execute(query, uuid.UUID(dashboard_id), tenant_id)
+            await self._set_schema(conn, schema_name)
+            result = await conn.execute(query, int(dashboard_id), tenant_id)
             return result == "DELETE 1"
 
     # -------------------------------------------------------------------------
@@ -325,27 +376,37 @@ class PostgresDashboardStore:
         dashboard_id: str,
         widget: WidgetCreate,
         tenant_id: str,
+        schema_name: str | None = None,
     ) -> Widget | None:
-        """Add a widget to a dashboard with tenant check."""
+        """Add a widget to a dashboard with tenant check.
+
+        Uses SERIAL (auto-increment) for widget ID.
+
+        Args:
+            dashboard_id: Dashboard ID (integer as string).
+            widget: Widget creation data.
+            tenant_id: Tenant ID for isolation.
+            schema_name: Optional PostgreSQL schema for per-tenant isolation.
+        """
         # Verify dashboard belongs to tenant
-        dashboard = await self.get_dashboard(dashboard_id, tenant_id)
+        dashboard = await self.get_dashboard(dashboard_id, tenant_id, schema_name)
         if not dashboard:
             return None
 
-        widget_id = uuid.uuid4()
         now = datetime.now(timezone.utc)
 
+        # Don't specify id - let SERIAL auto-generate it
         query = """
             INSERT INTO prismiq_widgets
-            (id, dashboard_id, type, title, query, position, config, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            (dashboard_id, type, title, query, position, config, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING *
         """
         async with self._pool.acquire() as conn:
+            await self._set_schema(conn, schema_name)
             row = await conn.fetchrow(
                 query,
-                widget_id,
-                uuid.UUID(dashboard_id),
+                int(dashboard_id),
                 widget.type.value,
                 widget.title,
                 json.dumps(widget.query.model_dump()) if widget.query else None,
@@ -360,8 +421,15 @@ class PostgresDashboardStore:
         self,
         widget_id: str,
         tenant_id: str,
+        schema_name: str | None = None,
     ) -> Widget | None:
-        """Get a widget by ID with tenant check via dashboard."""
+        """Get a widget by ID with tenant check via dashboard.
+
+        Args:
+            widget_id: Widget ID (integer as string).
+            tenant_id: Tenant ID for isolation.
+            schema_name: Optional PostgreSQL schema for per-tenant isolation.
+        """
         query = """
             SELECT w.*
             FROM prismiq_widgets w
@@ -369,7 +437,8 @@ class PostgresDashboardStore:
             WHERE w.id = $1 AND d.tenant_id = $2
         """
         async with self._pool.acquire() as conn:
-            row = await conn.fetchrow(query, uuid.UUID(widget_id), tenant_id)
+            await self._set_schema(conn, schema_name)
+            row = await conn.fetchrow(query, int(widget_id), tenant_id)
             if not row:
                 return None
             return self._row_to_widget(row)
@@ -379,8 +448,16 @@ class PostgresDashboardStore:
         widget_id: str,
         update: WidgetUpdate,
         tenant_id: str,
+        schema_name: str | None = None,
     ) -> Widget | None:
-        """Update a widget with tenant check."""
+        """Update a widget with tenant check.
+
+        Args:
+            widget_id: Widget ID (integer as string).
+            update: Widget update data.
+            tenant_id: Tenant ID for isolation.
+            schema_name: Optional PostgreSQL schema for per-tenant isolation.
+        """
         # Build dynamic UPDATE
         updates: list[str] = []
         params: list[Any] = []
@@ -407,9 +484,9 @@ class PostgresDashboardStore:
             param_num += 1
 
         if not updates:
-            return await self.get_widget(widget_id, tenant_id)
+            return await self.get_widget(widget_id, tenant_id, schema_name)
 
-        params.extend([uuid.UUID(widget_id), tenant_id])
+        params.extend([int(widget_id), tenant_id])
 
         # Column names in `updates` are hardcoded above, not user input
         query = f"""
@@ -423,6 +500,7 @@ class PostgresDashboardStore:
         """  # noqa: S608
 
         async with self._pool.acquire() as conn:
+            await self._set_schema(conn, schema_name)
             row = await conn.fetchrow(query, *params)
             if not row:
                 return None
@@ -432,8 +510,15 @@ class PostgresDashboardStore:
         self,
         widget_id: str,
         tenant_id: str,
+        schema_name: str | None = None,
     ) -> bool:
-        """Delete a widget with tenant check."""
+        """Delete a widget with tenant check.
+
+        Args:
+            widget_id: Widget ID (integer as string).
+            tenant_id: Tenant ID for isolation.
+            schema_name: Optional PostgreSQL schema for per-tenant isolation.
+        """
         query = """
             DELETE FROM prismiq_widgets w
             USING prismiq_dashboards d
@@ -442,17 +527,27 @@ class PostgresDashboardStore:
             AND d.tenant_id = $2
         """
         async with self._pool.acquire() as conn:
-            result = await conn.execute(query, uuid.UUID(widget_id), tenant_id)
+            await self._set_schema(conn, schema_name)
+            result = await conn.execute(query, int(widget_id), tenant_id)
             return result == "DELETE 1"
 
     async def duplicate_widget(
         self,
         widget_id: str,
         tenant_id: str,
+        schema_name: str | None = None,
     ) -> Widget | None:
-        """Duplicate a widget with tenant check."""
+        """Duplicate a widget with tenant check.
+
+        Uses SERIAL (auto-increment) for the new widget ID.
+
+        Args:
+            widget_id: Widget ID (integer as string).
+            tenant_id: Tenant ID for isolation.
+            schema_name: Optional PostgreSQL schema for per-tenant isolation.
+        """
         # Get the original widget
-        original = await self.get_widget(widget_id, tenant_id)
+        original = await self.get_widget(widget_id, tenant_id, schema_name)
         if not original:
             return None
 
@@ -461,13 +556,12 @@ class PostgresDashboardStore:
             SELECT dashboard_id FROM prismiq_widgets WHERE id = $1
         """
         async with self._pool.acquire() as conn:
-            row = await conn.fetchrow(query, uuid.UUID(widget_id))
+            await self._set_schema(conn, schema_name)
+            row = await conn.fetchrow(query, int(widget_id))
             if not row:
                 return None
-            dashboard_id = str(row["dashboard_id"])
+            dashboard_id = row["dashboard_id"]  # Integer
 
-        # Create a new widget with copied data
-        new_widget_id = uuid.uuid4()
         now = datetime.now(timezone.utc)
 
         # Offset position slightly
@@ -478,17 +572,18 @@ class PostgresDashboardStore:
             h=original.position.h,
         )
 
+        # Don't specify id - let SERIAL auto-generate it
         insert_query = """
             INSERT INTO prismiq_widgets
-            (id, dashboard_id, type, title, query, position, config, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            (dashboard_id, type, title, query, position, config, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING *
         """
         async with self._pool.acquire() as conn:
+            await self._set_schema(conn, schema_name)
             row = await conn.fetchrow(
                 insert_query,
-                new_widget_id,
-                uuid.UUID(dashboard_id),
+                dashboard_id,
                 original.type.value,
                 f"{original.title} (Copy)",
                 json.dumps(original.query.model_dump()) if original.query else None,
@@ -504,16 +599,27 @@ class PostgresDashboardStore:
         dashboard_id: str,
         positions: list[dict[str, Any]],
         tenant_id: str,
+        schema_name: str | None = None,
     ) -> bool:
-        """Batch update widget positions with tenant check."""
+        """Batch update widget positions with tenant check.
+
+        Args:
+            dashboard_id: Dashboard ID (integer as string).
+            positions: List of position updates with widget_id/id and position data.
+            tenant_id: Tenant ID for isolation.
+            schema_name: Optional PostgreSQL schema for per-tenant isolation.
+        """
         # Verify dashboard belongs to tenant
-        dashboard = await self.get_dashboard(dashboard_id, tenant_id)
+        dashboard = await self.get_dashboard(dashboard_id, tenant_id, schema_name)
         if not dashboard:
             return False
 
         async with self._pool.acquire() as conn, conn.transaction():
+            await self._set_schema(conn, schema_name)
             for pos in positions:
                 widget_id = pos.get("widget_id") or pos.get("id")
+                if widget_id is None:
+                    continue  # Skip invalid position entries
                 position = pos.get("position", pos)
                 await conn.execute(
                     """
@@ -529,8 +635,8 @@ class PostgresDashboardStore:
                             "h": position.get("h", 3),
                         }
                     ),
-                    uuid.UUID(widget_id),
-                    uuid.UUID(dashboard_id),
+                    int(widget_id),
+                    int(dashboard_id),
                 )
         return True
 
@@ -628,6 +734,7 @@ class PostgresDashboardStore:
         tenant_id: str,
         user_id: str,
         position: int | None = None,
+        schema_name: str | None = None,
     ) -> PinnedDashboard:
         """Pin a dashboard to a context.
 
@@ -637,6 +744,7 @@ class PostgresDashboardStore:
             tenant_id: Tenant ID for isolation.
             user_id: User ID who is pinning.
             position: Optional position. If None, appends at end.
+            schema_name: Optional PostgreSQL schema for per-tenant isolation.
 
         Returns:
             The created PinnedDashboard entry.
@@ -645,16 +753,19 @@ class PostgresDashboardStore:
             ValueError: If dashboard not found or already pinned.
         """
         # Verify dashboard exists and belongs to tenant
-        dashboard = await self.get_dashboard(dashboard_id, tenant_id)
+        dashboard = await self.get_dashboard(dashboard_id, tenant_id, schema_name)
         if not dashboard:
             raise ValueError(f"Dashboard '{dashboard_id}' not found")
 
         t = _pinned_dashboards_table
 
         async with self._pool.acquire() as conn:
+            await self._set_schema(conn, schema_name)
             # Determine position if not provided using SQLAlchemy Core
             if position is None:
-                max_pos_query = select(func.coalesce(func.max(t.c.position) + 1, 0)).where(
+                max_pos_query = select(
+                    func.coalesce(func.max(t.c.position) + 1, 0)
+                ).where(
                     t.c.tenant_id == tenant_id,
                     t.c.user_id == user_id,
                     t.c.context == context,
@@ -667,13 +778,14 @@ class PostgresDashboardStore:
             now = datetime.now(timezone.utc)
 
             # Build INSERT using SQLAlchemy Core
+            # Note: dashboard_id is Integer, pin id is UUID
             insert_stmt = (
                 insert(t)
                 .values(
                     id=pin_id,
                     tenant_id=tenant_id,
                     user_id=user_id,
-                    dashboard_id=uuid.UUID(dashboard_id),
+                    dashboard_id=int(dashboard_id),
                     context=context,
                     position=position,
                     pinned_at=now,
@@ -700,6 +812,7 @@ class PostgresDashboardStore:
         context: str,
         tenant_id: str,
         user_id: str,
+        schema_name: str | None = None,
     ) -> bool:
         """Unpin a dashboard from a context.
 
@@ -708,6 +821,7 @@ class PostgresDashboardStore:
             context: The context to unpin from.
             tenant_id: Tenant ID for isolation.
             user_id: User ID who owns the pin.
+            schema_name: Optional PostgreSQL schema for per-tenant isolation.
 
         Returns:
             True if unpinned, False if not found.
@@ -716,12 +830,13 @@ class PostgresDashboardStore:
         stmt = delete(t).where(
             t.c.tenant_id == tenant_id,
             t.c.user_id == user_id,
-            t.c.dashboard_id == uuid.UUID(dashboard_id),
+            t.c.dashboard_id == int(dashboard_id),
             t.c.context == context,
         )
         sql, params = self._compile_query(stmt)
 
         async with self._pool.acquire() as conn:
+            await self._set_schema(conn, schema_name)
             result = await conn.execute(sql, *params)
             return result == "DELETE 1"
 
@@ -730,6 +845,7 @@ class PostgresDashboardStore:
         context: str,
         tenant_id: str,
         user_id: str,
+        schema_name: str | None = None,
     ) -> list[Dashboard]:
         """Get all dashboards pinned to a context.
 
@@ -737,6 +853,7 @@ class PostgresDashboardStore:
             context: The context to get pins for.
             tenant_id: Tenant ID for isolation.
             user_id: User ID who owns the pins.
+            schema_name: Optional PostgreSQL schema for per-tenant isolation.
 
         Returns:
             List of Dashboard objects, ordered by position.
@@ -755,12 +872,15 @@ class PostgresDashboardStore:
         sql, params = self._compile_query(stmt)
 
         async with self._pool.acquire() as conn:
+            await self._set_schema(conn, schema_name)
             rows = await conn.fetch(sql, *params)
 
         # Fetch each dashboard
         dashboards: list[Dashboard] = []
         for row in rows:
-            dashboard = await self.get_dashboard(str(row["dashboard_id"]), tenant_id)
+            dashboard = await self.get_dashboard(
+                str(row["dashboard_id"]), tenant_id, schema_name
+            )
             if dashboard:
                 dashboards.append(dashboard)
 
@@ -771,6 +891,7 @@ class PostgresDashboardStore:
         dashboard_id: str,
         tenant_id: str,
         user_id: str,
+        schema_name: str | None = None,
     ) -> list[str]:
         """Get all contexts where a dashboard is pinned.
 
@@ -778,6 +899,7 @@ class PostgresDashboardStore:
             dashboard_id: The dashboard ID.
             tenant_id: Tenant ID for isolation.
             user_id: User ID who owns the pins.
+            schema_name: Optional PostgreSQL schema for per-tenant isolation.
 
         Returns:
             List of context names.
@@ -788,13 +910,14 @@ class PostgresDashboardStore:
             .where(
                 t.c.tenant_id == tenant_id,
                 t.c.user_id == user_id,
-                t.c.dashboard_id == uuid.UUID(dashboard_id),
+                t.c.dashboard_id == int(dashboard_id),
             )
             .order_by(t.c.context)
         )
         sql, params = self._compile_query(stmt)
 
         async with self._pool.acquire() as conn:
+            await self._set_schema(conn, schema_name)
             rows = await conn.fetch(sql, *params)
             return [row["context"] for row in rows]
 
@@ -804,6 +927,7 @@ class PostgresDashboardStore:
         dashboard_ids: list[str],
         tenant_id: str,
         user_id: str,
+        schema_name: str | None = None,
     ) -> bool:
         """Reorder pinned dashboards in a context.
 
@@ -816,25 +940,27 @@ class PostgresDashboardStore:
             dashboard_ids: Ordered list of dashboard IDs for the new order.
             tenant_id: Tenant ID for isolation.
             user_id: User ID who owns the pins.
+            schema_name: Optional PostgreSQL schema for per-tenant isolation.
 
         Returns:
             True if reordered, False otherwise.
         """
         t = _pinned_dashboards_table
 
-        # Convert provided IDs to UUIDs
-        provided_uuids = [uuid.UUID(d_id) for d_id in dashboard_ids]
+        # Convert provided IDs to integers
+        provided_ids = [int(d_id) for d_id in dashboard_ids]
 
         async with self._pool.acquire() as conn, conn.transaction():
+            await self._set_schema(conn, schema_name)
             # First, get any remaining pins not in dashboard_ids, ordered by current position
-            if provided_uuids:
+            if provided_ids:
                 remaining_stmt = (
                     select(t.c.dashboard_id)
                     .where(
                         t.c.tenant_id == tenant_id,
                         t.c.user_id == user_id,
                         t.c.context == context,
-                        not_(t.c.dashboard_id.in_(provided_uuids)),
+                        not_(t.c.dashboard_id.in_(provided_ids)),
                     )
                     .order_by(t.c.position)
                 )
@@ -852,20 +978,20 @@ class PostgresDashboardStore:
 
             remaining_sql, remaining_params = self._compile_query(remaining_stmt)
             remaining_rows = await conn.fetch(remaining_sql, *remaining_params)
-            remaining_uuids = [row["dashboard_id"] for row in remaining_rows]
+            remaining_ids = [row["dashboard_id"] for row in remaining_rows]
 
             # Build combined list: provided IDs first, then remaining IDs
-            all_uuids = provided_uuids + remaining_uuids
+            all_ids = provided_ids + remaining_ids
 
             # Update positions for all pins
-            for i, d_uuid in enumerate(all_uuids):
+            for i, d_id in enumerate(all_ids):
                 stmt = (
                     update(t)
                     .where(
                         t.c.tenant_id == tenant_id,
                         t.c.user_id == user_id,
                         t.c.context == context,
-                        t.c.dashboard_id == d_uuid,
+                        t.c.dashboard_id == d_id,
                     )
                     .values(position=i)
                 )
@@ -880,6 +1006,7 @@ class PostgresDashboardStore:
         context: str,
         tenant_id: str,
         user_id: str,
+        schema_name: str | None = None,
     ) -> bool:
         """Check if a dashboard is pinned to a context.
 
@@ -888,6 +1015,7 @@ class PostgresDashboardStore:
             context: The context to check.
             tenant_id: Tenant ID for isolation.
             user_id: User ID who owns the pins.
+            schema_name: Optional PostgreSQL schema for per-tenant isolation.
 
         Returns:
             True if pinned, False otherwise.
@@ -897,12 +1025,13 @@ class PostgresDashboardStore:
             t.c.tenant_id == tenant_id,
             t.c.user_id == user_id,
             t.c.context == context,
-            t.c.dashboard_id == uuid.UUID(dashboard_id),
+            t.c.dashboard_id == int(dashboard_id),
         )
         stmt = select(exists(subquery))
         sql, params = self._compile_query(stmt)
 
         async with self._pool.acquire() as conn:
+            await self._set_schema(conn, schema_name)
             result = await conn.fetchval(sql, *params)
             return bool(result)
 
@@ -911,6 +1040,7 @@ class PostgresDashboardStore:
         context: str,
         tenant_id: str,
         user_id: str,
+        schema_name: str | None = None,
     ) -> list[PinnedDashboard]:
         """Get pin entries for a context (for API responses).
 
@@ -918,6 +1048,7 @@ class PostgresDashboardStore:
             context: The context to get pins for.
             tenant_id: Tenant ID for isolation.
             user_id: User ID who owns the pins.
+            schema_name: Optional PostgreSQL schema for per-tenant isolation.
 
         Returns:
             List of PinnedDashboard entries, ordered by position.
@@ -935,6 +1066,7 @@ class PostgresDashboardStore:
         sql, params = self._compile_query(stmt)
 
         async with self._pool.acquire() as conn:
+            await self._set_schema(conn, schema_name)
             rows = await conn.fetch(sql, *params)
             return [self._row_to_pinned_dashboard(row) for row in rows]
 
@@ -964,7 +1096,9 @@ class PostgresDashboardStore:
         from sqlalchemy.dialects import postgresql
 
         dialect = postgresql.dialect(paramstyle="numeric")
-        compiled = stmt.compile(dialect=dialect, compile_kwargs={"literal_binds": False})
+        compiled = stmt.compile(
+            dialect=dialect, compile_kwargs={"literal_binds": False}
+        )
         sql = str(compiled)
 
         # Extract parameters in the order they appear in the SQL
