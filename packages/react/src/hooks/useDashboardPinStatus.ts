@@ -21,6 +21,12 @@ export interface UseDashboardPinStatusOptions {
    */
   dashboardId: string;
   /**
+   * Optional list of contexts to filter results by.
+   * When provided, pinnedContexts will only include contexts from this list.
+   * This is useful when you only care about specific contexts.
+   */
+  contexts?: string[];
+  /**
    * Whether to automatically fetch on mount.
    * @default true
    */
@@ -83,7 +89,7 @@ export interface UseDashboardPinStatusResult {
 export function useDashboardPinStatus(
   options: UseDashboardPinStatusOptions
 ): UseDashboardPinStatusResult {
-  const { dashboardId, enabled = true } = options;
+  const { dashboardId, contexts: filterContexts, enabled = true } = options;
 
   const { client } = useAnalytics();
 
@@ -98,8 +104,12 @@ export function useDashboardPinStatus(
     setError(null);
 
     try {
-      const contexts = await client.getDashboardPinContexts(dashboardId);
-      setPinnedContexts(contexts);
+      const allContexts = await client.getDashboardPinContexts(dashboardId);
+      // Filter to only requested contexts if specified
+      const filteredContexts = filterContexts
+        ? allContexts.filter((ctx) => filterContexts.includes(ctx))
+        : allContexts;
+      setPinnedContexts(filteredContexts);
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       setError(error);
@@ -107,7 +117,7 @@ export function useDashboardPinStatus(
     } finally {
       setIsLoading(false);
     }
-  }, [client, dashboardId, enabled]);
+  }, [client, dashboardId, filterContexts, enabled]);
 
   const refetch = useCallback(async () => {
     await fetchPinStatus();

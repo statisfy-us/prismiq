@@ -190,32 +190,43 @@ export function PinButton({
   const displayLabel = isPinned ? unpinLabel : label;
 
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      disabled={isLoading}
-      className={className}
-      style={combinedStyles}
-      aria-pressed={isPinned}
-      aria-label={iconOnly ? displayLabel : undefined}
-      title={iconOnly ? displayLabel : undefined}
-    >
-      {isLoading ? (
-        <span
-          style={{
-            display: 'inline-block',
-            width: iconSize,
-            height: iconSize,
-            border: '2px solid currentColor',
-            borderRightColor: 'transparent',
-            borderRadius: '50%',
-            animation: 'prismiq-spin 0.6s linear infinite',
-          }}
-        />
-      ) : (
-        <PinIcon filled={isPinned} size={iconSize} />
-      )}
-      {!iconOnly && <span>{displayLabel}</span>}
-    </button>
+    <>
+      <style>
+        {`
+          @keyframes prismiq-spin {
+            to {
+              transform: rotate(360deg);
+            }
+          }
+        `}
+      </style>
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={isLoading}
+        className={className}
+        style={combinedStyles}
+        aria-pressed={isPinned}
+        aria-label={iconOnly ? displayLabel : undefined}
+        title={iconOnly ? displayLabel : undefined}
+      >
+        {isLoading ? (
+          <span
+            style={{
+              display: 'inline-block',
+              width: iconSize,
+              height: iconSize,
+              border: '2px solid currentColor',
+              borderRightColor: 'transparent',
+              borderRadius: '50%',
+              animation: 'prismiq-spin 0.6s linear infinite',
+            }}
+          />
+        ) : (
+          <PinIcon filled={isPinned} size={iconSize} />
+        )}
+        {!iconOnly && <span>{displayLabel}</span>}
+      </button>
+    </>
   );
 }

@@ -7,6 +7,18 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy import (
+    Column,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    func,
+    insert,
+    select,
+)
+from sqlalchemy.dialects.postgresql import TIMESTAMP, UUID
+
 from prismiq.dashboards import (
     Dashboard,
     DashboardCreate,
@@ -25,6 +37,20 @@ from prismiq.types import QueryDefinition
 
 if TYPE_CHECKING:
     from asyncpg import Pool  # type: ignore[import-not-found]
+
+# SQLAlchemy Table definition for pinned dashboards (used for query generation)
+_metadata = MetaData()
+_pinned_dashboards_table = Table(
+    "prismiq_pinned_dashboards",
+    _metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True),
+    Column("tenant_id", String(255), nullable=False),
+    Column("user_id", String(255), nullable=False),
+    Column("dashboard_id", UUID(as_uuid=True), nullable=False),
+    Column("context", String(100), nullable=False),
+    Column("position", Integer, nullable=False),
+    Column("pinned_at", TIMESTAMP(timezone=True), nullable=False),
+)
 
 
 class PostgresDashboardStore:
@@ -617,40 +643,41 @@ class PostgresDashboardStore:
         if not dashboard:
             raise ValueError(f"Dashboard '{dashboard_id}' not found")
 
+        t = _pinned_dashboards_table
+
         async with self._pool.acquire() as conn:
-            # Determine position if not provided
+            # Determine position if not provided using SQLAlchemy Core
             if position is None:
-                result = await conn.fetchval(
-                    """
-                    SELECT COALESCE(MAX(position) + 1, 0)
-                    FROM prismiq_pinned_dashboards
-                    WHERE tenant_id = $1 AND user_id = $2 AND context = $3
-                    """,
-                    tenant_id,
-                    user_id,
-                    context,
+                max_pos_query = select(func.coalesce(func.max(t.c.position) + 1, 0)).where(
+                    t.c.tenant_id == tenant_id,
+                    t.c.user_id == user_id,
+                    t.c.context == context,
                 )
+                sql, params = self._compile_query(max_pos_query)
+                result = await conn.fetchval(sql, *params)
                 position = int(result)
 
             pin_id = uuid.uuid4()
             now = datetime.now(timezone.utc)
 
-            try:
-                row = await conn.fetchrow(
-                    """
-                    INSERT INTO prismiq_pinned_dashboards
-                    (id, tenant_id, user_id, dashboard_id, context, position, pinned_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7)
-                    RETURNING *
-                    """,
-                    pin_id,
-                    tenant_id,
-                    user_id,
-                    uuid.UUID(dashboard_id),
-                    context,
-                    position,
-                    now,
+            # Build INSERT using SQLAlchemy Core
+            insert_stmt = (
+                insert(t)
+                .values(
+                    id=pin_id,
+                    tenant_id=tenant_id,
+                    user_id=user_id,
+                    dashboard_id=uuid.UUID(dashboard_id),
+                    context=context,
+                    position=position,
+                    pinned_at=now,
                 )
+                .returning(*t.c)
+            )
+            insert_sql, insert_params = self._compile_query(insert_stmt)
+
+            try:
+                row = await conn.fetchrow(insert_sql, *insert_params)
             except Exception as e:
                 # Unique constraint violation means already pinned
                 if "unique_pin_per_context" in str(e):
@@ -864,3 +891,32 @@ class PostgresDashboardStore:
             position=row["position"],
             pinned_at=row["pinned_at"],
         )
+
+    @staticmethod
+    def _compile_query(stmt: Any) -> tuple[str, list[Any]]:
+        """Compile a SQLAlchemy statement for asyncpg execution.
+
+        Converts SQLAlchemy Core statements to SQL strings with positional
+        parameters ($1, $2, etc.) compatible with asyncpg.
+
+        Args:
+            stmt: SQLAlchemy Core statement (select, insert, etc.)
+
+        Returns:
+            Tuple of (sql_string, list_of_parameters)
+        """
+        from sqlalchemy.dialects import postgresql
+
+        dialect = postgresql.dialect(paramstyle="numeric")
+        compiled = stmt.compile(dialect=dialect, compile_kwargs={"literal_binds": False})
+        sql = str(compiled)
+
+        # Extract parameters in the order they appear in the SQL
+        # The compiled.positiontup gives param names in order for positional dialects
+        if hasattr(compiled, "positiontup") and compiled.positiontup:
+            params = [compiled.params[name] for name in compiled.positiontup]
+        else:
+            # Fallback: params dict should be ordered in Python 3.7+
+            params = list(compiled.params.values())
+
+        return sql, params

@@ -991,8 +991,9 @@ class InMemoryDashboardStore:
             key = (tenant_id, user_id, context)
             pins = self._pins.get(key, [])
 
+            # Empty pins list is a successful no-op (matches Postgres store semantics)
             if not pins:
-                return False
+                return True
 
             # Build map of dashboard_id -> pin
             pin_map = {p.dashboard_id: p for p in pins}

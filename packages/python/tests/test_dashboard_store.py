@@ -842,10 +842,10 @@ class TestInMemoryDashboardStoreReorderPins:
         assert pins[1].dashboard_id == d1.id
         assert pins[2].dashboard_id == d2.id
 
-    async def test_reorder_empty_context_returns_false(self, store: InMemoryDashboardStore) -> None:
-        """Test reordering empty context returns False."""
+    async def test_reorder_empty_context_returns_true(self, store: InMemoryDashboardStore) -> None:
+        """Test reordering empty context returns True (no-op success)."""
         result = await store.reorder_pins("ctx", ["some_id"], TEST_TENANT_ID, TEST_USER_ID)
-        assert result is False
+        assert result is True  # Empty reorder is a successful no-op
 
     async def test_reorder_partial_list_preserves_unlisted(
         self, store: InMemoryDashboardStore

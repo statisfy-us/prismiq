@@ -49,11 +49,11 @@ class UnpinRequest(BaseModel):
 
     Attributes:
         dashboard_id: ID of the dashboard to unpin.
-        context: Context to unpin from.
+        context: Context to unpin from (1-100 characters).
     """
 
     dashboard_id: str
-    context: str
+    context: str = Field(..., min_length=1, max_length=100)
 
 
 class ReorderPinsRequest(BaseModel):
