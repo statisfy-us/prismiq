@@ -13,9 +13,12 @@ from sqlalchemy import (
     MetaData,
     String,
     Table,
+    delete,
+    exists,
     func,
     insert,
     select,
+    update,
 )
 from sqlalchemy.dialects.postgresql import TIMESTAMP, UUID
 
@@ -706,17 +709,17 @@ class PostgresDashboardStore:
         Returns:
             True if unpinned, False if not found.
         """
+        t = _pinned_dashboards_table
+        stmt = delete(t).where(
+            t.c.tenant_id == tenant_id,
+            t.c.user_id == user_id,
+            t.c.dashboard_id == uuid.UUID(dashboard_id),
+            t.c.context == context,
+        )
+        sql, params = self._compile_query(stmt)
+
         async with self._pool.acquire() as conn:
-            result = await conn.execute(
-                """
-                DELETE FROM prismiq_pinned_dashboards
-                WHERE tenant_id = $1 AND user_id = $2 AND dashboard_id = $3 AND context = $4
-                """,
-                tenant_id,
-                user_id,
-                uuid.UUID(dashboard_id),
-                context,
-            )
+            result = await conn.execute(sql, *params)
             return result == "DELETE 1"
 
     async def get_pinned_dashboards(
@@ -736,17 +739,20 @@ class PostgresDashboardStore:
             List of Dashboard objects, ordered by position.
         """
         # Get pinned dashboard IDs in order
-        async with self._pool.acquire() as conn:
-            rows = await conn.fetch(
-                """
-                SELECT dashboard_id FROM prismiq_pinned_dashboards
-                WHERE tenant_id = $1 AND user_id = $2 AND context = $3
-                ORDER BY position
-                """,
-                tenant_id,
-                user_id,
-                context,
+        t = _pinned_dashboards_table
+        stmt = (
+            select(t.c.dashboard_id)
+            .where(
+                t.c.tenant_id == tenant_id,
+                t.c.user_id == user_id,
+                t.c.context == context,
             )
+            .order_by(t.c.position)
+        )
+        sql, params = self._compile_query(stmt)
+
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(sql, *params)
 
         # Fetch each dashboard
         dashboards: list[Dashboard] = []
@@ -773,17 +779,20 @@ class PostgresDashboardStore:
         Returns:
             List of context names.
         """
-        async with self._pool.acquire() as conn:
-            rows = await conn.fetch(
-                """
-                SELECT context FROM prismiq_pinned_dashboards
-                WHERE tenant_id = $1 AND user_id = $2 AND dashboard_id = $3
-                ORDER BY context
-                """,
-                tenant_id,
-                user_id,
-                uuid.UUID(dashboard_id),
+        t = _pinned_dashboards_table
+        stmt = (
+            select(t.c.context)
+            .where(
+                t.c.tenant_id == tenant_id,
+                t.c.user_id == user_id,
+                t.c.dashboard_id == uuid.UUID(dashboard_id),
             )
+            .order_by(t.c.context)
+        )
+        sql, params = self._compile_query(stmt)
+
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(sql, *params)
             return [row["context"] for row in rows]
 
     async def reorder_pins(
@@ -804,20 +813,22 @@ class PostgresDashboardStore:
         Returns:
             True if reordered, False otherwise.
         """
+        t = _pinned_dashboards_table
+
         async with self._pool.acquire() as conn, conn.transaction():
             for i, d_id in enumerate(dashboard_ids):
-                await conn.execute(
-                    """
-                    UPDATE prismiq_pinned_dashboards
-                    SET position = $1
-                    WHERE tenant_id = $2 AND user_id = $3 AND context = $4 AND dashboard_id = $5
-                    """,
-                    i,
-                    tenant_id,
-                    user_id,
-                    context,
-                    uuid.UUID(d_id),
+                stmt = (
+                    update(t)
+                    .where(
+                        t.c.tenant_id == tenant_id,
+                        t.c.user_id == user_id,
+                        t.c.context == context,
+                        t.c.dashboard_id == uuid.UUID(d_id),
+                    )
+                    .values(position=i)
                 )
+                sql, params = self._compile_query(stmt)
+                await conn.execute(sql, *params)
         return True
 
     async def is_dashboard_pinned(
@@ -838,19 +849,18 @@ class PostgresDashboardStore:
         Returns:
             True if pinned, False otherwise.
         """
+        t = _pinned_dashboards_table
+        subquery = select(t.c.id).where(
+            t.c.tenant_id == tenant_id,
+            t.c.user_id == user_id,
+            t.c.context == context,
+            t.c.dashboard_id == uuid.UUID(dashboard_id),
+        )
+        stmt = select(exists(subquery))
+        sql, params = self._compile_query(stmt)
+
         async with self._pool.acquire() as conn:
-            result = await conn.fetchval(
-                """
-                SELECT EXISTS (
-                    SELECT 1 FROM prismiq_pinned_dashboards
-                    WHERE tenant_id = $1 AND user_id = $2 AND context = $3 AND dashboard_id = $4
-                )
-                """,
-                tenant_id,
-                user_id,
-                context,
-                uuid.UUID(dashboard_id),
-            )
+            result = await conn.fetchval(sql, *params)
             return bool(result)
 
     async def get_pins_for_context(
@@ -869,17 +879,20 @@ class PostgresDashboardStore:
         Returns:
             List of PinnedDashboard entries, ordered by position.
         """
-        async with self._pool.acquire() as conn:
-            rows = await conn.fetch(
-                """
-                SELECT * FROM prismiq_pinned_dashboards
-                WHERE tenant_id = $1 AND user_id = $2 AND context = $3
-                ORDER BY position
-                """,
-                tenant_id,
-                user_id,
-                context,
+        t = _pinned_dashboards_table
+        stmt = (
+            select(t)
+            .where(
+                t.c.tenant_id == tenant_id,
+                t.c.user_id == user_id,
+                t.c.context == context,
             )
+            .order_by(t.c.position)
+        )
+        sql, params = self._compile_query(stmt)
+
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(sql, *params)
             return [self._row_to_pinned_dashboard(row) for row in rows]
 
     def _row_to_pinned_dashboard(self, row: Any) -> PinnedDashboard:
