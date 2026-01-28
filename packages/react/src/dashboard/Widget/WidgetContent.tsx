@@ -36,6 +36,24 @@ export interface WidgetContentProps {
 }
 
 /**
+ * Simple markdown parser for text widgets.
+ * Supports headings, bold, italic, code, and line breaks.
+ */
+function parseMarkdown(text: string, theme: ReturnType<typeof useTheme>['theme']): string {
+  return text
+    .replace(/^### (.+)$/gm, '<h3 style="margin: 0.5em 0; font-size: 1.1em;">$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2 style="margin: 0.5em 0; font-size: 1.25em;">$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1 style="margin: 0.5em 0; font-size: 1.5em;">$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(
+      /`(.+?)`/g,
+      `<code style="background: ${theme.colors.surface}; padding: 0.1em 0.3em; border-radius: 3px; font-family: ${theme.fonts.mono};">$1</code>`
+    )
+    .replace(/\n/g, '<br/>');
+}
+
+/**
  * Render text/markdown content.
  */
 function TextContent({ config }: { config: WidgetConfig }): JSX.Element {
@@ -75,7 +93,17 @@ function TextContent({ config }: { config: WidgetConfig }): JSX.Element {
     return <></>;
   }
 
-  // For now, just render plain text. In the future, could add markdown support.
+  // Render markdown if enabled
+  if (config.markdown) {
+    return (
+      <div
+        style={contentStyle}
+        dangerouslySetInnerHTML={{ __html: parseMarkdown(config.content, theme) }}
+      />
+    );
+  }
+
+  // Plain text with line breaks
   return (
     <div style={contentStyle}>
       {config.content.split('\n').map((line, i) => (

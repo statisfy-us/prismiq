@@ -28,6 +28,7 @@ import { DateFormattingSection } from './configs/DateFormattingSection';
 import { TrendConfigSection } from './configs/TrendConfigSection';
 import { HyperlinkSection } from './configs/HyperlinkSection';
 import { ReferenceLinesSection } from './configs/ReferenceLinesSection';
+import { TextFormattingSection } from './configs/TextFormattingSection';
 import type { Widget, WidgetConfig, WidgetType, WidgetHyperlink } from '../types';
 import type {
   DatabaseSchema,
@@ -554,36 +555,7 @@ export function WidgetEditorPage({
         );
 
       case 'text':
-        return (
-          <>
-            <div style={fieldStyle}>
-              <label style={labelStyle}>Content</label>
-              <textarea
-                value={config.content || ''}
-                onChange={(e) => updateConfig('content', e.target.value)}
-                rows={6}
-                style={{
-                  width: '100%',
-                  padding: theme.spacing.sm,
-                  fontSize: theme.fontSizes.sm,
-                  border: `1px solid ${theme.colors.border}`,
-                  borderRadius: theme.radius.sm,
-                  backgroundColor: theme.colors.background,
-                  color: theme.colors.text,
-                  fontFamily: config.markdown ? theme.fonts.mono : theme.fonts.sans,
-                  resize: 'vertical',
-                }}
-              />
-            </div>
-            <Checkbox
-              label="Enable Markdown"
-              checked={config.markdown ?? true}
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                updateConfig('markdown', e.target.checked)
-              }
-            />
-          </>
-        );
+        return <TextFormattingSection config={config} onChange={updateConfig} />;
 
       default:
         return null;

@@ -19,3 +19,6 @@ export type { HyperlinkSectionProps } from './HyperlinkSection';
 
 export { ReferenceLinesSection } from './ReferenceLinesSection';
 export type { ReferenceLinesSectionProps } from './ReferenceLinesSection';
+
+export { TextFormattingSection } from './TextFormattingSection';
+export type { TextFormattingSectionProps } from './TextFormattingSection';
