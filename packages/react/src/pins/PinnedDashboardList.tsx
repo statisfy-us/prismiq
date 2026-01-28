@@ -258,6 +258,15 @@ export function PinnedDashboardList({
   if (isLoading) {
     return (
       <div className={className} style={{ ...containerStyles, ...style }}>
+        <style>
+          {`
+            @keyframes prismiq-spin {
+              to {
+                transform: rotate(360deg);
+              }
+            }
+          `}
+        </style>
         <div style={loadingStyles}>
           <span
             style={{
@@ -332,7 +341,18 @@ export function PinnedDashboardList({
 
         if (renderItem) {
           return (
-            <div key={dashboard.id} onClick={() => onSelect(dashboard)}>
+            <div
+              key={dashboard.id}
+              onClick={() => onSelect(dashboard)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onSelect(dashboard);
+                }
+              }}
+            >
               {renderItem(dashboard, actions)}
             </div>
           );

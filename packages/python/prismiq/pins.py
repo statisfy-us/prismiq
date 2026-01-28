@@ -8,8 +8,12 @@ areas of the embedding application.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
+
+# Non-empty string type for dashboard IDs
+NonEmptyStr = Annotated[str, StringConstraints(min_length=1)]
 
 
 class PinnedDashboard(BaseModel):
@@ -61,8 +65,8 @@ class ReorderPinsRequest(BaseModel):
 
     Attributes:
         context: Context to reorder pins in.
-        dashboard_ids: Ordered list of dashboard IDs (new order). Must not be empty.
+        dashboard_ids: Ordered list of dashboard IDs (new order). Each ID must be non-empty.
     """
 
     context: str = Field(..., min_length=1, max_length=100)
-    dashboard_ids: list[str] = Field(..., min_length=1)
+    dashboard_ids: list[NonEmptyStr] = Field(..., min_length=1)
