@@ -130,23 +130,31 @@ export function DashboardEditor({
 
   // Load existing dashboard
   useEffect(() => {
-    if (!dashboardId || !client) return;
+    if (!dashboardId || !client) {
+      console.log('[DashboardEditor] Early return - dashboardId:', dashboardId, 'client:', !!client);
+      return;
+    }
 
     const loadDashboard = async () => {
+      console.log('[DashboardEditor] Starting loadDashboard for:', dashboardId);
       try {
         setIsLoading(true);
         setError(null);
+        console.log('[DashboardEditor] Fetching dashboard...');
         const data = await client.get<Dashboard>(`/dashboards/${dashboardId}`);
+        console.log('[DashboardEditor] Dashboard fetched:', data?.id, 'widgets:', data?.widgets?.length);
         setDashboard(data);
         setIsDirty(false);
         isInitialLayoutRef.current = true;
 
         // Execute queries for widgets in batches to reduce server load
         const widgetsWithQueries = data.widgets.filter((w) => w.query);
+        console.log('[DashboardEditor] Widgets with queries:', widgetsWithQueries.length);
         if (widgetsWithQueries.length > 0) {
           // Process widgets in batches
           for (let i = 0; i < widgetsWithQueries.length; i += batchSize) {
             const batch = widgetsWithQueries.slice(i, i + batchSize);
+            console.log('[DashboardEditor] Processing batch', Math.floor(i / batchSize) + 1, 'with', batch.length, 'widgets');
 
             // Set batch to loading
             setWidgetLoading((prev) => {
@@ -159,10 +167,13 @@ export function DashboardEditor({
             await Promise.all(
               batch.map(async (widget) => {
                 try {
+                  console.log('[DashboardEditor] Executing query for widget:', widget.id);
                   const result = await client.executeQuery(widget.query!);
+                  console.log('[DashboardEditor] Query completed for widget:', widget.id);
                   setWidgetResults((prev) => ({ ...prev, [widget.id]: result }));
                   setWidgetRefreshTimes((prev) => ({ ...prev, [widget.id]: Math.floor(Date.now() / 1000) }));
                 } catch (err) {
+                  console.error('[DashboardEditor] Widget query error:', widget.id, err);
                   const errorMessage = err instanceof Error ? err.message : 'Query failed';
                   setWidgetErrors((prev) => ({
                     ...prev,
@@ -175,9 +186,12 @@ export function DashboardEditor({
             );
           }
         }
+        console.log('[DashboardEditor] All widget queries completed');
       } catch (err) {
+        console.error('[DashboardEditor] Load error:', err);
         setError(err instanceof Error ? err : new Error('Failed to load dashboard'));
       } finally {
+        console.log('[DashboardEditor] Setting isLoading to false');
         setIsLoading(false);
       }
     };

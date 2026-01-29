@@ -106,6 +106,7 @@ class PrismiqEngine:
         schema_cache_ttl: int | None = None,
         enable_metrics: bool = True,
         persist_dashboards: bool = False,
+        skip_table_creation: bool = False,
     ) -> None:
         """Initialize the Prismiq engine.
 
@@ -121,6 +122,8 @@ class PrismiqEngine:
             schema_cache_ttl: TTL for schema cache in seconds (default: 3600 = 1 hour).
             enable_metrics: Whether to record Prometheus metrics (default: True).
             persist_dashboards: Store dashboards in PostgreSQL (default: False uses in-memory).
+            skip_table_creation: Skip automatic table creation (default: False).
+                Use when tables are managed externally (e.g., via Alembic migrations).
         """
         self._database_url = database_url
         self._exposed_tables = exposed_tables
@@ -131,6 +134,7 @@ class PrismiqEngine:
         self._schema_cache_ttl = schema_cache_ttl
         self._enable_metrics = enable_metrics
         self._persist_dashboards = persist_dashboards
+        self._skip_table_creation = skip_table_creation
 
         # Schema config manager
         self._schema_config_manager = SchemaConfigManager(schema_config)
@@ -239,8 +243,9 @@ class PrismiqEngine:
 
         # Initialize dashboard store
         if self._persist_dashboards:
-            # Create tables if they don't exist
-            await ensure_tables(self._pool)
+            # Create tables if they don't exist (skip if managed externally via Alembic)
+            if not self._skip_table_creation:
+                await ensure_tables(self._pool)
             self._dashboard_store = PostgresDashboardStore(self._pool)
             self._saved_query_store = SavedQueryStore(self._pool)
         else:
