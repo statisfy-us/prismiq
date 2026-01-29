@@ -134,7 +134,9 @@ export function DashboardEditor({
   const [isDirty, setIsDirty] = useState(false);
 
   // Track if initial layout has been set (react-grid-layout fires onLayoutChange on mount)
-  const isInitialLayoutRef = useRef(true);
+  // Use a counter instead of boolean to ignore multiple initial layout events
+  const initialLayoutCountRef = useRef(0);
+  const INITIAL_LAYOUT_IGNORE_COUNT = 3; // Ignore first N layout changes after load
 
   // Store client in ref so effect doesn't re-run when client reference changes
   const clientRef = useRef(client);
@@ -204,7 +206,7 @@ export function DashboardEditor({
       loadedDashboardRef.current = dashboardId;
       setDashboard(cached.data);
       setIsDirty(false);
-      isInitialLayoutRef.current = true;
+      initialLayoutCountRef.current = 0;
       setIsLoading(false);
       // Execute widget queries with cached data (no cancellation - results should always be set)
       executeWidgetQueries(cached.data.widgets, currentClient);
@@ -220,7 +222,7 @@ export function DashboardEditor({
         .then((data) => {
           setDashboard(data);
           setIsDirty(false);
-          isInitialLayoutRef.current = true;
+          initialLayoutCountRef.current = 0;
           setIsLoading(false);
           executeWidgetQueries(data.widgets, currentClient);
         })
@@ -254,7 +256,7 @@ export function DashboardEditor({
         inflightFetches.delete(dashboardId);
         setDashboard(data);
         setIsDirty(false);
-        isInitialLayoutRef.current = true;
+        initialLayoutCountRef.current = 0;
         setIsLoading(false);
         executeWidgetQueries(data.widgets, currentClient);
       })
@@ -319,9 +321,10 @@ export function DashboardEditor({
   // Handle layout changes
   const handleLayoutChange = useCallback(
     (positions: Record<string, WidgetPosition>) => {
-      // Skip the initial layout change fired by react-grid-layout on mount
-      if (isInitialLayoutRef.current) {
-        isInitialLayoutRef.current = false;
+      // Skip initial layout changes fired by react-grid-layout on mount/load
+      // react-grid-layout can fire multiple onLayoutChange events during initial render
+      if (initialLayoutCountRef.current < INITIAL_LAYOUT_IGNORE_COUNT) {
+        initialLayoutCountRef.current++;
         return;
       }
 
@@ -355,7 +358,7 @@ export function DashboardEditor({
       try {
         const savedDashboard = await client.get<Dashboard>(`/dashboards/${id}`);
         setDashboard(savedDashboard);
-        isInitialLayoutRef.current = true;
+        initialLayoutCountRef.current = 0;
         onSave?.(savedDashboard);
       } catch (reloadErr) {
         // Reload failed but save succeeded - use local state
