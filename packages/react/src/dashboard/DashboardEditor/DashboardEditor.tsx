@@ -77,6 +77,14 @@ function getDefaultPosition(
  */
 const DEFAULT_BATCH_SIZE = 4;
 
+// Module-level cache for dashboard data to survive StrictMode remounts
+// Maps dashboardId -> { data, timestamp }
+const dashboardCache = new Map<string, { data: Dashboard; timestamp: number }>();
+const CACHE_TTL_MS = 5000; // Cache data for 5 seconds
+
+// Track in-flight fetches to prevent duplicate network requests
+const inflightFetches = new Map<string, Promise<Dashboard>>();
+
 export function DashboardEditor({
   dashboardId,
   onSave,
@@ -128,76 +136,134 @@ export function DashboardEditor({
   // Track if initial layout has been set (react-grid-layout fires onLayoutChange on mount)
   const isInitialLayoutRef = useRef(true);
 
-  // Load existing dashboard
+  // Store client in ref so effect doesn't re-run when client reference changes
+  const clientRef = useRef(client);
+  clientRef.current = client;
+
+  // Track which dashboard has been loaded to prevent duplicate loads
+  const loadedDashboardRef = useRef<string | null>(null);
+
+
+  // Helper to execute widget queries - can be called from multiple paths
+  // Note: We don't cancel widget query results - they're harmless to set even after unmount
+  // and StrictMode would otherwise prevent results from ever being shown
+  const executeWidgetQueries = useCallback(async (
+    widgets: WidgetType[],
+    currentClient: typeof client
+  ) => {
+    const widgetsWithQueries = widgets.filter((w) => w.query);
+    if (widgetsWithQueries.length === 0) return;
+
+    for (let i = 0; i < widgetsWithQueries.length; i += batchSize) {
+      const batch = widgetsWithQueries.slice(i, i + batchSize);
+
+      setWidgetLoading((prev) => {
+        const next = { ...prev };
+        batch.forEach((w) => { next[w.id] = true; });
+        return next;
+      });
+
+      await Promise.all(
+        batch.map(async (widget) => {
+          try {
+            const result = await currentClient.executeQuery(widget.query!);
+            setWidgetResults((prev) => ({ ...prev, [widget.id]: result }));
+            setWidgetRefreshTimes((prev) => ({ ...prev, [widget.id]: Math.floor(Date.now() / 1000) }));
+          } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Query failed';
+            setWidgetErrors((prev) => ({
+              ...prev,
+              [widget.id]: new Error(`${widget.title}: ${errorMessage}`),
+            }));
+          } finally {
+            setWidgetLoading((prev) => ({ ...prev, [widget.id]: false }));
+          }
+        })
+      );
+    }
+  }, [batchSize]);
+
+  // Load existing dashboard - only re-run when dashboardId changes
   useEffect(() => {
-    if (!dashboardId || !client) {
-      console.log('[DashboardEditor] Early return - dashboardId:', dashboardId, 'client:', !!client);
+    const currentClient = clientRef.current;
+
+    if (!dashboardId || !currentClient) {
       return;
     }
 
-    const loadDashboard = async () => {
-      console.log('[DashboardEditor] Starting loadDashboard for:', dashboardId);
-      try {
-        setIsLoading(true);
-        setError(null);
-        console.log('[DashboardEditor] Fetching dashboard...');
-        const data = await client.get<Dashboard>(`/dashboards/${dashboardId}`);
-        console.log('[DashboardEditor] Dashboard fetched:', data?.id, 'widgets:', data?.widgets?.length);
+    // Skip if already loaded this dashboard (instance-level check)
+    if (loadedDashboardRef.current === dashboardId) {
+      return;
+    }
+
+    const now = Date.now();
+
+    // Check module-level cache first (survives StrictMode remounts)
+    const cached = dashboardCache.get(dashboardId);
+    if (cached && now - cached.timestamp < CACHE_TTL_MS) {
+      loadedDashboardRef.current = dashboardId;
+      setDashboard(cached.data);
+      setIsDirty(false);
+      isInitialLayoutRef.current = true;
+      setIsLoading(false);
+      // Execute widget queries with cached data (no cancellation - results should always be set)
+      executeWidgetQueries(cached.data.widgets, currentClient);
+      return;
+    }
+
+    // Check if there's already an in-flight fetch
+    const inflightFetch = inflightFetches.get(dashboardId);
+    if (inflightFetch) {
+      loadedDashboardRef.current = dashboardId;
+      setIsLoading(true);
+      inflightFetch
+        .then((data) => {
+          setDashboard(data);
+          setIsDirty(false);
+          isInitialLayoutRef.current = true;
+          setIsLoading(false);
+          executeWidgetQueries(data.widgets, currentClient);
+        })
+        .catch((err) => {
+          console.error(`[DashboardEditor] In-flight fetch error:`, err);
+          setIsLoading(false);
+        });
+      return;
+    }
+
+    // Start a new fetch
+    loadedDashboardRef.current = dashboardId;
+
+    const fetchPromise = (async (): Promise<Dashboard> => {
+      setIsLoading(true);
+      setError(null);
+
+      const data = await currentClient.get<Dashboard>(`/dashboards/${dashboardId}`);
+
+      // Cache the data at module level (survives StrictMode remounts)
+      dashboardCache.set(dashboardId, { data, timestamp: Date.now() });
+
+      return data;
+    })();
+
+    // Track the in-flight fetch
+    inflightFetches.set(dashboardId, fetchPromise);
+
+    fetchPromise
+      .then((data) => {
+        inflightFetches.delete(dashboardId);
         setDashboard(data);
         setIsDirty(false);
         isInitialLayoutRef.current = true;
-
-        // Execute queries for widgets in batches to reduce server load
-        const widgetsWithQueries = data.widgets.filter((w) => w.query);
-        console.log('[DashboardEditor] Widgets with queries:', widgetsWithQueries.length);
-        if (widgetsWithQueries.length > 0) {
-          // Process widgets in batches
-          for (let i = 0; i < widgetsWithQueries.length; i += batchSize) {
-            const batch = widgetsWithQueries.slice(i, i + batchSize);
-            console.log('[DashboardEditor] Processing batch', Math.floor(i / batchSize) + 1, 'with', batch.length, 'widgets');
-
-            // Set batch to loading
-            setWidgetLoading((prev) => {
-              const next = { ...prev };
-              batch.forEach((w) => { next[w.id] = true; });
-              return next;
-            });
-
-            // Execute batch in parallel
-            await Promise.all(
-              batch.map(async (widget) => {
-                try {
-                  console.log('[DashboardEditor] Executing query for widget:', widget.id);
-                  const result = await client.executeQuery(widget.query!);
-                  console.log('[DashboardEditor] Query completed for widget:', widget.id);
-                  setWidgetResults((prev) => ({ ...prev, [widget.id]: result }));
-                  setWidgetRefreshTimes((prev) => ({ ...prev, [widget.id]: Math.floor(Date.now() / 1000) }));
-                } catch (err) {
-                  console.error('[DashboardEditor] Widget query error:', widget.id, err);
-                  const errorMessage = err instanceof Error ? err.message : 'Query failed';
-                  setWidgetErrors((prev) => ({
-                    ...prev,
-                    [widget.id]: new Error(`${widget.title}: ${errorMessage}`),
-                  }));
-                } finally {
-                  setWidgetLoading((prev) => ({ ...prev, [widget.id]: false }));
-                }
-              })
-            );
-          }
-        }
-        console.log('[DashboardEditor] All widget queries completed');
-      } catch (err) {
-        console.error('[DashboardEditor] Load error:', err);
-        setError(err instanceof Error ? err : new Error('Failed to load dashboard'));
-      } finally {
-        console.log('[DashboardEditor] Setting isLoading to false');
         setIsLoading(false);
-      }
-    };
-
-    loadDashboard();
-  }, [dashboardId, client]);
+        executeWidgetQueries(data.widgets, currentClient);
+      })
+      .catch((err) => {
+        inflightFetches.delete(dashboardId);
+        setError(err instanceof Error ? err : new Error('Failed to load dashboard'));
+        setIsLoading(false);
+      });
+  }, [dashboardId, batchSize, executeWidgetQueries]); // Removed client - using ref instead
 
   // Execute widget queries for preview
   const refreshWidget = useCallback(
@@ -374,6 +440,7 @@ export function DashboardEditor({
     flex: 1,
     overflow: 'auto',
     position: 'relative',
+    width: '100%',
   };
 
   const loadingStyle: React.CSSProperties = {

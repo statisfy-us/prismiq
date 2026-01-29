@@ -3,7 +3,7 @@
  * Supports responsive breakpoints for mobile-friendly layouts.
  */
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Responsive, WidthProvider } from 'react-grid-layout/legacy';
 import 'react-grid-layout/css/styles.css';
 import { useTheme } from '../../theme';
@@ -170,6 +170,11 @@ export function DashboardLayout({
     [baseLayout, layout.columns]
   );
 
+  // Log breakpoint changes for layout debugging
+  const handleBreakpointChange = useCallback((newBreakpoint: string, newCols: number) => {
+    console.log(`[DashboardLayout] Breakpoint: ${newBreakpoint}, cols: ${newCols}`);
+  }, []);
+
   // Handle layout changes
   // The legacy API passes (currentLayout, allLayouts) but we only need currentLayout
   const handleLayoutChange = useCallback(
@@ -187,6 +192,7 @@ export function DashboardLayout({
   const containerStyle: React.CSSProperties = {
     backgroundColor: theme.colors.background,
     minHeight: '100%',
+    width: '100%',
     position: 'relative',
   };
 
@@ -219,6 +225,10 @@ export function DashboardLayout({
         isDraggable={editable}
         isResizable={editable}
         onLayoutChange={handleLayoutChange}
+        onBreakpointChange={handleBreakpointChange}
+        onWidthChange={(containerWidth, _margin, cols) => {
+          console.log(`[DashboardLayout] Width: ${containerWidth}px, cols: ${cols}`);
+        }}
         draggableHandle=".prismiq-widget-drag-handle"
         useCSSTransforms={true}
       >

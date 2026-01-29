@@ -4,7 +4,7 @@
  * Fetches and manages the list of dashboards from the Prismiq backend.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAnalytics } from '../context/AnalyticsProvider';
 import type { Dashboard } from '../types';
@@ -76,6 +76,13 @@ export function useDashboards(
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
+  // Track if initial fetch has been done
+  const hasFetchedRef = useRef(false);
+
+  // Store client in ref to avoid refetching when client reference changes
+  const clientRef = useRef(client);
+  clientRef.current = client;
+
   const fetchDashboards = useCallback(async () => {
     if (!enabled) return;
 
@@ -83,25 +90,26 @@ export function useDashboards(
     setError(null);
 
     try {
-      const result = await client.listDashboards();
+      const result = await clientRef.current.listDashboards();
       setData(result);
     } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      setError(error);
+      const fetchError = err instanceof Error ? err : new Error(String(err));
+      setError(fetchError);
       setData(null);
     } finally {
       setIsLoading(false);
     }
-  }, [client, enabled]);
+  }, [enabled]); // Removed client dependency - using ref
 
   const refetch = useCallback(async () => {
     await fetchDashboards();
   }, [fetchDashboards]);
 
+  // Fetch on mount - only once
   useEffect(() => {
-    if (enabled) {
-      void fetchDashboards();
-    }
+    if (!enabled || hasFetchedRef.current) return;
+    hasFetchedRef.current = true;
+    void fetchDashboards();
   }, [enabled, fetchDashboards]);
 
   return {
