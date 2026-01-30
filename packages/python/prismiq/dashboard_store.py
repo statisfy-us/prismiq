@@ -12,9 +12,17 @@ import uuid
 from datetime import datetime, timezone
 from typing import Protocol
 
-from prismiq.dashboards import (Dashboard, DashboardCreate, DashboardLayout,
-                                DashboardUpdate, Widget, WidgetConfig,
-                                WidgetCreate, WidgetPosition, WidgetUpdate)
+from prismiq.dashboards import (
+    Dashboard,
+    DashboardCreate,
+    DashboardLayout,
+    DashboardUpdate,
+    Widget,
+    WidgetConfig,
+    WidgetCreate,
+    WidgetPosition,
+    WidgetUpdate,
+)
 from prismiq.pins import PinnedDashboard
 
 
@@ -455,9 +463,7 @@ class InMemoryDashboardStore:
                 dashboards = [
                     d
                     for d in dashboards
-                    if d.owner_id == owner_id
-                    or d.is_public
-                    or owner_id in d.allowed_viewers
+                    if d.owner_id == owner_id or d.is_public or owner_id in d.allowed_viewers
                 ]
             # Return deep copies to prevent external mutation
             return [self._copy_dashboard(d) for d in dashboards]
@@ -836,9 +842,7 @@ class InMemoryDashboardStore:
                 id=str(uuid.uuid4()),
                 type=original_widget.type,
                 title=f"{original_widget.title} (Copy)",
-                query=copy.deepcopy(original_widget.query)
-                if original_widget.query
-                else None,
+                query=copy.deepcopy(original_widget.query) if original_widget.query else None,
                 position=original_widget.position.model_copy(
                     update={"x": original_widget.position.x + 1}
                 ),
@@ -957,10 +961,7 @@ class InMemoryDashboardStore:
         async with self._lock:
             # Verify dashboard exists and belongs to tenant
             dashboard = self._dashboards.get(dashboard_id)
-            if (
-                dashboard is None
-                or self._dashboard_tenants.get(dashboard_id) != tenant_id
-            ):
+            if dashboard is None or self._dashboard_tenants.get(dashboard_id) != tenant_id:
                 raise ValueError(f"Dashboard '{dashboard_id}' not found")
 
             key = (tenant_id, user_id, context)
@@ -974,9 +975,7 @@ class InMemoryDashboardStore:
                     )
 
             # Determine position
-            position = (
-                len(pins) if position is None else max(0, min(position, len(pins)))
-            )
+            position = len(pins) if position is None else max(0, min(position, len(pins)))
 
             # Create pin
             now = _utc_now()

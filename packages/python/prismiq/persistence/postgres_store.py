@@ -7,21 +7,42 @@ import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
-_logger = logging.getLogger(__name__)
-
-from sqlalchemy import (Column, Integer, MetaData, String, Table, delete,
-                        exists, func, insert, not_, select, update)
+from sqlalchemy import (
+    Column,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    delete,
+    exists,
+    func,
+    insert,
+    not_,
+    select,
+    update,
+)
 from sqlalchemy.dialects.postgresql import TIMESTAMP
 
-from prismiq.dashboards import (Dashboard, DashboardCreate, DashboardFilter,
-                                DashboardLayout, DashboardUpdate, Widget,
-                                WidgetConfig, WidgetCreate, WidgetPosition,
-                                WidgetType, WidgetUpdate)
+from prismiq.dashboards import (
+    Dashboard,
+    DashboardCreate,
+    DashboardFilter,
+    DashboardLayout,
+    DashboardUpdate,
+    Widget,
+    WidgetConfig,
+    WidgetCreate,
+    WidgetPosition,
+    WidgetType,
+    WidgetUpdate,
+)
 from prismiq.pins import PinnedDashboard
 from prismiq.types import QueryDefinition
 
 if TYPE_CHECKING:
     from asyncpg import Pool  # type: ignore[import-not-found]
+
+_logger = logging.getLogger(__name__)
 
 # SQLAlchemy Table definition for pinned dashboards (used for query generation)
 # quote=True ensures all identifiers are double-quoted in generated SQL
@@ -316,12 +337,8 @@ class PostgresDashboardStore:
                         widget.title,
                         widget.type.value,
                         json.dumps(widget.query.model_dump()) if widget.query else None,
-                        json.dumps(widget.config.model_dump())
-                        if widget.config
-                        else None,
-                        json.dumps(widget.position.model_dump())
-                        if widget.position
-                        else None,
+                        json.dumps(widget.config.model_dump()) if widget.config else None,
+                        json.dumps(widget.position.model_dump()) if widget.position else None,
                     )
 
             if not updates:
@@ -759,9 +776,7 @@ class PostgresDashboardStore:
             await self._set_search_path(conn, schema_name)
             # Determine position if not provided using SQLAlchemy Core
             if position is None:
-                max_pos_query = select(
-                    func.coalesce(func.max(t.c.position) + 1, 0)
-                ).where(
+                max_pos_query = select(func.coalesce(func.max(t.c.position) + 1, 0)).where(
                     t.c.tenant_id == tenant_id,
                     t.c.user_id == user_id,
                     t.c.context == context,
@@ -871,9 +886,7 @@ class PostgresDashboardStore:
         # Fetch each dashboard
         dashboards: list[Dashboard] = []
         for row in rows:
-            dashboard = await self.get_dashboard(
-                str(row["dashboard_id"]), tenant_id, schema_name
-            )
+            dashboard = await self.get_dashboard(str(row["dashboard_id"]), tenant_id, schema_name)
             if dashboard:
                 dashboards.append(dashboard)
 
@@ -1089,9 +1102,7 @@ class PostgresDashboardStore:
         from sqlalchemy.dialects import postgresql
 
         dialect = postgresql.dialect(paramstyle="numeric")
-        compiled = stmt.compile(
-            dialect=dialect, compile_kwargs={"literal_binds": False}
-        )
+        compiled = stmt.compile(dialect=dialect, compile_kwargs={"literal_binds": False})
         sql = str(compiled)
 
         # Extract parameters in the order they appear in the SQL
