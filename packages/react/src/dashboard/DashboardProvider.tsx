@@ -31,6 +31,18 @@ export const DashboardContext = createContext<DashboardContextValue | null>(null
 const DEFAULT_BATCH_SIZE = 4;
 
 /**
+ * Module-level cache for dashboard data to survive StrictMode remounts.
+ * Maps dashboardId -> { data, timestamp }
+ */
+const dashboardCache = new Map<string, { data: Dashboard; timestamp: number }>();
+const CACHE_TTL_MS = 5000; // Cache data for 5 seconds
+
+/**
+ * Track in-flight fetches to prevent duplicate network requests.
+ */
+const inflightFetches = new Map<string, Promise<Dashboard>>();
+
+/**
  * Apply dashboard filter values to a widget query.
  */
 function applyFiltersToQuery(
@@ -229,32 +241,27 @@ export function DashboardProvider({
   // Track request IDs to avoid stale updates
   const requestIdRef = useRef<string>('');
 
+  // Store client in ref so effect doesn't re-run when client reference changes
+  const clientRef = useRef(client);
+  clientRef.current = client;
+
+  // Track which dashboard has been loaded to prevent duplicate loads
+  const loadedDashboardRef = useRef<string | null>(null);
+
   /**
-   * Load dashboard metadata.
+   * Helper to set dashboard data and initialize filter defaults.
    */
-  const loadDashboard = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // Fetch dashboard from API using generic get method
-      const response = await client.get<Dashboard>(`/dashboards/${dashboardId}`);
-      setDashboard(response);
-
-      // Initialize filter values with defaults
-      const defaults: FilterValue[] = response.filters
-        .filter((f) => f.default_value !== undefined)
-        .map((f) => ({
-          filter_id: f.id,
-          value: f.default_value,
-        }));
-      setFilterValues(defaults);
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to load dashboard'));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [client, dashboardId]);
+  const setDashboardData = useCallback((data: Dashboard) => {
+    setDashboard(data);
+    // Initialize filter values with defaults
+    const defaults: FilterValue[] = data.filters
+      .filter((f) => f.default_value !== undefined)
+      .map((f) => ({
+        filter_id: f.id,
+        value: f.default_value,
+      }));
+    setFilterValues(defaults);
+  }, []);
 
   /**
    * Execute a single widget query.
@@ -465,10 +472,74 @@ export function DashboardProvider({
     });
   }, []);
 
-  // Load dashboard on mount
+  // Load dashboard on mount - with safeguards to prevent duplicate requests
   useEffect(() => {
-    loadDashboard();
-  }, [loadDashboard]);
+    const currentClient = clientRef.current;
+
+    if (!dashboardId || !currentClient) {
+      return;
+    }
+
+    // Skip if already loaded this dashboard (instance-level check)
+    if (loadedDashboardRef.current === dashboardId) {
+      return;
+    }
+
+    const now = Date.now();
+
+    // Check module-level cache first (survives StrictMode remounts)
+    const cached = dashboardCache.get(dashboardId);
+    if (cached && now - cached.timestamp < CACHE_TTL_MS) {
+      loadedDashboardRef.current = dashboardId;
+      setDashboardData(cached.data);
+      setIsLoading(false);
+      return;
+    }
+
+    // Check if there's already an in-flight fetch
+    const inflightFetch = inflightFetches.get(dashboardId);
+    if (inflightFetch) {
+      loadedDashboardRef.current = dashboardId;
+      setIsLoading(true);
+      inflightFetch
+        .then((data) => {
+          setDashboardData(data);
+          setIsLoading(false);
+        })
+        .catch((err) => {
+          setError(err instanceof Error ? err : new Error('Failed to load dashboard'));
+          setIsLoading(false);
+        });
+      return;
+    }
+
+    // Start a new fetch
+    loadedDashboardRef.current = dashboardId;
+    setIsLoading(true);
+    setError(null);
+
+    const fetchPromise = (async (): Promise<Dashboard> => {
+      const data = await currentClient.get<Dashboard>(`/dashboards/${dashboardId}`);
+      // Cache the data at module level (survives StrictMode remounts)
+      dashboardCache.set(dashboardId, { data, timestamp: Date.now() });
+      return data;
+    })();
+
+    // Track the in-flight fetch
+    inflightFetches.set(dashboardId, fetchPromise);
+
+    fetchPromise
+      .then((data) => {
+        inflightFetches.delete(dashboardId);
+        setDashboardData(data);
+        setIsLoading(false);
+      })
+      .catch((err) => {
+        inflightFetches.delete(dashboardId);
+        setError(err instanceof Error ? err : new Error('Failed to load dashboard'));
+        setIsLoading(false);
+      });
+  }, [dashboardId, setDashboardData]);
 
   // Execute widget queries when dashboard loads or filters change
   // Also re-execute when cross-filters change
