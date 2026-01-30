@@ -187,6 +187,7 @@ export function DashboardLayout({
   const containerStyle: React.CSSProperties = {
     backgroundColor: theme.colors.background,
     minHeight: '100%',
+    width: '100%',
     position: 'relative',
   };
 

@@ -12,17 +12,9 @@ import uuid
 from datetime import datetime, timezone
 from typing import Protocol
 
-from prismiq.dashboards import (
-    Dashboard,
-    DashboardCreate,
-    DashboardLayout,
-    DashboardUpdate,
-    Widget,
-    WidgetConfig,
-    WidgetCreate,
-    WidgetPosition,
-    WidgetUpdate,
-)
+from prismiq.dashboards import (Dashboard, DashboardCreate, DashboardLayout,
+                                DashboardUpdate, Widget, WidgetConfig,
+                                WidgetCreate, WidgetPosition, WidgetUpdate)
 from prismiq.pins import PinnedDashboard
 
 
@@ -40,24 +32,36 @@ class DashboardStore(Protocol):
     isolation.
     """
 
-    async def list_dashboards(self, tenant_id: str, owner_id: str | None = None) -> list[Dashboard]:
+    async def list_dashboards(
+        self,
+        tenant_id: str,
+        owner_id: str | None = None,
+        schema_name: str | None = None,
+    ) -> list[Dashboard]:
         """List all dashboards for a tenant, optionally filtered by owner.
 
         Args:
             tenant_id: Tenant ID for isolation.
             owner_id: Optional owner ID to filter by.
+            schema_name: PostgreSQL schema name for per-tenant schema isolation.
 
         Returns:
             List of dashboards.
         """
         ...
 
-    async def get_dashboard(self, dashboard_id: str, tenant_id: str) -> Dashboard | None:
+    async def get_dashboard(
+        self,
+        dashboard_id: str,
+        tenant_id: str,
+        schema_name: str | None = None,
+    ) -> Dashboard | None:
         """Get a dashboard by ID.
 
         Args:
             dashboard_id: The dashboard ID.
             tenant_id: Tenant ID for isolation.
+            schema_name: PostgreSQL schema name for per-tenant schema isolation.
 
         Returns:
             The dashboard, or None if not found.
@@ -65,7 +69,11 @@ class DashboardStore(Protocol):
         ...
 
     async def create_dashboard(
-        self, dashboard: DashboardCreate, tenant_id: str, owner_id: str | None = None
+        self,
+        dashboard: DashboardCreate,
+        tenant_id: str,
+        owner_id: str | None = None,
+        schema_name: str | None = None,
     ) -> Dashboard:
         """Create a new dashboard.
 
@@ -73,6 +81,7 @@ class DashboardStore(Protocol):
             dashboard: Dashboard creation data.
             tenant_id: Tenant ID for isolation.
             owner_id: Optional owner ID.
+            schema_name: PostgreSQL schema name for per-tenant schema isolation.
 
         Returns:
             The created dashboard with generated ID and timestamps.
@@ -80,7 +89,11 @@ class DashboardStore(Protocol):
         ...
 
     async def update_dashboard(
-        self, dashboard_id: str, update: DashboardUpdate, tenant_id: str
+        self,
+        dashboard_id: str,
+        update: DashboardUpdate,
+        tenant_id: str,
+        schema_name: str | None = None,
     ) -> Dashboard | None:
         """Update a dashboard.
 
@@ -88,18 +101,25 @@ class DashboardStore(Protocol):
             dashboard_id: The dashboard ID.
             update: Fields to update.
             tenant_id: Tenant ID for isolation.
+            schema_name: PostgreSQL schema name for per-tenant schema isolation.
 
         Returns:
             The updated dashboard, or None if not found.
         """
         ...
 
-    async def delete_dashboard(self, dashboard_id: str, tenant_id: str) -> bool:
+    async def delete_dashboard(
+        self,
+        dashboard_id: str,
+        tenant_id: str,
+        schema_name: str | None = None,
+    ) -> bool:
         """Delete a dashboard.
 
         Args:
             dashboard_id: The dashboard ID.
             tenant_id: Tenant ID for isolation.
+            schema_name: PostgreSQL schema name for per-tenant schema isolation.
 
         Returns:
             True if deleted, False if not found.
@@ -107,7 +127,11 @@ class DashboardStore(Protocol):
         ...
 
     async def add_widget(
-        self, dashboard_id: str, widget: WidgetCreate, tenant_id: str
+        self,
+        dashboard_id: str,
+        widget: WidgetCreate,
+        tenant_id: str,
+        schema_name: str | None = None,
     ) -> Widget | None:
         """Add a widget to a dashboard.
 
@@ -115,18 +139,25 @@ class DashboardStore(Protocol):
             dashboard_id: The dashboard ID.
             widget: Widget creation data.
             tenant_id: Tenant ID for isolation.
+            schema_name: PostgreSQL schema name for per-tenant schema isolation.
 
         Returns:
             The created widget, or None if dashboard not found.
         """
         ...
 
-    async def get_widget(self, widget_id: str, tenant_id: str) -> Widget | None:
+    async def get_widget(
+        self,
+        widget_id: str,
+        tenant_id: str,
+        schema_name: str | None = None,
+    ) -> Widget | None:
         """Get a widget by ID.
 
         Args:
             widget_id: The widget ID.
             tenant_id: Tenant ID for isolation.
+            schema_name: PostgreSQL schema name for per-tenant schema isolation.
 
         Returns:
             The widget, or None if not found.
@@ -134,7 +165,11 @@ class DashboardStore(Protocol):
         ...
 
     async def update_widget(
-        self, widget_id: str, update: WidgetUpdate, tenant_id: str
+        self,
+        widget_id: str,
+        update: WidgetUpdate,
+        tenant_id: str,
+        schema_name: str | None = None,
     ) -> Widget | None:
         """Update a widget.
 
@@ -142,30 +177,43 @@ class DashboardStore(Protocol):
             widget_id: The widget ID.
             update: Fields to update.
             tenant_id: Tenant ID for isolation.
+            schema_name: PostgreSQL schema name for per-tenant schema isolation.
 
         Returns:
             The updated widget, or None if not found.
         """
         ...
 
-    async def delete_widget(self, widget_id: str, tenant_id: str) -> bool:
+    async def delete_widget(
+        self,
+        widget_id: str,
+        tenant_id: str,
+        schema_name: str | None = None,
+    ) -> bool:
         """Delete a widget.
 
         Args:
             widget_id: The widget ID.
             tenant_id: Tenant ID for isolation.
+            schema_name: PostgreSQL schema name for per-tenant schema isolation.
 
         Returns:
             True if deleted, False if not found.
         """
         ...
 
-    async def duplicate_widget(self, widget_id: str, tenant_id: str) -> Widget | None:
+    async def duplicate_widget(
+        self,
+        widget_id: str,
+        tenant_id: str,
+        schema_name: str | None = None,
+    ) -> Widget | None:
         """Duplicate a widget.
 
         Args:
             widget_id: The widget ID to duplicate.
             tenant_id: Tenant ID for isolation.
+            schema_name: PostgreSQL schema name for per-tenant schema isolation.
 
         Returns:
             The new duplicated widget, or None if not found.
@@ -177,6 +225,7 @@ class DashboardStore(Protocol):
         dashboard_id: str,
         positions: list[dict[str, object]],
         tenant_id: str,
+        schema_name: str | None = None,
     ) -> bool:
         """Batch update widget positions.
 
@@ -184,6 +233,7 @@ class DashboardStore(Protocol):
             dashboard_id: The dashboard ID.
             positions: List of position updates with widget_id and position.
             tenant_id: Tenant ID for isolation.
+            schema_name: PostgreSQL schema name for per-tenant schema isolation.
 
         Returns:
             True if updated, False if dashboard not found.
@@ -201,6 +251,7 @@ class DashboardStore(Protocol):
         tenant_id: str,
         user_id: str,
         position: int | None = None,
+        schema_name: str | None = None,
     ) -> PinnedDashboard:
         """Pin a dashboard to a context.
 
@@ -210,6 +261,7 @@ class DashboardStore(Protocol):
             tenant_id: Tenant ID for isolation.
             user_id: User ID who is pinning.
             position: Optional position. If None, appends at end.
+            schema_name: PostgreSQL schema name for per-tenant schema isolation.
 
         Returns:
             The created PinnedDashboard entry.
@@ -225,6 +277,7 @@ class DashboardStore(Protocol):
         context: str,
         tenant_id: str,
         user_id: str,
+        schema_name: str | None = None,
     ) -> bool:
         """Unpin a dashboard from a context.
 
@@ -233,6 +286,7 @@ class DashboardStore(Protocol):
             context: The context to unpin from.
             tenant_id: Tenant ID for isolation.
             user_id: User ID who owns the pin.
+            schema_name: PostgreSQL schema name for per-tenant schema isolation.
 
         Returns:
             True if unpinned, False if pin not found.
@@ -244,6 +298,7 @@ class DashboardStore(Protocol):
         context: str,
         tenant_id: str,
         user_id: str,
+        schema_name: str | None = None,
     ) -> list[Dashboard]:
         """Get all dashboards pinned to a context.
 
@@ -251,6 +306,7 @@ class DashboardStore(Protocol):
             context: The context to get pins for.
             tenant_id: Tenant ID for isolation.
             user_id: User ID who owns the pins.
+            schema_name: PostgreSQL schema name for per-tenant schema isolation.
 
         Returns:
             List of Dashboard objects, ordered by position.
@@ -262,6 +318,7 @@ class DashboardStore(Protocol):
         dashboard_id: str,
         tenant_id: str,
         user_id: str,
+        schema_name: str | None = None,
     ) -> list[str]:
         """Get all contexts where a dashboard is pinned.
 
@@ -269,6 +326,7 @@ class DashboardStore(Protocol):
             dashboard_id: The dashboard ID.
             tenant_id: Tenant ID for isolation.
             user_id: User ID who owns the pins.
+            schema_name: PostgreSQL schema name for per-tenant schema isolation.
 
         Returns:
             List of context names where the dashboard is pinned.
@@ -281,6 +339,7 @@ class DashboardStore(Protocol):
         dashboard_ids: list[str],
         tenant_id: str,
         user_id: str,
+        schema_name: str | None = None,
     ) -> bool:
         """Reorder pinned dashboards in a context.
 
@@ -289,6 +348,7 @@ class DashboardStore(Protocol):
             dashboard_ids: Ordered list of dashboard IDs (new order).
             tenant_id: Tenant ID for isolation.
             user_id: User ID who owns the pins.
+            schema_name: PostgreSQL schema name for per-tenant schema isolation.
 
         Returns:
             True if reordered successfully, False otherwise.
@@ -301,6 +361,7 @@ class DashboardStore(Protocol):
         context: str,
         tenant_id: str,
         user_id: str,
+        schema_name: str | None = None,
     ) -> bool:
         """Check if a dashboard is pinned to a context.
 
@@ -309,6 +370,7 @@ class DashboardStore(Protocol):
             context: The context to check.
             tenant_id: Tenant ID for isolation.
             user_id: User ID who owns the pins.
+            schema_name: PostgreSQL schema name for per-tenant schema isolation.
 
         Returns:
             True if pinned, False otherwise.
@@ -320,6 +382,7 @@ class DashboardStore(Protocol):
         context: str,
         tenant_id: str,
         user_id: str,
+        schema_name: str | None = None,
     ) -> list[PinnedDashboard]:
         """Get pin entries for a context (for API responses).
 
@@ -327,6 +390,7 @@ class DashboardStore(Protocol):
             context: The context to get pins for.
             tenant_id: Tenant ID for isolation.
             user_id: User ID who owns the pins.
+            schema_name: PostgreSQL schema name for per-tenant schema isolation.
 
         Returns:
             List of PinnedDashboard entries, ordered by position.
@@ -364,12 +428,18 @@ class InMemoryDashboardStore:
         self._pins: dict[tuple[str, str, str], list[PinnedDashboard]] = {}
         self._lock = asyncio.Lock()
 
-    async def list_dashboards(self, tenant_id: str, owner_id: str | None = None) -> list[Dashboard]:
+    async def list_dashboards(
+        self,
+        tenant_id: str,
+        owner_id: str | None = None,
+        schema_name: str | None = None,  # Ignored for in-memory store
+    ) -> list[Dashboard]:
         """List all dashboards for a tenant, optionally filtered by owner.
 
         Args:
             tenant_id: Tenant ID for isolation.
             owner_id: Optional owner ID to filter by.
+            schema_name: PostgreSQL schema name (ignored for in-memory store).
 
         Returns:
             List of dashboards (deep copies).
@@ -385,17 +455,25 @@ class InMemoryDashboardStore:
                 dashboards = [
                     d
                     for d in dashboards
-                    if d.owner_id == owner_id or d.is_public or owner_id in d.allowed_viewers
+                    if d.owner_id == owner_id
+                    or d.is_public
+                    or owner_id in d.allowed_viewers
                 ]
             # Return deep copies to prevent external mutation
             return [self._copy_dashboard(d) for d in dashboards]
 
-    async def get_dashboard(self, dashboard_id: str, tenant_id: str) -> Dashboard | None:
+    async def get_dashboard(
+        self,
+        dashboard_id: str,
+        tenant_id: str,
+        schema_name: str | None = None,  # Ignored for in-memory store
+    ) -> Dashboard | None:
         """Get a dashboard by ID with tenant check.
 
         Args:
             dashboard_id: The dashboard ID.
             tenant_id: Tenant ID for isolation.
+            schema_name: PostgreSQL schema name (ignored for in-memory store).
 
         Returns:
             Deep copy of the dashboard, or None if not found.
@@ -410,7 +488,11 @@ class InMemoryDashboardStore:
             return self._copy_dashboard(dashboard)
 
     async def create_dashboard(
-        self, dashboard: DashboardCreate, tenant_id: str, owner_id: str | None = None
+        self,
+        dashboard: DashboardCreate,
+        tenant_id: str,
+        owner_id: str | None = None,
+        schema_name: str | None = None,  # Ignored for in-memory store
     ) -> Dashboard:
         """Create a new dashboard.
 
@@ -418,6 +500,7 @@ class InMemoryDashboardStore:
             dashboard: Dashboard creation data.
             tenant_id: Tenant ID for isolation.
             owner_id: Optional owner ID.
+            schema_name: PostgreSQL schema name (ignored for in-memory store).
 
         Returns:
             The created dashboard with generated ID and timestamps.
@@ -442,7 +525,11 @@ class InMemoryDashboardStore:
             return self._copy_dashboard(new_dashboard)
 
     async def update_dashboard(
-        self, dashboard_id: str, update: DashboardUpdate, tenant_id: str
+        self,
+        dashboard_id: str,
+        update: DashboardUpdate,
+        tenant_id: str,
+        schema_name: str | None = None,  # Ignored for in-memory store
     ) -> Dashboard | None:
         """Update a dashboard with tenant check.
 
@@ -450,6 +537,7 @@ class InMemoryDashboardStore:
             dashboard_id: The dashboard ID.
             update: Fields to update.
             tenant_id: Tenant ID for isolation.
+            schema_name: PostgreSQL schema name (ignored for in-memory store).
 
         Returns:
             The updated dashboard, or None if not found.
@@ -482,12 +570,18 @@ class InMemoryDashboardStore:
             self._dashboards[dashboard_id] = updated
             return self._copy_dashboard(updated)
 
-    async def delete_dashboard(self, dashboard_id: str, tenant_id: str) -> bool:
+    async def delete_dashboard(
+        self,
+        dashboard_id: str,
+        tenant_id: str,
+        schema_name: str | None = None,  # Ignored for in-memory store
+    ) -> bool:
         """Delete a dashboard with tenant check.
 
         Args:
             dashboard_id: The dashboard ID.
             tenant_id: Tenant ID for isolation.
+            schema_name: PostgreSQL schema name (ignored for in-memory store).
 
         Returns:
             True if deleted, False if not found.
@@ -509,7 +603,11 @@ class InMemoryDashboardStore:
             return True
 
     async def add_widget(
-        self, dashboard_id: str, widget: WidgetCreate, tenant_id: str
+        self,
+        dashboard_id: str,
+        widget: WidgetCreate,
+        tenant_id: str,
+        schema_name: str | None = None,  # Ignored for in-memory store
     ) -> Widget | None:
         """Add a widget to a dashboard with tenant check.
 
@@ -517,6 +615,7 @@ class InMemoryDashboardStore:
             dashboard_id: The dashboard ID.
             widget: Widget creation data.
             tenant_id: Tenant ID for isolation.
+            schema_name: PostgreSQL schema name (ignored for in-memory store).
 
         Returns:
             The created widget, or None if dashboard not found.
@@ -553,12 +652,18 @@ class InMemoryDashboardStore:
 
             return self._copy_widget(new_widget)
 
-    async def get_widget(self, widget_id: str, tenant_id: str) -> Widget | None:
+    async def get_widget(
+        self,
+        widget_id: str,
+        tenant_id: str,
+        schema_name: str | None = None,  # Ignored for in-memory store
+    ) -> Widget | None:
         """Get a widget by ID with tenant check.
 
         Args:
             widget_id: The widget ID.
             tenant_id: Tenant ID for isolation.
+            schema_name: PostgreSQL schema name (ignored for in-memory store).
 
         Returns:
             The widget, or None if not found.
@@ -581,7 +686,11 @@ class InMemoryDashboardStore:
             return None
 
     async def update_widget(
-        self, widget_id: str, update: WidgetUpdate, tenant_id: str
+        self,
+        widget_id: str,
+        update: WidgetUpdate,
+        tenant_id: str,
+        schema_name: str | None = None,  # Ignored for in-memory store
     ) -> Widget | None:
         """Update a widget with tenant check.
 
@@ -589,6 +698,7 @@ class InMemoryDashboardStore:
             widget_id: The widget ID.
             update: Fields to update.
             tenant_id: Tenant ID for isolation.
+            schema_name: PostgreSQL schema name (ignored for in-memory store).
 
         Returns:
             The updated widget, or None if not found.
@@ -638,12 +748,18 @@ class InMemoryDashboardStore:
 
             return self._copy_widget(updated_widget)
 
-    async def delete_widget(self, widget_id: str, tenant_id: str) -> bool:
+    async def delete_widget(
+        self,
+        widget_id: str,
+        tenant_id: str,
+        schema_name: str | None = None,  # Ignored for in-memory store
+    ) -> bool:
         """Delete a widget with tenant check.
 
         Args:
             widget_id: The widget ID.
             tenant_id: Tenant ID for isolation.
+            schema_name: PostgreSQL schema name (ignored for in-memory store).
 
         Returns:
             True if deleted, False if not found.
@@ -676,12 +792,18 @@ class InMemoryDashboardStore:
             del self._widget_to_dashboard[widget_id]
             return True
 
-    async def duplicate_widget(self, widget_id: str, tenant_id: str) -> Widget | None:
+    async def duplicate_widget(
+        self,
+        widget_id: str,
+        tenant_id: str,
+        schema_name: str | None = None,  # Ignored for in-memory store
+    ) -> Widget | None:
         """Duplicate a widget with tenant check.
 
         Args:
             widget_id: The widget ID to duplicate.
             tenant_id: Tenant ID for isolation.
+            schema_name: PostgreSQL schema name (ignored for in-memory store).
 
         Returns:
             The new duplicated widget, or None if not found.
@@ -714,7 +836,9 @@ class InMemoryDashboardStore:
                 id=str(uuid.uuid4()),
                 type=original_widget.type,
                 title=f"{original_widget.title} (Copy)",
-                query=copy.deepcopy(original_widget.query) if original_widget.query else None,
+                query=copy.deepcopy(original_widget.query)
+                if original_widget.query
+                else None,
                 position=original_widget.position.model_copy(
                     update={"x": original_widget.position.x + 1}
                 ),
@@ -740,6 +864,7 @@ class InMemoryDashboardStore:
         dashboard_id: str,
         positions: list[dict[str, object]],
         tenant_id: str,
+        schema_name: str | None = None,  # Ignored for in-memory store
     ) -> bool:
         """Batch update widget positions with tenant check.
 
@@ -747,6 +872,7 @@ class InMemoryDashboardStore:
             dashboard_id: The dashboard ID.
             positions: List of position updates with widget_id and position.
             tenant_id: Tenant ID for isolation.
+            schema_name: PostgreSQL schema name (ignored for in-memory store).
 
         Returns:
             True if updated, False if dashboard not found.
@@ -810,6 +936,7 @@ class InMemoryDashboardStore:
         tenant_id: str,
         user_id: str,
         position: int | None = None,
+        schema_name: str | None = None,  # Ignored for in-memory store
     ) -> PinnedDashboard:
         """Pin a dashboard to a context.
 
@@ -819,6 +946,7 @@ class InMemoryDashboardStore:
             tenant_id: Tenant ID for isolation.
             user_id: User ID who is pinning.
             position: Optional position. If None, appends at end.
+            schema_name: PostgreSQL schema name (ignored for in-memory store).
 
         Returns:
             The created PinnedDashboard entry.
@@ -829,7 +957,10 @@ class InMemoryDashboardStore:
         async with self._lock:
             # Verify dashboard exists and belongs to tenant
             dashboard = self._dashboards.get(dashboard_id)
-            if dashboard is None or self._dashboard_tenants.get(dashboard_id) != tenant_id:
+            if (
+                dashboard is None
+                or self._dashboard_tenants.get(dashboard_id) != tenant_id
+            ):
                 raise ValueError(f"Dashboard '{dashboard_id}' not found")
 
             key = (tenant_id, user_id, context)
@@ -843,7 +974,9 @@ class InMemoryDashboardStore:
                     )
 
             # Determine position
-            position = len(pins) if position is None else max(0, min(position, len(pins)))
+            position = (
+                len(pins) if position is None else max(0, min(position, len(pins)))
+            )
 
             # Create pin
             now = _utc_now()
@@ -876,6 +1009,7 @@ class InMemoryDashboardStore:
         context: str,
         tenant_id: str,
         user_id: str,
+        schema_name: str | None = None,  # Ignored for in-memory store
     ) -> bool:
         """Unpin a dashboard from a context.
 
@@ -884,6 +1018,7 @@ class InMemoryDashboardStore:
             context: The context to unpin from.
             tenant_id: Tenant ID for isolation.
             user_id: User ID who owns the pin.
+            schema_name: PostgreSQL schema name (ignored for in-memory store).
 
         Returns:
             True if unpinned, False if not found.
@@ -915,6 +1050,7 @@ class InMemoryDashboardStore:
         context: str,
         tenant_id: str,
         user_id: str,
+        schema_name: str | None = None,  # Ignored for in-memory store
     ) -> list[Dashboard]:
         """Get all dashboards pinned to a context.
 
@@ -922,6 +1058,7 @@ class InMemoryDashboardStore:
             context: The context to get pins for.
             tenant_id: Tenant ID for isolation.
             user_id: User ID who owns the pins.
+            schema_name: PostgreSQL schema name (ignored for in-memory store).
 
         Returns:
             List of Dashboard objects, ordered by position.
@@ -946,6 +1083,7 @@ class InMemoryDashboardStore:
         dashboard_id: str,
         tenant_id: str,
         user_id: str,
+        schema_name: str | None = None,  # Ignored for in-memory store
     ) -> list[str]:
         """Get all contexts where a dashboard is pinned.
 
@@ -953,6 +1091,7 @@ class InMemoryDashboardStore:
             dashboard_id: The dashboard ID.
             tenant_id: Tenant ID for isolation.
             user_id: User ID who owns the pins.
+            schema_name: PostgreSQL schema name (ignored for in-memory store).
 
         Returns:
             List of context names.
@@ -975,6 +1114,7 @@ class InMemoryDashboardStore:
         dashboard_ids: list[str],
         tenant_id: str,
         user_id: str,
+        schema_name: str | None = None,  # Ignored for in-memory store
     ) -> bool:
         """Reorder pinned dashboards in a context.
 
@@ -983,6 +1123,7 @@ class InMemoryDashboardStore:
             dashboard_ids: Ordered list of dashboard IDs.
             tenant_id: Tenant ID for isolation.
             user_id: User ID who owns the pins.
+            schema_name: PostgreSQL schema name (ignored for in-memory store).
 
         Returns:
             True if reordered, False otherwise.
@@ -1035,6 +1176,7 @@ class InMemoryDashboardStore:
         context: str,
         tenant_id: str,
         user_id: str,
+        schema_name: str | None = None,  # Ignored for in-memory store
     ) -> bool:
         """Check if a dashboard is pinned to a context.
 
@@ -1043,6 +1185,7 @@ class InMemoryDashboardStore:
             context: The context to check.
             tenant_id: Tenant ID for isolation.
             user_id: User ID who owns the pins.
+            schema_name: PostgreSQL schema name (ignored for in-memory store).
 
         Returns:
             True if pinned, False otherwise.
@@ -1058,6 +1201,7 @@ class InMemoryDashboardStore:
         context: str,
         tenant_id: str,
         user_id: str,
+        schema_name: str | None = None,  # Ignored for in-memory store
     ) -> list[PinnedDashboard]:
         """Get pin entries for a context (for API responses).
 
@@ -1065,6 +1209,7 @@ class InMemoryDashboardStore:
             context: The context to get pins for.
             tenant_id: Tenant ID for isolation.
             user_id: User ID who owns the pins.
+            schema_name: PostgreSQL schema name (ignored for in-memory store).
 
         Returns:
             List of PinnedDashboard entries, ordered by position.

@@ -10,6 +10,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -128,6 +129,9 @@ export function useAnalyticsCallbacks(): AnalyticsCallbacks {
  * }
  * ```
  */
+// Debug: Track provider instances
+let providerInstanceCount = 0;
+
 export function AnalyticsProvider({
   config,
   tenantId,
@@ -139,25 +143,51 @@ export function AnalyticsProvider({
   onSchemaError,
   children,
 }: AnalyticsProviderProps): JSX.Element {
-  // Create client instance - memoize to prevent recreation on re-renders
-  // Include tenantId, userId, and schemaName in the client config
-  const client = useMemo(
-    () =>
-      new PrismiqClient({
-        ...config,
-        tenantId,
-        userId,
-        schemaName,
-      }),
-    [config, tenantId, userId, schemaName]
-  );
+  // Debug: Track this provider instance
+  const instanceIdRef = useRef<string | null>(null);
+  if (!instanceIdRef.current) {
+    providerInstanceCount++;
+    instanceIdRef.current = `provider-${providerInstanceCount}`;
+    console.log(`[AnalyticsProvider] Creating instance ${instanceIdRef.current}`);
+  }
+
+  // Create client instance ONCE on first render using ref
+  // This prevents recreation when props change (which would cause cascading refetches)
+  const clientRef = useRef<PrismiqClient | null>(null);
+  if (!clientRef.current) {
+    console.log(`[AnalyticsProvider ${instanceIdRef.current}] Creating PrismiqClient`);
+    clientRef.current = new PrismiqClient({
+      ...config,
+      tenantId,
+      userId,
+      schemaName,
+    });
+  }
+  const client = clientRef.current;
 
   // Schema state
   const [schema, setSchema] = useState<DatabaseSchema | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  // Fetch schema function
+  // Track if initial schema fetch has been done
+  const hasFetchedSchemaRef = useRef(false);
+
+  // Debug: Log mount/unmount
+  useEffect(() => {
+    console.log(`[AnalyticsProvider ${instanceIdRef.current}] MOUNTED`);
+    return () => {
+      console.log(`[AnalyticsProvider ${instanceIdRef.current}] UNMOUNTED`);
+    };
+  }, []);
+
+  // Store callbacks in refs to avoid recreating fetchSchema
+  const onSchemaLoadRef = useRef(onSchemaLoad);
+  const onSchemaErrorRef = useRef(onSchemaError);
+  onSchemaLoadRef.current = onSchemaLoad;
+  onSchemaErrorRef.current = onSchemaError;
+
+  // Fetch schema function - stable reference
   const fetchSchema = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -165,23 +195,25 @@ export function AnalyticsProvider({
     try {
       const fetchedSchema = await client.getSchema();
       setSchema(fetchedSchema);
-      onSchemaLoad?.(fetchedSchema);
+      onSchemaLoadRef.current?.(fetchedSchema);
     } catch (err) {
       const schemaError = err instanceof Error ? err : new Error(String(err));
       setError(schemaError);
-      onSchemaError?.(schemaError);
+      onSchemaErrorRef.current?.(schemaError);
     } finally {
       setIsLoading(false);
     }
-  }, [client, onSchemaLoad, onSchemaError]);
+  }, [client]); // Only depends on client, which is now stable
 
   // Refetch schema function (exposed to consumers)
   const refetchSchema = useCallback(async () => {
     await fetchSchema();
   }, [fetchSchema]);
 
-  // Fetch schema on mount
+  // Fetch schema on mount - only once
   useEffect(() => {
+    if (hasFetchedSchemaRef.current) return;
+    hasFetchedSchemaRef.current = true;
     void fetchSchema();
   }, [fetchSchema]);
 

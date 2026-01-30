@@ -77,6 +77,14 @@ function getDefaultPosition(
  */
 const DEFAULT_BATCH_SIZE = 4;
 
+// Module-level cache for dashboard data to survive StrictMode remounts
+// Maps dashboardId -> { data, timestamp }
+const dashboardCache = new Map<string, { data: Dashboard; timestamp: number }>();
+const CACHE_TTL_MS = 5000; // Cache data for 5 seconds
+
+// Track in-flight fetches to prevent duplicate network requests
+const inflightFetches = new Map<string, Promise<Dashboard>>();
+
 export function DashboardEditor({
   dashboardId,
   onSave,
@@ -126,64 +134,138 @@ export function DashboardEditor({
   const [isDirty, setIsDirty] = useState(false);
 
   // Track if initial layout has been set (react-grid-layout fires onLayoutChange on mount)
-  const isInitialLayoutRef = useRef(true);
+  // Use a counter instead of boolean to ignore multiple initial layout events
+  const initialLayoutCountRef = useRef(0);
+  const INITIAL_LAYOUT_IGNORE_COUNT = 3; // Ignore first N layout changes after load
 
-  // Load existing dashboard
+  // Store client in ref so effect doesn't re-run when client reference changes
+  const clientRef = useRef(client);
+  clientRef.current = client;
+
+  // Track which dashboard has been loaded to prevent duplicate loads
+  const loadedDashboardRef = useRef<string | null>(null);
+
+
+  // Helper to execute widget queries - can be called from multiple paths
+  // Note: We don't cancel widget query results - they're harmless to set even after unmount
+  // and StrictMode would otherwise prevent results from ever being shown
+  const executeWidgetQueries = useCallback(async (
+    widgets: WidgetType[],
+    currentClient: typeof client
+  ) => {
+    const widgetsWithQueries = widgets.filter((w) => w.query);
+    if (widgetsWithQueries.length === 0) return;
+
+    for (let i = 0; i < widgetsWithQueries.length; i += batchSize) {
+      const batch = widgetsWithQueries.slice(i, i + batchSize);
+
+      setWidgetLoading((prev) => {
+        const next = { ...prev };
+        batch.forEach((w) => { next[w.id] = true; });
+        return next;
+      });
+
+      await Promise.all(
+        batch.map(async (widget) => {
+          try {
+            const result = await currentClient.executeQuery(widget.query!);
+            setWidgetResults((prev) => ({ ...prev, [widget.id]: result }));
+            setWidgetRefreshTimes((prev) => ({ ...prev, [widget.id]: Math.floor(Date.now() / 1000) }));
+          } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Query failed';
+            setWidgetErrors((prev) => ({
+              ...prev,
+              [widget.id]: new Error(`${widget.title}: ${errorMessage}`),
+            }));
+          } finally {
+            setWidgetLoading((prev) => ({ ...prev, [widget.id]: false }));
+          }
+        })
+      );
+    }
+  }, [batchSize]);
+
+  // Load existing dashboard - only re-run when dashboardId changes
   useEffect(() => {
-    if (!dashboardId || !client) return;
+    const currentClient = clientRef.current;
 
-    const loadDashboard = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        const data = await client.get<Dashboard>(`/dashboards/${dashboardId}`);
+    if (!dashboardId || !currentClient) {
+      return;
+    }
+
+    // Skip if already loaded this dashboard (instance-level check)
+    if (loadedDashboardRef.current === dashboardId) {
+      return;
+    }
+
+    const now = Date.now();
+
+    // Check module-level cache first (survives StrictMode remounts)
+    const cached = dashboardCache.get(dashboardId);
+    if (cached && now - cached.timestamp < CACHE_TTL_MS) {
+      loadedDashboardRef.current = dashboardId;
+      setDashboard(cached.data);
+      setIsDirty(false);
+      initialLayoutCountRef.current = 0;
+      setIsLoading(false);
+      // Execute widget queries with cached data (no cancellation - results should always be set)
+      executeWidgetQueries(cached.data.widgets, currentClient);
+      return;
+    }
+
+    // Check if there's already an in-flight fetch
+    const inflightFetch = inflightFetches.get(dashboardId);
+    if (inflightFetch) {
+      loadedDashboardRef.current = dashboardId;
+      setIsLoading(true);
+      inflightFetch
+        .then((data) => {
+          setDashboard(data);
+          setIsDirty(false);
+          initialLayoutCountRef.current = 0;
+          setIsLoading(false);
+          executeWidgetQueries(data.widgets, currentClient);
+        })
+        .catch((err) => {
+          console.error(`[DashboardEditor] In-flight fetch error:`, err);
+          setIsLoading(false);
+        });
+      return;
+    }
+
+    // Start a new fetch
+    loadedDashboardRef.current = dashboardId;
+
+    const fetchPromise = (async (): Promise<Dashboard> => {
+      setIsLoading(true);
+      setError(null);
+
+      const data = await currentClient.get<Dashboard>(`/dashboards/${dashboardId}`);
+
+      // Cache the data at module level (survives StrictMode remounts)
+      dashboardCache.set(dashboardId, { data, timestamp: Date.now() });
+
+      return data;
+    })();
+
+    // Track the in-flight fetch
+    inflightFetches.set(dashboardId, fetchPromise);
+
+    fetchPromise
+      .then((data) => {
+        inflightFetches.delete(dashboardId);
         setDashboard(data);
         setIsDirty(false);
-        isInitialLayoutRef.current = true;
-
-        // Execute queries for widgets in batches to reduce server load
-        const widgetsWithQueries = data.widgets.filter((w) => w.query);
-        if (widgetsWithQueries.length > 0) {
-          // Process widgets in batches
-          for (let i = 0; i < widgetsWithQueries.length; i += batchSize) {
-            const batch = widgetsWithQueries.slice(i, i + batchSize);
-
-            // Set batch to loading
-            setWidgetLoading((prev) => {
-              const next = { ...prev };
-              batch.forEach((w) => { next[w.id] = true; });
-              return next;
-            });
-
-            // Execute batch in parallel
-            await Promise.all(
-              batch.map(async (widget) => {
-                try {
-                  const result = await client.executeQuery(widget.query!);
-                  setWidgetResults((prev) => ({ ...prev, [widget.id]: result }));
-                  setWidgetRefreshTimes((prev) => ({ ...prev, [widget.id]: Math.floor(Date.now() / 1000) }));
-                } catch (err) {
-                  const errorMessage = err instanceof Error ? err.message : 'Query failed';
-                  setWidgetErrors((prev) => ({
-                    ...prev,
-                    [widget.id]: new Error(`${widget.title}: ${errorMessage}`),
-                  }));
-                } finally {
-                  setWidgetLoading((prev) => ({ ...prev, [widget.id]: false }));
-                }
-              })
-            );
-          }
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err : new Error('Failed to load dashboard'));
-      } finally {
+        initialLayoutCountRef.current = 0;
         setIsLoading(false);
-      }
-    };
-
-    loadDashboard();
-  }, [dashboardId, client]);
+        executeWidgetQueries(data.widgets, currentClient);
+      })
+      .catch((err) => {
+        inflightFetches.delete(dashboardId);
+        setError(err instanceof Error ? err : new Error('Failed to load dashboard'));
+        setIsLoading(false);
+      });
+  }, [dashboardId, batchSize, executeWidgetQueries]); // Removed client - using ref instead
 
   // Execute widget queries for preview
   const refreshWidget = useCallback(
@@ -195,7 +277,8 @@ export function DashboardEditor({
       setRefreshingWidgets((prev) => new Set(prev).add(widgetId));
 
       try {
-        const result = await client.executeQuery(widget.query);
+        // Pass bypassCache=true to force fresh data on manual refresh
+        const result = await client.executeQuery(widget.query, true);
         setWidgetResults((prev) => ({ ...prev, [widgetId]: result }));
         setWidgetRefreshTimes((prev) => ({ ...prev, [widgetId]: Math.floor(Date.now() / 1000) }));
         setWidgetErrors((prev) => {
@@ -239,9 +322,10 @@ export function DashboardEditor({
   // Handle layout changes
   const handleLayoutChange = useCallback(
     (positions: Record<string, WidgetPosition>) => {
-      // Skip the initial layout change fired by react-grid-layout on mount
-      if (isInitialLayoutRef.current) {
-        isInitialLayoutRef.current = false;
+      // Skip initial layout changes fired by react-grid-layout on mount/load
+      // react-grid-layout can fire multiple onLayoutChange events during initial render
+      if (initialLayoutCountRef.current < INITIAL_LAYOUT_IGNORE_COUNT) {
+        initialLayoutCountRef.current++;
         return;
       }
 
@@ -275,7 +359,7 @@ export function DashboardEditor({
       try {
         const savedDashboard = await client.get<Dashboard>(`/dashboards/${id}`);
         setDashboard(savedDashboard);
-        isInitialLayoutRef.current = true;
+        initialLayoutCountRef.current = 0;
         onSave?.(savedDashboard);
       } catch (reloadErr) {
         // Reload failed but save succeeded - use local state
@@ -360,6 +444,7 @@ export function DashboardEditor({
     flex: 1,
     overflow: 'auto',
     position: 'relative',
+    width: '100%',
   };
 
   const loadingStyle: React.CSSProperties = {

@@ -26,10 +26,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any
-from uuid import uuid4
 
 from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TIMESTAMP, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TIMESTAMP
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -52,7 +51,7 @@ class PrismiqDashboard(PrismiqBase):
     """Dashboard model for storing dashboard metadata.
 
     Attributes:
-        id: Unique dashboard identifier (UUID)
+        id: Unique dashboard identifier (auto-increment integer)
         tenant_id: Tenant identifier for multi-tenancy
         name: Dashboard display name
         description: Optional description
@@ -67,7 +66,7 @@ class PrismiqDashboard(PrismiqBase):
 
     __tablename__ = "prismiq_dashboards"
 
-    id: Mapped[Any] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -96,7 +95,7 @@ class PrismiqWidget(PrismiqBase):
     """Widget model for storing widget metadata.
 
     Attributes:
-        id: Unique widget identifier (UUID)
+        id: Unique widget identifier (auto-increment integer)
         dashboard_id: Parent dashboard ID (foreign key)
         type: Widget type (bar, line, pie, table, text, etc.)
         title: Widget display title
@@ -109,9 +108,9 @@ class PrismiqWidget(PrismiqBase):
 
     __tablename__ = "prismiq_widgets"
 
-    id: Mapped[Any] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    dashboard_id: Mapped[Any] = mapped_column(
-        UUID(as_uuid=True),
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    dashboard_id: Mapped[int] = mapped_column(
+        Integer,
         ForeignKey("prismiq_dashboards.id", ondelete="CASCADE"),
         nullable=False,
     )
@@ -134,7 +133,7 @@ class PrismiqSavedQuery(PrismiqBase):
     """Saved query model for reusable query definitions.
 
     Attributes:
-        id: Unique query identifier (UUID)
+        id: Unique query identifier (auto-increment integer)
         tenant_id: Tenant identifier for multi-tenancy
         name: Query display name
         description: Optional description
@@ -147,7 +146,7 @@ class PrismiqSavedQuery(PrismiqBase):
 
     __tablename__ = "prismiq_saved_queries"
 
-    id: Mapped[Any] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -174,7 +173,7 @@ class PrismiqPinnedDashboard(PrismiqBase):
     (e.g., "dashboard", "accounts", "home") for quick access.
 
     Attributes:
-        id: Unique pin identifier (UUID)
+        id: Unique pin identifier (auto-increment integer)
         tenant_id: Tenant identifier for multi-tenancy
         user_id: User who created the pin
         dashboard_id: Dashboard that is pinned (foreign key)
@@ -185,11 +184,11 @@ class PrismiqPinnedDashboard(PrismiqBase):
 
     __tablename__ = "prismiq_pinned_dashboards"
 
-    id: Mapped[Any] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[str] = mapped_column(String(255), nullable=False)
     user_id: Mapped[str] = mapped_column(String(255), nullable=False)
-    dashboard_id: Mapped[Any] = mapped_column(
-        UUID(as_uuid=True),
+    dashboard_id: Mapped[int] = mapped_column(
+        Integer,
         ForeignKey("prismiq_dashboards.id", ondelete="CASCADE"),
         nullable=False,
     )
