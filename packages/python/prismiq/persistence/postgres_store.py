@@ -67,7 +67,9 @@ class PostgresDashboardStore:
         if schema_name:
             # Set search_path to the tenant schema, falling back to public
             # Use double-quoted identifiers to handle schema names with special chars
-            sql = f'SET search_path TO "{schema_name}", public'
+            # Escape double quotes to prevent SQL injection
+            escaped_schema = schema_name.replace('"', '""')
+            sql = f'SET search_path TO "{escaped_schema}", public'
             _logger.info(f"[postgres_store] Setting search_path: {sql}")
             await conn.execute(sql)
         else:
@@ -92,10 +94,6 @@ class PostgresDashboardStore:
             owner_id: Optional owner ID to filter by access.
             schema_name: PostgreSQL schema name for per-tenant schema isolation.
         """
-        _logger.info(
-            f"[postgres_store] list_dashboards called: tenant_id={tenant_id}, "
-            f"owner_id={owner_id}, schema_name={schema_name}"
-        )
         query = """
             SELECT
                 d.id,
