@@ -277,7 +277,8 @@ export function DashboardEditor({
       setRefreshingWidgets((prev) => new Set(prev).add(widgetId));
 
       try {
-        const result = await client.executeQuery(widget.query);
+        // Pass bypassCache=true to force fresh data on manual refresh
+        const result = await client.executeQuery(widget.query, true);
         setWidgetResults((prev) => ({ ...prev, [widgetId]: result }));
         setWidgetRefreshTimes((prev) => ({ ...prev, [widgetId]: Math.floor(Date.now() / 1000) }));
         setWidgetErrors((prev) => {
