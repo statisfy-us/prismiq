@@ -614,6 +614,8 @@ class PostgresDashboardStore:
             await self._set_search_path(conn, schema_name)
             for pos in positions:
                 widget_id = pos.get("widget_id") or pos.get("id")
+                if widget_id is None:
+                    continue
                 position = pos.get("position", pos)
                 await conn.execute(
                     """
