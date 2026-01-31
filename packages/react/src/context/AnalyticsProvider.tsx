@@ -15,7 +15,7 @@ import {
   type ReactNode,
 } from 'react';
 
-import { PrismiqClient, type ClientConfig } from '../api/client';
+import { PrismiqClient, type ClientConfig, type ViewType } from '../api/client';
 import type { DatabaseSchema, QueryDefinition, QueryResult } from '../types';
 
 // ============================================================================
@@ -42,6 +42,10 @@ export interface AnalyticsContextValue {
   userId?: string;
   /** PostgreSQL schema name for per-tenant schema isolation. */
   schemaName?: string;
+  /** Current view type for row-level security filtering. */
+  viewType?: ViewType;
+  /** Current account ID for account-specific filtering. */
+  accountId?: string;
 }
 
 /**
@@ -49,7 +53,7 @@ export interface AnalyticsContextValue {
  */
 export interface AnalyticsProviderProps {
   /** Configuration for the Prismiq client. tenantId and userId are provided via separate props. */
-  config: Omit<ClientConfig, 'tenantId' | 'userId' | 'schemaName'>;
+  config: Omit<ClientConfig, 'tenantId' | 'userId' | 'schemaName' | 'viewType' | 'accountId'>;
   /**
    * Tenant ID for multi-tenant isolation.
    * All API calls will include this in the X-Tenant-ID header.
@@ -68,6 +72,18 @@ export interface AnalyticsProviderProps {
    * Used when each tenant has their own PostgreSQL schema (e.g., "org_123").
    */
   schemaName?: string;
+  /**
+   * View type for row-level security filtering.
+   * - 'all': Show all data (admin view)
+   * - 'my_book': Filter to user's assigned accounts
+   * - 'account': Filter to a specific account (requires accountId)
+   */
+  viewType?: ViewType;
+  /**
+   * Account ID for account-specific filtering.
+   * Used when viewType is 'account' to filter data to a single account.
+   */
+  accountId?: string;
   /** Callback when a query is executed successfully. */
   onQueryExecute?: (query: QueryDefinition, result: QueryResult) => void;
   /** Callback when a query execution fails. */
@@ -137,6 +153,8 @@ export function AnalyticsProvider({
   tenantId,
   userId,
   schemaName,
+  viewType,
+  accountId,
   onQueryExecute,
   onQueryError,
   onSchemaLoad,
@@ -161,6 +179,8 @@ export function AnalyticsProvider({
       tenantId,
       userId,
       schemaName,
+      viewType,
+      accountId,
     });
   }
   const client = clientRef.current;
@@ -228,8 +248,10 @@ export function AnalyticsProvider({
       tenantId,
       userId,
       schemaName,
+      viewType,
+      accountId,
     }),
-    [client, schema, isLoading, error, refetchSchema, tenantId, userId, schemaName]
+    [client, schema, isLoading, error, refetchSchema, tenantId, userId, schemaName, viewType, accountId]
   );
 
   // Memoize callbacks

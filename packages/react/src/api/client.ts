@@ -32,6 +32,14 @@ import type {
 // ============================================================================
 
 /**
+ * View type for row-level security filtering.
+ * - 'all': Show all data (admin view)
+ * - 'my_book': Filter to user's assigned accounts
+ * - 'account': Filter to a specific account (requires accountId)
+ */
+export type ViewType = 'all' | 'my_book' | 'account';
+
+/**
  * Configuration for the Prismiq client.
  */
 export interface ClientConfig {
@@ -55,6 +63,20 @@ export interface ClientConfig {
    * Used when each tenant has their own PostgreSQL schema (e.g., "org_123").
    */
   schemaName?: string;
+  /**
+   * View type for row-level security filtering.
+   * Included in viewtype header when provided.
+   * - 'all': Show all data (admin view)
+   * - 'my_book': Filter to user's assigned accounts
+   * - 'account': Filter to a specific account (requires accountId)
+   */
+  viewType?: ViewType;
+  /**
+   * Account ID for account-specific filtering.
+   * Included in accountid header when viewType is 'account'.
+   * Used to filter data to a single account.
+   */
+  accountId?: string;
   /** Optional function to get an authentication token. */
   getToken?: () => Promise<string> | string;
 }
@@ -101,6 +123,8 @@ export class PrismiqClient {
   private readonly tenantId: string;
   private readonly userId?: string;
   private readonly schemaName?: string;
+  private readonly viewType?: ViewType;
+  private readonly accountId?: string;
   private readonly getToken?: () => Promise<string> | string;
 
   constructor(config: ClientConfig) {
@@ -109,6 +133,8 @@ export class PrismiqClient {
     this.tenantId = config.tenantId;
     this.userId = config.userId;
     this.schemaName = config.schemaName;
+    this.viewType = config.viewType;
+    this.accountId = config.accountId;
     this.getToken = config.getToken;
   }
 
@@ -135,6 +161,16 @@ export class PrismiqClient {
     // Add schema name header if provided (for per-tenant schema isolation)
     if (this.schemaName) {
       (headers as Record<string, string>)['X-Schema-Name'] = this.schemaName;
+    }
+
+    // Add viewtype header if provided (for row-level security filtering)
+    if (this.viewType) {
+      (headers as Record<string, string>)['viewtype'] = this.viewType;
+    }
+
+    // Add accountid header if provided (for account-specific filtering)
+    if (this.accountId) {
+      (headers as Record<string, string>)['accountid'] = this.accountId;
     }
 
     // Add authorization header if token provider is configured

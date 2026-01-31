@@ -79,7 +79,7 @@ export type {
 // ============================================================================
 
 export { PrismiqClient, PrismiqError } from './api';
-export type { ClientConfig } from './api';
+export type { ClientConfig, ViewType } from './api';
 
 // ============================================================================
 // Theme
