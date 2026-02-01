@@ -15,7 +15,7 @@ import {
   type ReactNode,
 } from 'react';
 
-import { PrismiqClient, type ClientConfig, type ViewType } from '../api/client';
+import { PrismiqClient, type ClientConfig } from '../api/client';
 import type { DatabaseSchema, QueryDefinition, QueryResult } from '../types';
 
 // ============================================================================
@@ -43,7 +43,7 @@ export interface AnalyticsContextValue {
   /** PostgreSQL schema name for per-tenant schema isolation. */
   schemaName?: string;
   /** Current view type for row-level security filtering. */
-  viewType?: ViewType;
+  viewType?: string;
   /** Current account ID for account-specific filtering. */
   accountId?: string;
 }
@@ -73,12 +73,11 @@ export interface AnalyticsProviderProps {
    */
   schemaName?: string;
   /**
-   * View type for row-level security filtering.
-   * - 'all': Show all data (admin view)
-   * - 'my_book': Filter to user's assigned accounts
-   * - 'account': Filter to a specific account (requires accountId)
+   * Custom header value for row-level security filtering.
+   * Included in viewtype header when provided.
+   * The interpretation of this value is application-specific.
    */
-  viewType?: ViewType;
+  viewType?: string;
   /**
    * Account ID for account-specific filtering.
    * Used when viewType is 'account' to filter data to a single account.

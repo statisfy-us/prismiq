@@ -3,4 +3,4 @@
  */
 
 export { PrismiqClient, PrismiqError } from './client';
-export type { ClientConfig, ViewType } from './client';
+export type { ClientConfig } from './client';

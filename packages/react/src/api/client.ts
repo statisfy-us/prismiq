@@ -32,14 +32,6 @@ import type {
 // ============================================================================
 
 /**
- * View type for row-level security filtering.
- * - 'all': Show all data (admin view)
- * - 'my_book': Filter to user's assigned accounts
- * - 'account': Filter to a specific account (requires accountId)
- */
-export type ViewType = 'all' | 'my_book' | 'account';
-
-/**
  * Configuration for the Prismiq client.
  */
 export interface ClientConfig {
@@ -64,17 +56,15 @@ export interface ClientConfig {
    */
   schemaName?: string;
   /**
-   * View type for row-level security filtering.
+   * Custom header value for row-level security filtering.
    * Included in viewtype header when provided.
-   * - 'all': Show all data (admin view)
-   * - 'my_book': Filter to user's assigned accounts
-   * - 'account': Filter to a specific account (requires accountId)
+   * The interpretation of this value is application-specific.
    */
-  viewType?: ViewType;
+  viewType?: string;
   /**
-   * Account ID for account-specific filtering.
-   * Included in accountid header when viewType is 'account'.
-   * Used to filter data to a single account.
+   * Custom header value for entity-specific filtering.
+   * Included in accountid header when provided.
+   * The interpretation of this value is application-specific.
    */
   accountId?: string;
   /** Optional function to get an authentication token. */
@@ -123,7 +113,7 @@ export class PrismiqClient {
   private readonly tenantId: string;
   private readonly userId?: string;
   private readonly schemaName?: string;
-  private readonly viewType?: ViewType;
+  private readonly viewType?: string;
   private readonly accountId?: string;
   private readonly getToken?: () => Promise<string> | string;
 
