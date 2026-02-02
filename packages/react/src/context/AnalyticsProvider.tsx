@@ -42,18 +42,14 @@ export interface AnalyticsContextValue {
   userId?: string;
   /** PostgreSQL schema name for per-tenant schema isolation. */
   schemaName?: string;
-  /** Current view type for row-level security filtering. */
-  viewType?: string;
-  /** Current account ID for account-specific filtering. */
-  accountId?: string;
 }
 
 /**
  * Props for the AnalyticsProvider component.
  */
 export interface AnalyticsProviderProps {
-  /** Configuration for the Prismiq client. tenantId and userId are provided via separate props. */
-  config: Omit<ClientConfig, 'tenantId' | 'userId' | 'schemaName' | 'viewType' | 'accountId'>;
+  /** Configuration for the Prismiq client. tenantId, userId, schemaName are provided via separate props. */
+  config: Omit<ClientConfig, 'tenantId' | 'userId' | 'schemaName'>;
   /**
    * Tenant ID for multi-tenant isolation.
    * All API calls will include this in the X-Tenant-ID header.
@@ -72,17 +68,6 @@ export interface AnalyticsProviderProps {
    * Used when each tenant has their own PostgreSQL schema (e.g., "org_123").
    */
   schemaName?: string;
-  /**
-   * Custom header value for row-level security filtering.
-   * Included in viewtype header when provided.
-   * The interpretation of this value is application-specific.
-   */
-  viewType?: string;
-  /**
-   * Account ID for account-specific filtering.
-   * Used when viewType is 'account' to filter data to a single account.
-   */
-  accountId?: string;
   /** Callback when a query is executed successfully. */
   onQueryExecute?: (query: QueryDefinition, result: QueryResult) => void;
   /** Callback when a query execution fails. */
@@ -152,8 +137,6 @@ export function AnalyticsProvider({
   tenantId,
   userId,
   schemaName,
-  viewType,
-  accountId,
   onQueryExecute,
   onQueryError,
   onSchemaLoad,
@@ -178,8 +161,6 @@ export function AnalyticsProvider({
       tenantId,
       userId,
       schemaName,
-      viewType,
-      accountId,
     });
   }
   const client = clientRef.current;
@@ -247,10 +228,8 @@ export function AnalyticsProvider({
       tenantId,
       userId,
       schemaName,
-      viewType,
-      accountId,
     }),
-    [client, schema, isLoading, error, refetchSchema, tenantId, userId, schemaName, viewType, accountId]
+    [client, schema, isLoading, error, refetchSchema, tenantId, userId, schemaName]
   );
 
   // Memoize callbacks

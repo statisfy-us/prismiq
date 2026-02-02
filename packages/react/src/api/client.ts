@@ -56,17 +56,11 @@ export interface ClientConfig {
    */
   schemaName?: string;
   /**
-   * Custom header value for row-level security filtering.
-   * Included in viewtype header when provided.
-   * The interpretation of this value is application-specific.
+   * Custom headers to include with every request.
+   * Useful for application-specific headers like row-level security filters.
+   * Keys are header names, values are header values.
    */
-  viewType?: string;
-  /**
-   * Custom header value for entity-specific filtering.
-   * Included in accountid header when provided.
-   * The interpretation of this value is application-specific.
-   */
-  accountId?: string;
+  customHeaders?: Record<string, string>;
   /** Optional function to get an authentication token. */
   getToken?: () => Promise<string> | string;
 }
@@ -113,8 +107,7 @@ export class PrismiqClient {
   private readonly tenantId: string;
   private readonly userId?: string;
   private readonly schemaName?: string;
-  private readonly viewType?: string;
-  private readonly accountId?: string;
+  private readonly customHeaders?: Record<string, string>;
   private readonly getToken?: () => Promise<string> | string;
 
   constructor(config: ClientConfig) {
@@ -123,8 +116,7 @@ export class PrismiqClient {
     this.tenantId = config.tenantId;
     this.userId = config.userId;
     this.schemaName = config.schemaName;
-    this.viewType = config.viewType;
-    this.accountId = config.accountId;
+    this.customHeaders = config.customHeaders;
     this.getToken = config.getToken;
   }
 
@@ -153,14 +145,11 @@ export class PrismiqClient {
       (headers as Record<string, string>)['X-Schema-Name'] = this.schemaName;
     }
 
-    // Add viewtype header if provided (for row-level security filtering)
-    if (this.viewType) {
-      (headers as Record<string, string>)['viewtype'] = this.viewType;
-    }
-
-    // Add accountid header if provided (for account-specific filtering)
-    if (this.accountId) {
-      (headers as Record<string, string>)['accountid'] = this.accountId;
+    // Add custom headers if provided (for application-specific needs)
+    if (this.customHeaders) {
+      for (const [key, value] of Object.entries(this.customHeaders)) {
+        (headers as Record<string, string>)[key] = value;
+      }
     }
 
     // Add authorization header if token provider is configured
