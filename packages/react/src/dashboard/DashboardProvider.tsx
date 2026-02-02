@@ -65,6 +65,8 @@ function applyFiltersToQuery(
     }
 
     // Find the table ID that matches this filter
+    // If filter specifies a table and it exists in the query, use that table
+    // Otherwise apply to first table - backend will validate if column exists
     let tableId = query.tables[0]?.id || 't1';
     if (filter.table) {
       const matchingTable = query.tables.find((t) => t.name === filter.table);

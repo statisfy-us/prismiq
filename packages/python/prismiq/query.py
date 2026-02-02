@@ -500,6 +500,58 @@ class QueryBuilder:
 
         return None
 
+    def sanitize_filters(self, query: QueryDefinition) -> QueryDefinition:
+        """Remove filters that reference non-existent columns.
+
+        Filters referencing columns that don't exist in their target table are
+        silently removed instead of causing validation errors.
+
+        Args:
+            query: Query definition with potentially invalid filters.
+
+        Returns:
+            A new QueryDefinition with invalid filters removed.
+        """
+        if not query.filters:
+            return query
+
+        # Build table_id -> table_name mapping
+        table_map: dict[str, str] = {}
+        for qt in query.tables:
+            table_map[qt.id] = qt.name
+
+        # Build set of calculated field names (these are always valid)
+        calculated_field_names = {cf.name for cf in (query.calculated_fields or [])}
+
+        # Filter out invalid filters
+        valid_filters = []
+        for f in query.filters:
+            table_name = table_map.get(f.table_id)
+            if not table_name:
+                # Unknown table_id - skip this filter
+                continue
+
+            table = self._schema.get_table(table_name)
+            if not table:
+                # Unknown table - skip this filter
+                continue
+
+            # Allow references to calculated fields
+            if f.column in calculated_field_names:
+                valid_filters.append(f)
+                continue
+
+            # Check if column exists in table
+            if table.has_column(f.column):
+                valid_filters.append(f)
+            # else: column doesn't exist - skip this filter silently
+
+        # Return new query with sanitized filters
+        if len(valid_filters) == len(query.filters):
+            return query  # No changes needed
+
+        return query.model_copy(update={"filters": valid_filters})
+
     def build(self, query: QueryDefinition) -> tuple[str, list[Any]]:
         """Build a parameterized SQL query.
 

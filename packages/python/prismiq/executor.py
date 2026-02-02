@@ -106,7 +106,10 @@ class QueryExecutor:
             QueryTimeoutError: If the query exceeds the timeout.
             QueryExecutionError: If the query execution fails.
         """
-        # Validate first
+        # Sanitize filters - remove filters referencing non-existent columns
+        query = self._builder.sanitize_filters(query)
+
+        # Validate
         errors = self._builder.validate(query)
         if errors:
             raise QueryValidationError("Query validation failed", errors=errors)
