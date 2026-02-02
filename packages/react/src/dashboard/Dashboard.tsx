@@ -253,11 +253,12 @@ export function Dashboard({
   showFilters = true,
   showTitle = true,
   refreshInterval,
+  batchSize,
   className = '',
 }: DashboardProps): JSX.Element {
   return (
     <CrossFilterProvider>
-      <DashboardProvider dashboardId={id} refreshInterval={refreshInterval}>
+      <DashboardProvider dashboardId={id} refreshInterval={refreshInterval} batchSize={batchSize}>
         <DashboardContent
           showFilters={showFilters}
           showTitle={showTitle}

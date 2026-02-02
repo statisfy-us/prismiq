@@ -28,7 +28,7 @@ export const DashboardContext = createContext<DashboardContextValue | null>(null
 /**
  * Default batch size for loading widgets.
  */
-const DEFAULT_BATCH_SIZE = 4;
+const DEFAULT_BATCH_SIZE = 8;
 
 /**
  * Module-level cache for dashboard data to survive StrictMode remounts.
@@ -263,6 +263,16 @@ export function DashboardProvider({
         value: f.default_value,
       }));
     setFilterValues(defaults);
+    // Initialize all widgets with loading state so they show spinners
+    // until their queries are executed (instead of showing "No Data")
+    const initialLoadingState: Record<string, boolean> = {};
+    data.widgets.forEach((widget) => {
+      // Only mark widgets with queries as loading (text widgets don't need it)
+      if (widget.query) {
+        initialLoadingState[widget.id] = true;
+      }
+    });
+    setWidgetLoading(initialLoadingState);
   }, []);
 
   /**

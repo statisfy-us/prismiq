@@ -410,6 +410,8 @@ export interface DashboardProps {
   showTitle?: boolean;
   /** Auto-refresh interval in milliseconds. */
   refreshInterval?: number;
+  /** Number of widgets to load in each batch (default: 8). */
+  batchSize?: number;
   /** Callback when a widget is clicked. */
   onWidgetClick?: (widget: Widget, result: QueryResult) => void;
   /** Additional CSS class. */
