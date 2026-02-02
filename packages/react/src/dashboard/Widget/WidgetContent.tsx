@@ -209,7 +209,8 @@ function resultToDataPoints(result: QueryResult): ChartDataPoint[] {
 }
 
 /**
- * Spinner overlay shown during refresh.
+ * Spinner overlay shown during loading/refresh.
+ * Uses theme-aware colors for proper dark/light mode support.
  */
 function RefreshOverlay(): JSX.Element {
   const { theme } = useTheme();
@@ -220,7 +221,8 @@ function RefreshOverlay(): JSX.Element {
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    // Use theme surface color with opacity for theme-aware overlay
+    backgroundColor: `${theme.colors.surface}e6`, // e6 = ~90% opacity in hex
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -330,8 +332,9 @@ export function WidgetContent({
     position: 'relative',
   };
 
-  // Handle loading state (initial load only, not refresh)
-  if (isLoading && !result && !isRefreshing) {
+  // Handle loading state - show spinner, hide old data
+  // Same behavior for initial load and filter changes
+  if (isLoading) {
     return (
       <div style={containerStyle}>
         <LoadingState />
@@ -339,8 +342,8 @@ export function WidgetContent({
     );
   }
 
-  // Wrapper to add refresh overlay on top of content
-  const wrapWithRefreshOverlay = (content: JSX.Element): JSX.Element => {
+  // Wrapper for content (only shows refresh overlay for manual refresh)
+  const wrapWithContainer = (content: JSX.Element): JSX.Element => {
     if (isRefreshing && result) {
       return (
         <div style={containerStyle}>
@@ -395,7 +398,7 @@ export function WidgetContent({
         ? result.rows[0]?.[result.columns.indexOf(widget.config.trend_comparison)]
         : undefined;
 
-      return wrapWithRefreshOverlay(
+      return wrapWithContainer(
         <MetricCard
           title=""
           value={typeof value === 'number' ? value : Number(value) || 0}
@@ -422,7 +425,7 @@ export function WidgetContent({
     }
 
     case 'bar_chart':
-      return wrapWithRefreshOverlay(
+      return wrapWithContainer(
         <BarChart
           data={data}
           xAxis={xAxis}
@@ -446,7 +449,7 @@ export function WidgetContent({
       );
 
     case 'line_chart':
-      return wrapWithRefreshOverlay(
+      return wrapWithContainer(
         <LineChart
           data={data}
           xAxis={xAxis}
@@ -466,7 +469,7 @@ export function WidgetContent({
       );
 
     case 'area_chart':
-      return wrapWithRefreshOverlay(
+      return wrapWithContainer(
         <AreaChart
           data={data}
           xAxis={xAxis}
@@ -483,7 +486,7 @@ export function WidgetContent({
       );
 
     case 'pie_chart':
-      return wrapWithRefreshOverlay(
+      return wrapWithContainer(
         <PieChart
           data={data}
           labelColumn={xAxis}
@@ -500,7 +503,7 @@ export function WidgetContent({
       );
 
     case 'scatter_chart':
-      return wrapWithRefreshOverlay(
+      return wrapWithContainer(
         <ScatterChart
           data={data}
           xAxis={xAxis}
@@ -546,7 +549,8 @@ export function WidgetContent({
         />
       );
 
-      // Handle refresh overlay for tables
+      // Handle refresh overlay for tables (manual refresh only)
+      // Note: isLoading is handled earlier and shows LoadingState
       if (isRefreshing) {
         return (
           <div style={tableContainerStyle}>
@@ -560,6 +564,6 @@ export function WidgetContent({
     }
 
     default:
-      return wrapWithRefreshOverlay(<EmptyState />);
+      return wrapWithContainer(<EmptyState />);
   }
 }
