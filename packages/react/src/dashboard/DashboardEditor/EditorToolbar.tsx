@@ -2,6 +2,7 @@
  * Dashboard editor toolbar component.
  */
 
+import { useEffect } from 'react';
 import { useTheme } from '../../theme';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
@@ -12,6 +13,8 @@ import { Icon } from '../../components/ui/Icon';
 export interface EditorToolbarProps {
   /** Dashboard name. */
   dashboardName: string;
+  /** Callback when dashboard name changes. */
+  onNameChange?: (name: string) => void;
   /** Whether there are unsaved changes. */
   hasChanges: boolean;
   /** Whether save is in progress. */
@@ -33,6 +36,7 @@ export interface EditorToolbarProps {
  */
 export function EditorToolbar({
   dashboardName,
+  onNameChange,
   hasChanges,
   isSaving,
   onAddWidget,
@@ -83,10 +87,53 @@ export function EditorToolbar({
     marginRight: theme.spacing.sm,
   };
 
+  const titleInputStyle: React.CSSProperties = {
+    fontSize: theme.fontSizes.lg,
+    fontWeight: 600,
+    color: theme.colors.text,
+    backgroundColor: 'transparent',
+    border: `1px solid ${theme.colors.border}`,
+    borderRadius: theme.radius.sm,
+    padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+    outline: 'none',
+    minWidth: '200px',
+  };
+
+  // Inject focus-visible style for the title input so keyboard users see a
+  // visible focus indicator even though outline is removed in the inline style.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const styleId = 'prismiq-dashboard-title-input-focus';
+    if (document.getElementById(styleId)) return;
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      .prismiq-dashboard-title-input:focus-visible {
+        border-color: var(--prismiq-color-primary);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--prismiq-color-primary) 25%, transparent);
+      }
+    `;
+    document.head.appendChild(style);
+  }, []);
+
   return (
     <div style={toolbarStyle} className="prismiq-editor-toolbar">
       <div style={leftSectionStyle}>
-        <h2 style={titleStyle}>{dashboardName || 'New Dashboard'}</h2>
+        {onNameChange ? (
+          <input
+            type="text"
+            id="dashboard-title-input"
+            className="prismiq-dashboard-title-input"
+            data-testid="dashboard-title-input"
+            aria-label="Dashboard title"
+            value={dashboardName}
+            onChange={(e) => onNameChange(e.target.value)}
+            placeholder="Dashboard name"
+            style={titleInputStyle}
+          />
+        ) : (
+          <h2 style={titleStyle}>{dashboardName || 'New Dashboard'}</h2>
+        )}
 
         <div style={actionsStyle}>
           <Button

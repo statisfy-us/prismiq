@@ -1606,6 +1606,7 @@ def create_router(
         queries = await saved_query_store.list(
             tenant_id=auth.tenant_id,
             user_id=auth.user_id,
+            schema_name=auth.schema_name,
         )
         return SavedQueryListResponse(queries=queries)
 
@@ -1626,7 +1627,9 @@ def create_router(
             404: If saved query not found.
         """
         saved_query_store = engine.saved_query_store
-        query = await saved_query_store.get(query_id, tenant_id=auth.tenant_id)
+        query = await saved_query_store.get(
+            query_id, tenant_id=auth.tenant_id, schema_name=auth.schema_name
+        )
         if query is None:
             raise HTTPException(status_code=404, detail=f"Saved query '{query_id}' not found")
         return query
@@ -1649,6 +1652,7 @@ def create_router(
             data,
             tenant_id=auth.tenant_id,
             owner_id=auth.user_id,
+            schema_name=auth.schema_name,
         )
 
     @router.patch("/saved-queries/{query_id}", response_model=SavedQuery)
@@ -1677,6 +1681,7 @@ def create_router(
             data,
             tenant_id=auth.tenant_id,
             user_id=auth.user_id,
+            schema_name=auth.schema_name,
         )
         if updated is None:
             raise HTTPException(
@@ -1708,6 +1713,7 @@ def create_router(
             query_id,
             tenant_id=auth.tenant_id,
             user_id=auth.user_id,
+            schema_name=auth.schema_name,
         )
         if not deleted:
             raise HTTPException(

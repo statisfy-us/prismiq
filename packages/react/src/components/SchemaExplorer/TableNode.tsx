@@ -186,7 +186,7 @@ export function TableNode({
         </span>
         <span style={nameStyles}>{table.name}</span>
         <span style={countStyles}>
-          {table.row_count !== undefined
+          {table.row_count != null
             ? `${table.row_count.toLocaleString()} rows`
             : `${table.columns.length} cols`}
         </span>

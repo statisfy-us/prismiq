@@ -81,22 +81,24 @@ class PostgresDashboardStore:
     async def _set_search_path(self, conn: Any, schema_name: str | None) -> None:
         """Set PostgreSQL search_path for schema isolation.
 
+        Uses session-scoped set_config so the search_path persists across
+        statements on the same connection.
+
         Args:
             conn: asyncpg connection
             schema_name: Schema name to use, or None for default (public)
         """
         if schema_name:
-            # Set search_path to the tenant schema, falling back to public
-            # Use double-quoted identifiers to handle schema names with special chars
-            # Escape double quotes to prevent SQL injection
+            # Build search_path value with safely quoted schema identifier
+            # Double any embedded double-quotes to escape them in the identifier
             escaped_schema = schema_name.replace('"', '""')
-            sql = f'SET search_path TO "{escaped_schema}", public'
-            _logger.info(f"[postgres_store] Setting search_path: {sql}")
-            await conn.execute(sql)
+            search_path_value = f'"{escaped_schema}", "public"'
+            _logger.debug("[postgres_store] Setting search_path to: %s", search_path_value)
+            await conn.fetchval("SELECT set_config('search_path', $1, false)", search_path_value)
         else:
             # Explicitly set to public when no schema_name provided
-            _logger.info("[postgres_store] Setting search_path: SET search_path TO public")
-            await conn.execute("SET search_path TO public")
+            _logger.debug('[postgres_store] Setting search_path to: "public"')
+            await conn.fetchval("SELECT set_config('search_path', $1, false)", '"public"')
 
     # -------------------------------------------------------------------------
     # Dashboard Operations
@@ -329,9 +331,10 @@ class PostgresDashboardStore:
                 for widget in update.widgets:
                     await conn.execute(
                         """
-                        INSERT INTO prismiq_widgets (
-                            dashboard_id, title, type, query, config, position
-                        ) VALUES ($1, $2, $3, $4, $5, $6)
+                        INSERT INTO "prismiq_widgets" (
+                            "dashboard_id", "title", "type", "query", "config", "position",
+                            "created_at", "updated_at"
+                        ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
                         """,
                         int(dashboard_id),
                         widget.title,

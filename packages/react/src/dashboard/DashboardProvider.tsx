@@ -20,6 +20,11 @@ import type {
   Widget,
 } from './types';
 import type { FilterDefinition, QueryDefinition, QueryResult } from '../types';
+import {
+  dashboardCache,
+  CACHE_TTL_MS,
+  inflightFetches,
+} from './dashboardCache';
 
 /**
  * Dashboard context.
@@ -30,18 +35,6 @@ export const DashboardContext = createContext<DashboardContextValue | null>(null
  * Default batch size for loading widgets.
  */
 const DEFAULT_BATCH_SIZE = 8;
-
-/**
- * Module-level cache for dashboard data to survive StrictMode remounts.
- * Maps dashboardId -> { data, timestamp }
- */
-const dashboardCache = new Map<string, { data: Dashboard; timestamp: number }>();
-const CACHE_TTL_MS = 5000; // Cache data for 5 seconds
-
-/**
- * Track in-flight fetches to prevent duplicate network requests.
- */
-const inflightFetches = new Map<string, Promise<Dashboard>>();
 
 /**
  * Apply dashboard filter values to a widget query.
