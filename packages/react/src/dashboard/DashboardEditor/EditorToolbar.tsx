@@ -2,6 +2,7 @@
  * Dashboard editor toolbar component.
  */
 
+import { useEffect } from 'react';
 import { useTheme } from '../../theme';
 import { Button } from '../../components/ui/Button';
 import { Icon } from '../../components/ui/Icon';
@@ -98,6 +99,23 @@ export function EditorToolbar({
     minWidth: '200px',
   };
 
+  // Inject focus-visible style for the title input so keyboard users see a
+  // visible focus indicator even though outline is removed in the inline style.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const styleId = 'prismiq-dashboard-title-input-focus';
+    if (document.getElementById(styleId)) return;
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      .prismiq-dashboard-title-input:focus-visible {
+        border-color: var(--prismiq-color-primary);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--prismiq-color-primary) 25%, transparent);
+      }
+    `;
+    document.head.appendChild(style);
+  }, []);
+
   return (
     <div style={toolbarStyle} className="prismiq-editor-toolbar">
       <div style={leftSectionStyle}>
@@ -105,6 +123,7 @@ export function EditorToolbar({
           <input
             type="text"
             id="dashboard-title-input"
+            className="prismiq-dashboard-title-input"
             data-testid="dashboard-title-input"
             aria-label="Dashboard title"
             value={dashboardName}
