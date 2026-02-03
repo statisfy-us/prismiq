@@ -44,11 +44,11 @@ class SavedQueryStore:
             # Double any embedded double-quotes to escape them in the identifier
             escaped_schema = schema_name.replace('"', '""')
             search_path_value = f'"{escaped_schema}", public'
-            _logger.info("[saved_query_store] Setting search_path to: %s", search_path_value)
-            await conn.fetchval("SELECT set_config('search_path', $1, false)", search_path_value)
+            _logger.debug("[saved_query_store] Setting search_path to: %s", search_path_value)
+            await conn.fetchval("SELECT set_config('search_path', $1, true)", search_path_value)
         else:
-            _logger.info("[saved_query_store] Setting search_path to: public")
-            await conn.fetchval("SELECT set_config('search_path', $1, false)", "public")
+            _logger.debug("[saved_query_store] Setting search_path to: public")
+            await conn.fetchval("SELECT set_config('search_path', $1, true)", "public")
 
     async def list(
         self,

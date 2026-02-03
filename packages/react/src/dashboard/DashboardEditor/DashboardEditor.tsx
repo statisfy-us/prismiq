@@ -10,6 +10,11 @@ import { DashboardLayout } from '../DashboardLayout';
 import { Widget, WidgetContainer } from '../Widget';
 import { EditorToolbar } from './EditorToolbar';
 import { WidgetEditorPage } from './WidgetEditorPage';
+import {
+  dashboardCache,
+  CACHE_TTL_MS,
+  inflightFetches,
+} from '../dashboardCache';
 import type {
   Dashboard,
   Widget as WidgetType,
@@ -75,12 +80,6 @@ function getDefaultPosition(
  * />
  * ```
  */
-import {
-  dashboardCache,
-  CACHE_TTL_MS,
-  inflightFetches,
-} from '../dashboardCache';
-
 const DEFAULT_BATCH_SIZE = 4;
 
 export function DashboardEditor({
@@ -227,6 +226,7 @@ export function DashboardEditor({
         })
         .catch((err) => {
           console.error(`[DashboardEditor] In-flight fetch error:`, err);
+          setError(err instanceof Error ? err : new Error('Failed to load dashboard'));
           setIsLoading(false);
         });
       return;
@@ -353,8 +353,13 @@ export function DashboardEditor({
       if (currentDashboardId) {
         // Update existing dashboard
         await client.patch(`/dashboards/${currentDashboardId}`, dashboard);
-        // Reload to get canonical state
-        savedDashboard = await client.get<Dashboard>(`/dashboards/${currentDashboardId}`);
+        // Reload to get canonical state — non-fatal if it fails
+        try {
+          savedDashboard = await client.get<Dashboard>(`/dashboards/${currentDashboardId}`);
+        } catch (reloadErr) {
+          console.warn('[DashboardEditor] Reload after save failed, using local state:', reloadErr);
+          savedDashboard = dashboard;
+        }
       } else {
         // Create new dashboard - use the response which contains the server-generated ID
         savedDashboard = await client.post<Dashboard>('/dashboards', dashboard);
@@ -435,28 +440,35 @@ export function DashboardEditor({
 
   // Handle widget duplicate
   const handleDuplicateWidget = useCallback((widgetId: string) => {
-    const widget = dashboard.widgets.find((w) => w.id === widgetId);
-    if (!widget) return;
+    let duplicatedWidget: WidgetType | null = null;
 
-    const newWidget: WidgetType = {
-      ...widget,
-      id: generateId(),
-      title: `${widget.title} (copy)`,
-      position: getDefaultPosition(dashboard.widgets, widget.type),
-    };
+    setDashboard((prev) => {
+      const widget = prev.widgets.find((w) => w.id === widgetId);
+      if (!widget) {
+        console.warn(`[DashboardEditor] Cannot duplicate widget: '${widgetId}' not found`);
+        return prev;
+      }
 
-    setDashboard((prev) => ({
-      ...prev,
-      widgets: [...prev.widgets, newWidget],
-    }));
-    setIsDirty(true);
+      const newWidget: WidgetType = {
+        ...widget,
+        id: generateId(),
+        title: `${widget.title} (copy)`,
+        position: getDefaultPosition(prev.widgets, widget.type),
+      };
+      duplicatedWidget = newWidget;
 
-    // Execute query for duplicated widget if it has one
-    // Pass the widget directly to avoid stale closure issues
-    if (newWidget.query) {
-      refreshWidget(newWidget.id, newWidget);
+      return { ...prev, widgets: [...prev.widgets, newWidget] };
+    });
+
+    if (duplicatedWidget) {
+      setIsDirty(true);
+      // Execute query for duplicated widget if it has one
+      // Pass the widget directly to avoid stale closure issues
+      if ((duplicatedWidget as WidgetType).query) {
+        refreshWidget((duplicatedWidget as WidgetType).id, duplicatedWidget as WidgetType);
+      }
     }
-  }, [dashboard.widgets, refreshWidget]);
+  }, [refreshWidget]);
 
   // Render widget for layout
   const renderWidget = useCallback(
