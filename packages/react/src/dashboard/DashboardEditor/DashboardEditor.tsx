@@ -95,6 +95,12 @@ export function DashboardEditor({
 
   // Dashboard state
   const [currentDashboardId, setCurrentDashboardId] = useState<string | undefined>(dashboardId);
+
+  // Keep currentDashboardId in sync when the prop changes
+  useEffect(() => {
+    setCurrentDashboardId(dashboardId);
+  }, [dashboardId]);
+
   const [dashboard, setDashboard] = useState<Dashboard>({
     id: dashboardId || generateId(),
     name: 'New Dashboard',
@@ -441,6 +447,18 @@ export function DashboardEditor({
       ...prev,
       widgets: prev.widgets.filter((w) => w.id !== widgetId),
     }));
+
+    // Clean up per-widget caches
+    setWidgetResults((prev) => { const next = { ...prev }; delete next[widgetId]; return next; });
+    setWidgetLoading((prev) => { const next = { ...prev }; delete next[widgetId]; return next; });
+    setWidgetErrors((prev) => { const next = { ...prev }; delete next[widgetId]; return next; });
+    setWidgetRefreshTimes((prev) => { const next = { ...prev }; delete next[widgetId]; return next; });
+    setRefreshingWidgets((prev) => {
+      const next = new Set(prev);
+      next.delete(widgetId);
+      return next;
+    });
+
     setIsDirty(true);
   }, []);
 

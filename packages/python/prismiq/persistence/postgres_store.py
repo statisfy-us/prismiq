@@ -81,6 +81,9 @@ class PostgresDashboardStore:
     async def _set_search_path(self, conn: Any, schema_name: str | None) -> None:
         """Set PostgreSQL search_path for schema isolation.
 
+        Uses session-scoped set_config so the search_path persists across
+        statements on the same connection.
+
         Args:
             conn: asyncpg connection
             schema_name: Schema name to use, or None for default (public)
@@ -89,13 +92,13 @@ class PostgresDashboardStore:
             # Build search_path value with safely quoted schema identifier
             # Double any embedded double-quotes to escape them in the identifier
             escaped_schema = schema_name.replace('"', '""')
-            search_path_value = f'"{escaped_schema}", public'
+            search_path_value = f'"{escaped_schema}", "public"'
             _logger.debug("[postgres_store] Setting search_path to: %s", search_path_value)
-            await conn.fetchval("SELECT set_config('search_path', $1, true)", search_path_value)
+            await conn.fetchval("SELECT set_config('search_path', $1, false)", search_path_value)
         else:
             # Explicitly set to public when no schema_name provided
-            _logger.debug("[postgres_store] Setting search_path to: public")
-            await conn.fetchval("SELECT set_config('search_path', $1, true)", "public")
+            _logger.debug('[postgres_store] Setting search_path to: "public"')
+            await conn.fetchval("SELECT set_config('search_path', $1, false)", '"public"')
 
     # -------------------------------------------------------------------------
     # Dashboard Operations

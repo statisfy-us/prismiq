@@ -8,12 +8,43 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy import (
+    Boolean,
+    Column,
+    MetaData,
+    String,
+    Table,
+    delete,
+    insert,
+    select,
+    update,
+)
+from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP, UUID
+
 from prismiq.types import QueryDefinition, SavedQuery, SavedQueryCreate, SavedQueryUpdate
 
 if TYPE_CHECKING:
     from asyncpg import Pool  # type: ignore[import-not-found]
 
 _logger = logging.getLogger(__name__)
+
+# SQLAlchemy Table definition for saved queries (used for query generation)
+# quote=True ensures all identifiers are double-quoted in generated SQL
+_metadata = MetaData()
+_saved_queries_table = Table(
+    "prismiq_saved_queries",
+    _metadata,
+    Column("id", UUID, primary_key=True, quote=True),
+    Column("tenant_id", String(255), nullable=False, quote=True),
+    Column("name", String(255), nullable=False, quote=True),
+    Column("description", String, nullable=True, quote=True),
+    Column("query", JSONB, nullable=False, quote=True),
+    Column("owner_id", String(255), nullable=True, quote=True),
+    Column("is_shared", Boolean, nullable=False, quote=True),
+    Column("created_at", TIMESTAMP(timezone=True), nullable=False, quote=True),
+    Column("updated_at", TIMESTAMP(timezone=True), nullable=False, quote=True),
+    quote=True,
+)
 
 
 class SavedQueryStore:
@@ -35,6 +66,9 @@ class SavedQueryStore:
     async def _set_search_path(self, conn: Any, schema_name: str | None) -> None:
         """Set PostgreSQL search_path for schema isolation.
 
+        Uses session-scoped set_config so the search_path persists across
+        statements on the same connection.
+
         Args:
             conn: asyncpg connection
             schema_name: Schema name to use, or None for default (public)
@@ -43,12 +77,12 @@ class SavedQueryStore:
             # Build search_path value with safely quoted schema identifier
             # Double any embedded double-quotes to escape them in the identifier
             escaped_schema = schema_name.replace('"', '""')
-            search_path_value = f'"{escaped_schema}", public'
+            search_path_value = f'"{escaped_schema}", "public"'
             _logger.debug("[saved_query_store] Setting search_path to: %s", search_path_value)
-            await conn.fetchval("SELECT set_config('search_path', $1, true)", search_path_value)
+            await conn.fetchval("SELECT set_config('search_path', $1, false)", search_path_value)
         else:
-            _logger.debug("[saved_query_store] Setting search_path to: public")
-            await conn.fetchval("SELECT set_config('search_path', $1, true)", "public")
+            _logger.debug('[saved_query_store] Setting search_path to: "public"')
+            await conn.fetchval("SELECT set_config('search_path', $1, false)", '"public"')
 
     async def list(
         self,
@@ -66,25 +100,27 @@ class SavedQueryStore:
             user_id: Optional user ID to filter by access.
             schema_name: PostgreSQL schema name for per-tenant schema isolation.
         """
-        query = """
-            SELECT *
-            FROM prismiq_saved_queries
-            WHERE tenant_id = $1
-        """
-        params: list[Any] = [tenant_id]
+        t = _saved_queries_table
+        stmt = select(t).where(t.c.tenant_id == tenant_id)
 
         if user_id:
             # Return user's queries and shared queries
-            query += """
-                AND (owner_id = $2 OR is_shared = TRUE OR owner_id IS NULL)
-            """
-            params.append(user_id)
+            from sqlalchemy import or_
 
-        query += " ORDER BY name ASC"
+            stmt = stmt.where(
+                or_(
+                    t.c.owner_id == user_id,
+                    t.c.is_shared.is_(True),
+                    t.c.owner_id.is_(None),
+                )
+            )
 
+        stmt = stmt.order_by(t.c.name.asc())
+
+        sql, params = self._compile_query(stmt)
         async with self._pool.acquire() as conn:
             await self._set_search_path(conn, schema_name)
-            rows = await conn.fetch(query, *params)
+            rows = await conn.fetch(sql, *params)
             return [self._row_to_saved_query(row) for row in rows]
 
     async def get(
@@ -100,14 +136,16 @@ class SavedQueryStore:
             tenant_id: Tenant ID for isolation.
             schema_name: PostgreSQL schema name for per-tenant schema isolation.
         """
-        query = """
-            SELECT *
-            FROM prismiq_saved_queries
-            WHERE id = $1 AND tenant_id = $2
-        """
+        t = _saved_queries_table
+        stmt = select(t).where(
+            t.c.id == uuid.UUID(query_id),
+            t.c.tenant_id == tenant_id,
+        )
+
+        sql, params = self._compile_query(stmt)
         async with self._pool.acquire() as conn:
             await self._set_search_path(conn, schema_name)
-            row = await conn.fetchrow(query, uuid.UUID(query_id), tenant_id)
+            row = await conn.fetchrow(sql, *params)
             if not row:
                 return None
             return self._row_to_saved_query(row)
@@ -130,26 +168,27 @@ class SavedQueryStore:
         query_id = uuid.uuid4()
         now = datetime.now(timezone.utc)
 
-        query = """
-            INSERT INTO prismiq_saved_queries
-            (id, tenant_id, name, description, query, owner_id, is_shared, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            RETURNING *
-        """
+        t = _saved_queries_table
+        stmt = (
+            insert(t)
+            .values(
+                id=query_id,
+                tenant_id=tenant_id,
+                name=data.name,
+                description=data.description,
+                query=json.dumps(data.query.model_dump()),
+                owner_id=owner_id,
+                is_shared=data.is_shared,
+                created_at=now,
+                updated_at=now,
+            )
+            .returning(*t.c)
+        )
+
+        sql, params = self._compile_query(stmt)
         async with self._pool.acquire() as conn:
             await self._set_search_path(conn, schema_name)
-            row = await conn.fetchrow(
-                query,
-                query_id,
-                tenant_id,
-                data.name,
-                data.description,
-                json.dumps(data.query.model_dump()),
-                owner_id,
-                data.is_shared,
-                now,
-                now,
-            )
+            row = await conn.fetchrow(sql, *params)
             return self._row_to_saved_query(row)
 
     async def update(
@@ -171,60 +210,47 @@ class SavedQueryStore:
             user_id: User ID for ownership check.
             schema_name: PostgreSQL schema name for per-tenant schema isolation.
         """
-        # Build dynamic UPDATE based on provided fields
-        updates: list[str] = []
-        params: list[Any] = []
-        param_num = 1
+        # Collect fields to update
+        values: dict[str, Any] = {}
 
         if data.name is not None:
-            updates.append(f"name = ${param_num}")
-            params.append(data.name)
-            param_num += 1
+            values["name"] = data.name
 
         if data.description is not None:
-            updates.append(f"description = ${param_num}")
-            params.append(data.description)
-            param_num += 1
+            values["description"] = data.description
 
         if data.query is not None:
-            updates.append(f"query = ${param_num}")
-            params.append(json.dumps(data.query.model_dump()))
-            param_num += 1
+            values["query"] = json.dumps(data.query.model_dump())
 
         if data.is_shared is not None:
-            updates.append(f"is_shared = ${param_num}")
-            params.append(data.is_shared)
-            param_num += 1
+            values["is_shared"] = data.is_shared
 
-        if not updates:
+        if not values:
             # No updates provided, just return current query
             return await self.get(query_id, tenant_id, schema_name)
 
         # Always update the timestamp
-        updates.append(f"updated_at = ${param_num}")
-        params.append(datetime.now(timezone.utc))
-        param_num += 1
+        values["updated_at"] = datetime.now(timezone.utc)
 
-        # Add query_id and tenant_id as final params
-        params.extend([uuid.UUID(query_id), tenant_id])
+        t = _saved_queries_table
+        stmt = (
+            update(t)
+            .where(
+                t.c.id == uuid.UUID(query_id),
+                t.c.tenant_id == tenant_id,
+            )
+            .values(**values)
+            .returning(*t.c)
+        )
 
-        # Build WHERE clause - only owner can update
-        where_clause = f"id = ${param_num} AND tenant_id = ${param_num + 1}"
+        # Only owner can update
         if user_id:
-            params.append(user_id)
-            where_clause += f" AND owner_id = ${param_num + 2}"
+            stmt = stmt.where(t.c.owner_id == user_id)
 
-        # Column names in `updates` are hardcoded above, not user input
-        query = f"""
-            UPDATE prismiq_saved_queries
-            SET {", ".join(updates)}
-            WHERE {where_clause}
-            RETURNING *
-        """  # noqa: S608
-
+        sql, params = self._compile_query(stmt)
         async with self._pool.acquire() as conn:
             await self._set_search_path(conn, schema_name)
-            row = await conn.fetchrow(query, *params)
+            row = await conn.fetchrow(sql, *params)
             if not row:
                 return None
             return self._row_to_saved_query(row)
@@ -246,16 +272,19 @@ class SavedQueryStore:
             user_id: User ID for ownership check.
             schema_name: PostgreSQL schema name for per-tenant schema isolation.
         """
-        query = "DELETE FROM prismiq_saved_queries WHERE id = $1 AND tenant_id = $2"
-        params: list[Any] = [uuid.UUID(query_id), tenant_id]
+        t = _saved_queries_table
+        stmt = delete(t).where(
+            t.c.id == uuid.UUID(query_id),
+            t.c.tenant_id == tenant_id,
+        )
 
         if user_id:
-            query += " AND owner_id = $3"
-            params.append(user_id)
+            stmt = stmt.where(t.c.owner_id == user_id)
 
+        sql, params = self._compile_query(stmt)
         async with self._pool.acquire() as conn:
             await self._set_search_path(conn, schema_name)
-            result = await conn.execute(query, *params)
+            result = await conn.execute(sql, *params)
             return result == "DELETE 1"
 
     def _row_to_saved_query(self, row: Any) -> SavedQuery:
@@ -275,3 +304,32 @@ class SavedQueryStore:
             created_at=row["created_at"].isoformat() if row.get("created_at") else None,
             updated_at=row["updated_at"].isoformat() if row.get("updated_at") else None,
         )
+
+    @staticmethod
+    def _compile_query(stmt: Any) -> tuple[str, list[Any]]:
+        """Compile a SQLAlchemy statement for asyncpg execution.
+
+        Converts SQLAlchemy Core statements to SQL strings with positional
+        parameters ($1, $2, etc.) compatible with asyncpg.
+
+        Args:
+            stmt: SQLAlchemy Core statement (select, insert, etc.)
+
+        Returns:
+            Tuple of (sql_string, list_of_parameters)
+        """
+        from sqlalchemy.dialects import postgresql
+
+        dialect = postgresql.dialect(paramstyle="numeric")
+        compiled = stmt.compile(dialect=dialect, compile_kwargs={"literal_binds": False})
+        sql = str(compiled)
+
+        # Extract parameters in the order they appear in the SQL
+        # The compiled.positiontup gives param names in order for positional dialects
+        if hasattr(compiled, "positiontup") and compiled.positiontup:
+            params = [compiled.params[name] for name in compiled.positiontup]
+        else:
+            # Fallback: params dict should be ordered in Python 3.7+
+            params = list(compiled.params.values())
+
+        return sql, params
