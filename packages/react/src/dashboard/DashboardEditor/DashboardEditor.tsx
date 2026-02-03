@@ -360,6 +360,12 @@ export function DashboardEditor({
           console.warn('[DashboardEditor] Reload after save failed, using local state:', reloadErr);
           savedDashboard = dashboard;
         }
+        // Refresh shared cache so other components see canonical state
+        dashboardCache.set(currentDashboardId, {
+          data: savedDashboard,
+          timestamp: Date.now(),
+        });
+        inflightFetches.delete(currentDashboardId);
       } else {
         // Create new dashboard - use the response which contains the server-generated ID
         savedDashboard = await client.post<Dashboard>('/dashboards', dashboard);

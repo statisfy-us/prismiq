@@ -200,6 +200,11 @@ class SavedQueryStore:
             # No updates provided, just return current query
             return await self.get(query_id, tenant_id, schema_name)
 
+        # Always update the timestamp
+        updates.append(f"updated_at = ${param_num}")
+        params.append(datetime.now(timezone.utc))
+        param_num += 1
+
         # Add query_id and tenant_id as final params
         params.extend([uuid.UUID(query_id), tenant_id])
 
