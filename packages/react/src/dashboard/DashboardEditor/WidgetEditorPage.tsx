@@ -293,7 +293,7 @@ export function WidgetEditorPage({
   const bodyStyle: React.CSSProperties = {
     flex: 1,
     display: 'flex',
-    overflow: 'hidden',
+    minHeight: 0,
   };
 
   const leftPanelStyle: React.CSSProperties = {
@@ -311,7 +311,7 @@ export function WidgetEditorPage({
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    overflow: 'hidden',
+    minHeight: 0,
   };
 
   const previewPanelStyle: React.CSSProperties = {
@@ -322,11 +322,11 @@ export function WidgetEditorPage({
   };
 
   const dataSourcePanelStyle: React.CSSProperties = {
-    flex: 1,
+    flex: '1 1 auto',
     display: 'flex',
     flexDirection: 'column',
+    minHeight: 0,
     overflow: 'hidden',
-    minHeight: 0, // Important for flex children to overflow properly
   };
 
   const dataSourceHeaderStyle: React.CSSProperties = {
@@ -350,10 +350,11 @@ export function WidgetEditorPage({
   });
 
   const dataSourceContentStyle: React.CSSProperties = {
-    flex: 1,
+    flex: '1 1 auto',
     overflow: 'auto',
     padding: theme.spacing.md,
-    minHeight: 0, // Important for flex children to overflow properly
+    paddingBottom: '100px', // Extra space to ensure filter buttons are visible
+    minHeight: '250px',
   };
 
   const sectionStyle: React.CSSProperties = {

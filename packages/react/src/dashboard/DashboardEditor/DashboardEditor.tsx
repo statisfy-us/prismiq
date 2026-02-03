@@ -7,7 +7,7 @@ import { useTheme } from '../../theme';
 import { useAnalytics } from '../../context';
 import { useSchema } from '../../hooks';
 import { DashboardLayout } from '../DashboardLayout';
-import { Widget } from '../Widget';
+import { Widget, WidgetContainer } from '../Widget';
 import { EditorToolbar } from './EditorToolbar';
 import { WidgetEditorPage } from './WidgetEditorPage';
 import type {
@@ -75,15 +75,13 @@ function getDefaultPosition(
  * />
  * ```
  */
+import {
+  dashboardCache,
+  CACHE_TTL_MS,
+  inflightFetches,
+} from '../dashboardCache';
+
 const DEFAULT_BATCH_SIZE = 4;
-
-// Module-level cache for dashboard data to survive StrictMode remounts
-// Maps dashboardId -> { data, timestamp }
-const dashboardCache = new Map<string, { data: Dashboard; timestamp: number }>();
-const CACHE_TTL_MS = 5000; // Cache data for 5 seconds
-
-// Track in-flight fetches to prevent duplicate network requests
-const inflightFetches = new Map<string, Promise<Dashboard>>();
 
 export function DashboardEditor({
   dashboardId,
@@ -268,9 +266,10 @@ export function DashboardEditor({
   }, [dashboardId, batchSize, executeWidgetQueries]); // Removed client - using ref instead
 
   // Execute widget queries for preview
+  // Accepts optional widget parameter to avoid stale closure issues when widget was just added
   const refreshWidget = useCallback(
-    async (widgetId: string) => {
-      const widget = dashboard.widgets.find((w) => w.id === widgetId);
+    async (widgetId: string, widgetOverride?: WidgetType) => {
+      const widget = widgetOverride ?? dashboard.widgets.find((w) => w.id === widgetId);
       if (!widget?.query || !client) return;
 
       setWidgetLoading((prev) => ({ ...prev, [widgetId]: true }));
@@ -348,28 +347,22 @@ export function DashboardEditor({
     setIsSaving(true);
     setError(null);
     try {
-      const id = dashboardId || dashboard.id;
+      let savedDashboard: Dashboard;
+
       if (dashboardId) {
+        // Update existing dashboard
         await client.patch(`/dashboards/${dashboardId}`, dashboard);
+        // Reload to get canonical state
+        savedDashboard = await client.get<Dashboard>(`/dashboards/${dashboardId}`);
       } else {
-        await client.post('/dashboards', dashboard);
+        // Create new dashboard - use the response which contains the server-generated ID
+        savedDashboard = await client.post<Dashboard>('/dashboards', dashboard);
       }
 
-      // Reload from server to get canonical state (separate try-catch)
-      try {
-        const savedDashboard = await client.get<Dashboard>(`/dashboards/${id}`);
-        setDashboard(savedDashboard);
-        initialLayoutCountRef.current = 0;
-        onSave?.(savedDashboard);
-      } catch (reloadErr) {
-        // Reload failed but save succeeded - use local state
-        console.warn(
-          '[DashboardEditor] Failed to reload dashboard after save. Using local state.',
-          reloadErr instanceof Error ? reloadErr.message : reloadErr
-        );
-        onSave?.(dashboard);
-      }
+      setDashboard(savedDashboard);
+      initialLayoutCountRef.current = 0;
       setIsDirty(false);
+      onSave?.(savedDashboard);
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to save dashboard'));
     } finally {
@@ -393,16 +386,18 @@ export function DashboardEditor({
     // Check if this is a new widget or editing existing
     const existingWidget = dashboard.widgets.find((w) => w.id === widget.id);
 
+    let savedWidget: WidgetType;
     if (existingWidget) {
       // Update existing widget
       updateWidget(widget.id, widget);
+      savedWidget = widget;
     } else {
       // Add new widget with proper position
       const position = getDefaultPosition(dashboard.widgets, widget.type);
-      const newWidget = { ...widget, position };
+      savedWidget = { ...widget, position };
       setDashboard((prev) => ({
         ...prev,
-        widgets: [...prev.widgets, newWidget],
+        widgets: [...prev.widgets, savedWidget],
       }));
     }
 
@@ -410,25 +405,72 @@ export function DashboardEditor({
     setEditingWidget(null);
 
     // Refresh widget data if it has a query
-    if (widget.query) {
-      refreshWidget(widget.id);
+    // Pass the widget directly to avoid stale closure issues
+    if (savedWidget.query) {
+      refreshWidget(savedWidget.id, savedWidget);
     }
   }, [dashboard.widgets, updateWidget, refreshWidget]);
+
+  // Handle widget delete
+  const handleDeleteWidget = useCallback((widgetId: string) => {
+    const confirmed = window.confirm('Are you sure you want to delete this widget?');
+    if (!confirmed) return;
+
+    setDashboard((prev) => ({
+      ...prev,
+      widgets: prev.widgets.filter((w) => w.id !== widgetId),
+    }));
+    setIsDirty(true);
+  }, []);
+
+  // Handle widget duplicate
+  const handleDuplicateWidget = useCallback((widgetId: string) => {
+    const widget = dashboard.widgets.find((w) => w.id === widgetId);
+    if (!widget) return;
+
+    const newWidget: WidgetType = {
+      ...widget,
+      id: generateId(),
+      title: `${widget.title} (copy)`,
+      position: getDefaultPosition(dashboard.widgets, widget.type),
+    };
+
+    setDashboard((prev) => ({
+      ...prev,
+      widgets: [...prev.widgets, newWidget],
+    }));
+    setIsDirty(true);
+
+    // Execute query for duplicated widget if it has one
+    // Pass the widget directly to avoid stale closure issues
+    if (newWidget.query) {
+      refreshWidget(newWidget.id, newWidget);
+    }
+  }, [dashboard.widgets, refreshWidget]);
 
   // Render widget for layout
   const renderWidget = useCallback(
     (widget: WidgetType) => (
-      <Widget
+      <WidgetContainer
         widget={widget}
-        result={widgetResults[widget.id] ?? null}
-        isLoading={widgetLoading[widget.id] ?? false}
-        error={widgetErrors[widget.id]}
-        lastRefreshed={widgetRefreshTimes[widget.id]}
-        isRefreshing={refreshingWidgets.has(widget.id)}
-        onRefresh={() => refreshWidget(widget.id)}
-      />
+        dashboardId={dashboard.id}
+        editable={true}
+        onEdit={(w) => setEditingWidget(w)}
+        onDelete={handleDeleteWidget}
+        onDuplicate={handleDuplicateWidget}
+      >
+        <Widget
+          widget={widget}
+          result={widgetResults[widget.id] ?? null}
+          isLoading={widgetLoading[widget.id] ?? false}
+          error={widgetErrors[widget.id]}
+          lastRefreshed={widgetRefreshTimes[widget.id]}
+          isRefreshing={refreshingWidgets.has(widget.id)}
+          onRefresh={() => refreshWidget(widget.id)}
+        />
+      </WidgetContainer>
     ),
-    [widgetResults, widgetLoading, widgetErrors, widgetRefreshTimes, refreshingWidgets, refreshWidget]
+    [dashboard.id, widgetResults, widgetLoading, widgetErrors, widgetRefreshTimes, refreshingWidgets, refreshWidget, handleDeleteWidget, handleDuplicateWidget]
   );
 
   // Styles
@@ -544,6 +586,10 @@ export function DashboardEditor({
     <div className={`prismiq-dashboard-editor ${className}`} style={containerStyle}>
       <EditorToolbar
         dashboardName={dashboard.name}
+        onNameChange={(name) => {
+          setDashboard((prev) => ({ ...prev, name }));
+          setIsDirty(true);
+        }}
         hasChanges={isDirty}
         isSaving={isSaving}
         onAddWidget={handleAddWidget}

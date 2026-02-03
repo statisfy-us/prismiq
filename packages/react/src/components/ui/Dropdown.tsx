@@ -118,6 +118,7 @@ export const DropdownItem = forwardRef<HTMLDivElement, DropdownItemProps>(
 
     const handleClick = useCallback(
       (e: React.MouseEvent<HTMLDivElement>) => {
+        e.stopPropagation();
         if (disabled) {
           e.preventDefault();
           return;
@@ -335,7 +336,10 @@ export const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(function Dropd
         {...props}
       >
         <div
-          onClick={toggle}
+          onClickCapture={(e) => {
+            e.stopPropagation();
+            toggle();
+          }}
           style={{ cursor: disabled ? 'not-allowed' : 'pointer' }}
         >
           {trigger}

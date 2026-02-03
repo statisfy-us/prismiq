@@ -330,8 +330,9 @@ class PostgresDashboardStore:
                     await conn.execute(
                         """
                         INSERT INTO prismiq_widgets (
-                            dashboard_id, title, type, query, config, position
-                        ) VALUES ($1, $2, $3, $4, $5, $6)
+                            dashboard_id, title, type, query, config, position,
+                            created_at, updated_at
+                        ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
                         """,
                         int(dashboard_id),
                         widget.title,

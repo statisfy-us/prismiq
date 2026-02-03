@@ -12,6 +12,8 @@ import { Icon } from '../../components/ui/Icon';
 export interface EditorToolbarProps {
   /** Dashboard name. */
   dashboardName: string;
+  /** Callback when dashboard name changes. */
+  onNameChange?: (name: string) => void;
   /** Whether there are unsaved changes. */
   hasChanges: boolean;
   /** Whether save is in progress. */
@@ -33,6 +35,7 @@ export interface EditorToolbarProps {
  */
 export function EditorToolbar({
   dashboardName,
+  onNameChange,
   hasChanges,
   isSaving,
   onAddWidget,
@@ -83,10 +86,32 @@ export function EditorToolbar({
     marginRight: theme.spacing.sm,
   };
 
+  const titleInputStyle: React.CSSProperties = {
+    fontSize: theme.fontSizes.lg,
+    fontWeight: 600,
+    color: theme.colors.text,
+    backgroundColor: 'transparent',
+    border: `1px solid ${theme.colors.border}`,
+    borderRadius: theme.radius.sm,
+    padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+    outline: 'none',
+    minWidth: '200px',
+  };
+
   return (
     <div style={toolbarStyle} className="prismiq-editor-toolbar">
       <div style={leftSectionStyle}>
-        <h2 style={titleStyle}>{dashboardName || 'New Dashboard'}</h2>
+        {onNameChange ? (
+          <input
+            type="text"
+            value={dashboardName}
+            onChange={(e) => onNameChange(e.target.value)}
+            placeholder="Dashboard name"
+            style={titleInputStyle}
+          />
+        ) : (
+          <h2 style={titleStyle}>{dashboardName || 'New Dashboard'}</h2>
+        )}
 
         <div style={actionsStyle}>
           <Button
