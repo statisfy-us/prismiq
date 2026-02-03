@@ -104,6 +104,9 @@ export function EditorToolbar({
         {onNameChange ? (
           <input
             type="text"
+            id="dashboard-title-input"
+            data-testid="dashboard-title-input"
+            aria-label="Dashboard title"
             value={dashboardName}
             onChange={(e) => onNameChange(e.target.value)}
             placeholder="Dashboard name"

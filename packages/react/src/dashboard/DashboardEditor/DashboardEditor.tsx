@@ -95,6 +95,7 @@ export function DashboardEditor({
   const { schema } = useSchema();
 
   // Dashboard state
+  const [currentDashboardId, setCurrentDashboardId] = useState<string | undefined>(dashboardId);
   const [dashboard, setDashboard] = useState<Dashboard>({
     id: dashboardId || generateId(),
     name: 'New Dashboard',
@@ -349,14 +350,23 @@ export function DashboardEditor({
     try {
       let savedDashboard: Dashboard;
 
-      if (dashboardId) {
+      if (currentDashboardId) {
         // Update existing dashboard
-        await client.patch(`/dashboards/${dashboardId}`, dashboard);
+        await client.patch(`/dashboards/${currentDashboardId}`, dashboard);
         // Reload to get canonical state
-        savedDashboard = await client.get<Dashboard>(`/dashboards/${dashboardId}`);
+        savedDashboard = await client.get<Dashboard>(`/dashboards/${currentDashboardId}`);
       } else {
         // Create new dashboard - use the response which contains the server-generated ID
         savedDashboard = await client.post<Dashboard>('/dashboards', dashboard);
+        // Persist the canonical ID so subsequent saves use PUT/PATCH
+        setCurrentDashboardId(savedDashboard.id);
+        // Update the shared cache with the canonical response
+        dashboardCache.set(savedDashboard.id, {
+          data: savedDashboard,
+          timestamp: Date.now(),
+        });
+        // Clear any inflight fetch entry for the new ID
+        inflightFetches.delete(savedDashboard.id);
       }
 
       setDashboard(savedDashboard);
@@ -368,7 +378,7 @@ export function DashboardEditor({
     } finally {
       setIsSaving(false);
     }
-  }, [client, dashboardId, dashboard, onSave]);
+  }, [client, currentDashboardId, dashboard, onSave]);
 
   // Handle cancel
   const handleCancel = useCallback(() => {

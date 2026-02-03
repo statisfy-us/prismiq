@@ -336,7 +336,7 @@ export const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(function Dropd
         {...props}
       >
         <div
-          onClickCapture={(e) => {
+          onClick={(e) => {
             e.stopPropagation();
             toggle();
           }}

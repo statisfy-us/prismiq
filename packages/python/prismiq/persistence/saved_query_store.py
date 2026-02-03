@@ -8,8 +8,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
-from prismiq.types import (QueryDefinition, SavedQuery, SavedQueryCreate,
-                           SavedQueryUpdate)
+from prismiq.types import QueryDefinition, SavedQuery, SavedQueryCreate, SavedQueryUpdate
 
 if TYPE_CHECKING:
     from asyncpg import Pool  # type: ignore[import-not-found]
@@ -41,17 +40,15 @@ class SavedQueryStore:
             schema_name: Schema name to use, or None for default (public)
         """
         if schema_name:
-            # Set search_path to the tenant schema, falling back to public
-            # Escape double quotes to prevent SQL injection
+            # Build search_path value with safely quoted schema identifier
+            # Double any embedded double-quotes to escape them in the identifier
             escaped_schema = schema_name.replace('"', '""')
-            sql = f'SET search_path TO "{escaped_schema}", public'
-            _logger.info(f"[saved_query_store] Setting search_path: {sql}")
-            await conn.execute(sql)
+            search_path_value = f'"{escaped_schema}", public'
+            _logger.info("[saved_query_store] Setting search_path to: %s", search_path_value)
+            await conn.fetchval("SELECT set_config('search_path', $1, false)", search_path_value)
         else:
-            _logger.info(
-                "[saved_query_store] Setting search_path: SET search_path TO public"
-            )
-            await conn.execute("SET search_path TO public")
+            _logger.info("[saved_query_store] Setting search_path to: public")
+            await conn.fetchval("SELECT set_config('search_path', $1, false)", "public")
 
     async def list(
         self,
