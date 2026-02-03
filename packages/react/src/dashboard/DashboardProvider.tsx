@@ -563,6 +563,7 @@ export function DashboardProvider({
     // Check module-level cache first (survives StrictMode remounts)
     const cached = dashboardCache.get(dashboardId);
     if (cached && now - cached.timestamp < CACHE_TTL_MS) {
+      setError(null);
       loadedDashboardRef.current = dashboardId;
       setDashboardData(cached.data);
       setIsLoading(false);
@@ -576,6 +577,7 @@ export function DashboardProvider({
     const inflightFetch = inflightFetches.get(dashboardId);
     if (inflightFetch) {
       setIsLoading(true);
+      setError(null);
       inflightFetch
         .then((data) => {
           if (isCancelled) return;
