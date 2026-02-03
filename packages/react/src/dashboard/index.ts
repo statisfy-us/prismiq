@@ -22,6 +22,8 @@ export type {
   // Dashboard types
   DashboardLayout,
   Dashboard as DashboardDefinition,
+  // Lazy loading types
+  LazyLoadingConfig,
   // Context types
   DashboardContextValue,
   DashboardEditorContextValue,
@@ -54,6 +56,8 @@ export { useAutoRefresh } from './useAutoRefresh';
 export type { UseAutoRefreshOptions, UseAutoRefreshResult } from './useAutoRefresh';
 export { useFullscreen } from './useFullscreen';
 export type { UseFullscreenResult } from './useFullscreen';
+export { useWidgetVisibility } from './useWidgetVisibility';
+export type { UseWidgetVisibilityOptions, UseWidgetVisibilityResult } from './useWidgetVisibility';
 
 // Main components
 export { Dashboard } from './Dashboard';
@@ -61,8 +65,8 @@ export { DashboardLayout as DashboardLayoutComponent, EditableDashboardLayout } 
 export type { EditableDashboardLayoutProps } from './DashboardLayout';
 
 // Widget components
-export { Widget, WidgetHeader, WidgetContent, WidgetContainer } from './Widget';
-export type { WidgetContentProps, WidgetContainerProps } from './Widget';
+export { Widget, WidgetHeader, WidgetContent, WidgetContainer, LazyWidget, WidgetPlaceholder } from './Widget';
+export type { WidgetContentProps, WidgetContainerProps, LazyWidgetProps, WidgetPlaceholderProps } from './Widget';
 
 // Filter components
 export {

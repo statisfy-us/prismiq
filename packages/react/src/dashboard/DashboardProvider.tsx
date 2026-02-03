@@ -16,6 +16,7 @@ import type {
   DashboardContextValue,
   DashboardProviderProps,
   FilterValue,
+  LazyLoadingConfig,
   Widget,
 } from './types';
 import type { FilterDefinition, QueryDefinition, QueryResult } from '../types';
@@ -213,15 +214,31 @@ function applyCrossFiltersToQuery(
 }
 
 /**
+ * Default lazy loading configuration.
+ */
+const DEFAULT_LAZY_LOADING: LazyLoadingConfig = {
+  enabled: true,
+  rootMargin: '200px',
+};
+
+/**
  * Provider component for dashboard state management.
  */
 export function DashboardProvider({
   dashboardId,
   batchSize = DEFAULT_BATCH_SIZE,
+  lazyLoading = DEFAULT_LAZY_LOADING,
   children,
 }: DashboardProviderProps): JSX.Element {
   const { client } = useAnalytics();
   const crossFilterContext = useCrossFilterOptional();
+
+  // Lazy loading config with defaults
+  const lazyLoadingEnabled = lazyLoading.enabled ?? true;
+
+  // Store lazy loading enabled in ref so setDashboardData can access it
+  const lazyLoadingEnabledRef = useRef(lazyLoadingEnabled);
+  lazyLoadingEnabledRef.current = lazyLoadingEnabled;
 
   // Dashboard state
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
@@ -239,6 +256,10 @@ export function DashboardProvider({
   // Refresh state
   const [widgetRefreshTimes, setWidgetRefreshTimes] = useState<Record<string, number>>({});
   const [refreshingWidgets, setRefreshingWidgets] = useState<Set<string>>(new Set());
+
+  // Visibility tracking for lazy loading
+  const [visibleWidgets, setVisibleWidgets] = useState<Set<string>>(new Set());
+  const [everVisibleWidgets, setEverVisibleWidgets] = useState<Set<string>>(new Set());
 
   // Track request IDs to avoid stale updates
   const requestIdRef = useRef<string>('');
@@ -263,16 +284,21 @@ export function DashboardProvider({
         value: f.default_value,
       }));
     setFilterValues(defaults);
-    // Initialize all widgets with loading state so they show spinners
-    // until their queries are executed (instead of showing "No Data")
-    const initialLoadingState: Record<string, boolean> = {};
-    data.widgets.forEach((widget) => {
-      // Only mark widgets with queries as loading (text widgets don't need it)
-      if (widget.query) {
-        initialLoadingState[widget.id] = true;
-      }
-    });
-    setWidgetLoading(initialLoadingState);
+
+    // When lazy loading is DISABLED: Initialize all widgets with loading state
+    // so they show spinners until their queries are executed (instead of showing "No Data")
+    // When lazy loading is ENABLED: Don't pre-set loading state - let LazyWidget
+    // show placeholder until widget becomes visible, then the effect will trigger loading
+    if (!lazyLoadingEnabledRef.current) {
+      const initialLoadingState: Record<string, boolean> = {};
+      data.widgets.forEach((widget) => {
+        // Only mark widgets with queries as loading (text widgets don't need it)
+        if (widget.query) {
+          initialLoadingState[widget.id] = true;
+        }
+      });
+      setWidgetLoading(initialLoadingState);
+    }
   }, []);
 
   /**
@@ -484,6 +510,41 @@ export function DashboardProvider({
     });
   }, []);
 
+  /**
+   * Register a widget's visibility state (for lazy loading).
+   */
+  const registerVisibility = useCallback((widgetId: string, isVisible: boolean) => {
+    if (isVisible) {
+      setVisibleWidgets((prev) => {
+        if (prev.has(widgetId)) return prev;
+        return new Set(prev).add(widgetId);
+      });
+      setEverVisibleWidgets((prev) => {
+        if (prev.has(widgetId)) return prev;
+        return new Set(prev).add(widgetId);
+      });
+    } else {
+      setVisibleWidgets((prev) => {
+        if (!prev.has(widgetId)) return prev;
+        const next = new Set(prev);
+        next.delete(widgetId);
+        return next;
+      });
+    }
+  }, []);
+
+  /**
+   * Unregister a widget when unmounted (for lazy loading).
+   */
+  const unregisterVisibility = useCallback((widgetId: string) => {
+    setVisibleWidgets((prev) => {
+      if (!prev.has(widgetId)) return prev;
+      const next = new Set(prev);
+      next.delete(widgetId);
+      return next;
+    });
+  }, []);
+
   // Load dashboard on mount - with safeguards to prevent duplicate requests
   useEffect(() => {
     const currentClient = clientRef.current;
@@ -561,15 +622,92 @@ export function DashboardProvider({
   const prevCrossFiltersRef = useRef<string>('');
   const crossFiltersKey = JSON.stringify(crossFilters);
 
+  // When lazy loading is DISABLED: execute all widgets on load/filter change (original behavior)
   useEffect(() => {
-    if (dashboard && !isLoading) {
+    if (!lazyLoadingEnabled && dashboard && !isLoading) {
       // Track cross-filters key for debugging/future optimization
       prevCrossFiltersRef.current = crossFiltersKey;
 
       // Execute on initial load or when filters change
       executeAllWidgets(dashboard, filterValues, crossFilters);
     }
-  }, [dashboard, filterValues, isLoading, executeAllWidgets, crossFiltersKey, crossFilters]);
+  }, [lazyLoadingEnabled, dashboard, filterValues, isLoading, executeAllWidgets, crossFiltersKey, crossFilters]);
+
+  // When lazy loading is ENABLED: execute only visible widgets
+  useEffect(() => {
+    if (!lazyLoadingEnabled || !dashboard || isLoading) return;
+
+    // Find widgets that:
+    // 1. Are currently visible
+    // 2. Have a query (not text widgets)
+    // 3. Haven't been loaded yet
+    // 4. Aren't currently loading
+    const widgetsToLoad = dashboard.widgets.filter((w) =>
+      visibleWidgets.has(w.id) &&
+      w.query !== null &&
+      !widgetResults[w.id] &&
+      !widgetLoading[w.id]
+    );
+
+    if (widgetsToLoad.length > 0) {
+      executeWidgetsInBatches(
+        widgetsToLoad,
+        dashboard,
+        filterValues,
+        crossFilters,
+        false // Don't bypass cache
+      );
+    }
+  }, [
+    lazyLoadingEnabled,
+    dashboard,
+    isLoading,
+    visibleWidgets,
+    widgetResults,
+    widgetLoading,
+    filterValues,
+    crossFilters,
+    executeWidgetsInBatches,
+  ]);
+
+  // When filters change with lazy loading: re-execute all previously visible widgets
+  const filterValuesKey = JSON.stringify(filterValues);
+  const prevFilterValuesRef = useRef<string>(filterValuesKey);
+
+  useEffect(() => {
+    if (!lazyLoadingEnabled || !dashboard || isLoading) return;
+
+    // Check if filters actually changed
+    if (prevFilterValuesRef.current === filterValuesKey) return;
+    prevFilterValuesRef.current = filterValuesKey;
+
+    // Re-execute widgets that have been visible (they have data that needs refreshing)
+    const widgetsToRefresh = dashboard.widgets.filter((w) =>
+      everVisibleWidgets.has(w.id) &&
+      w.query !== null &&
+      widgetResults[w.id] // Only re-execute if previously loaded
+    );
+
+    if (widgetsToRefresh.length > 0) {
+      executeWidgetsInBatches(
+        widgetsToRefresh,
+        dashboard,
+        filterValues,
+        crossFilters,
+        false
+      );
+    }
+  }, [
+    lazyLoadingEnabled,
+    dashboard,
+    isLoading,
+    filterValuesKey,
+    everVisibleWidgets,
+    widgetResults,
+    filterValues,
+    crossFilters,
+    executeWidgetsInBatches,
+  ]);
 
   // Context value
   const contextValue = useMemo<DashboardContextValue>(
@@ -588,6 +726,10 @@ export function DashboardProvider({
       refreshWidget,
       refreshAll,
       getOldestRefreshTime,
+      // Lazy loading
+      registerVisibility,
+      unregisterVisibility,
+      lazyLoadingEnabled,
     }),
     [
       dashboard,
@@ -604,6 +746,9 @@ export function DashboardProvider({
       refreshWidget,
       refreshAll,
       getOldestRefreshTime,
+      registerVisibility,
+      unregisterVisibility,
+      lazyLoadingEnabled,
     ]
   );
 
