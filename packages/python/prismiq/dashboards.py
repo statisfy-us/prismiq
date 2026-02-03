@@ -180,6 +180,9 @@ class DashboardFilter(BaseModel):
     date_preset: str | None = None
     """Date preset for date_range type."""
 
+    dynamic: bool | None = None
+    """Whether to load options dynamically from the database."""
+
 
 # ============================================================================
 # Dashboard Layout

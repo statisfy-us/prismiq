@@ -10,9 +10,19 @@ import { DashboardProvider } from './DashboardProvider';
 import { useDashboard } from './useDashboard';
 import { useDashboardFilters } from './useDashboardFilters';
 import { DashboardLayout } from './DashboardLayout';
-import { Widget } from './Widget';
+import { Widget, LazyWidget } from './Widget';
 import { FilterBar } from './filters';
 import type { DashboardProps, Widget as WidgetType } from './types';
+
+/**
+ * Props for internal DashboardContent component.
+ */
+interface DashboardContentProps {
+  showFilters?: boolean;
+  showTitle?: boolean;
+  className?: string;
+  lazyLoadingRootMargin?: string;
+}
 
 /**
  * Internal dashboard content component.
@@ -21,7 +31,8 @@ function DashboardContent({
   showFilters = true,
   showTitle = true,
   className = '',
-}: Omit<DashboardProps, 'id' | 'refreshInterval' | 'onWidgetClick'>): JSX.Element {
+  lazyLoadingRootMargin = '200px',
+}: Readonly<DashboardContentProps>): JSX.Element {
   const { theme } = useTheme();
   const {
     dashboard,
@@ -30,6 +41,9 @@ function DashboardContent({
     widgetResults,
     widgetErrors,
     widgetLoading,
+    widgetRefreshTimes,
+    refreshingWidgets,
+    refreshWidget,
   } = useDashboard();
 
   const { filters, values, setValue, resetAll } = useDashboardFilters();
@@ -38,16 +52,26 @@ function DashboardContent({
   const crossFilterContext = useCrossFilterOptional();
 
   // Render widget function for DashboardLayout
+  // Wraps each widget with LazyWidget for scroll-based loading
   const renderWidget = useCallback(
     (widget: WidgetType) => (
-      <Widget
+      <LazyWidget
         widget={widget}
-        result={widgetResults[widget.id] ?? null}
-        isLoading={widgetLoading[widget.id] ?? false}
-        error={widgetErrors[widget.id]}
+        rootMargin={lazyLoadingRootMargin}
+        renderWidget={(w) => (
+          <Widget
+            widget={w}
+            result={widgetResults[w.id] ?? null}
+            isLoading={widgetLoading[w.id] ?? false}
+            error={widgetErrors[w.id]}
+            lastRefreshed={widgetRefreshTimes[w.id]}
+            isRefreshing={refreshingWidgets.has(w.id)}
+            onRefresh={() => refreshWidget(w.id)}
+          />
+        )}
       />
     ),
-    [widgetResults, widgetLoading, widgetErrors]
+    [widgetResults, widgetLoading, widgetErrors, widgetRefreshTimes, refreshingWidgets, refreshWidget, lazyLoadingRootMargin]
   );
 
   // Container styles
@@ -253,15 +277,23 @@ export function Dashboard({
   showFilters = true,
   showTitle = true,
   refreshInterval,
+  batchSize,
+  lazyLoading,
   className = '',
 }: DashboardProps): JSX.Element {
   return (
     <CrossFilterProvider>
-      <DashboardProvider dashboardId={id} refreshInterval={refreshInterval}>
+      <DashboardProvider
+        dashboardId={id}
+        refreshInterval={refreshInterval}
+        batchSize={batchSize}
+        lazyLoading={lazyLoading}
+      >
         <DashboardContent
           showFilters={showFilters}
           showTitle={showTitle}
           className={className}
+          lazyLoadingRootMargin={lazyLoading?.rootMargin}
         />
       </DashboardProvider>
     </CrossFilterProvider>

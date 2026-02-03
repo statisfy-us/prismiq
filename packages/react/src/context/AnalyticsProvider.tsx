@@ -48,7 +48,7 @@ export interface AnalyticsContextValue {
  * Props for the AnalyticsProvider component.
  */
 export interface AnalyticsProviderProps {
-  /** Configuration for the Prismiq client. tenantId and userId are provided via separate props. */
+  /** Configuration for the Prismiq client. tenantId, userId, schemaName are provided via separate props. */
   config: Omit<ClientConfig, 'tenantId' | 'userId' | 'schemaName'>;
   /**
    * Tenant ID for multi-tenant isolation.

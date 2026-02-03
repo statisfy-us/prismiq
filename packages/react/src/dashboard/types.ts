@@ -312,6 +312,20 @@ export interface Dashboard {
 }
 
 // ============================================================================
+// Lazy Loading Types
+// ============================================================================
+
+/**
+ * Configuration for scroll-based lazy loading of widgets.
+ */
+export interface LazyLoadingConfig {
+  /** Whether lazy loading is enabled (default: true). */
+  enabled?: boolean;
+  /** Root margin for prefetching - loads widgets before visible (default: "200px"). */
+  rootMargin?: string;
+}
+
+// ============================================================================
 // Context Types
 // ============================================================================
 
@@ -349,6 +363,14 @@ export interface DashboardContextValue {
   refreshAll: (batchSize?: number) => Promise<void>;
   /** Get oldest widget refresh timestamp (for dashboard-level indicator). */
   getOldestRefreshTime: () => number | null;
+
+  // Lazy loading visibility tracking
+  /** Register a widget's visibility state (for lazy loading). */
+  registerVisibility: (widgetId: string, isVisible: boolean) => void;
+  /** Unregister a widget when unmounted (for lazy loading). */
+  unregisterVisibility: (widgetId: string) => void;
+  /** Whether lazy loading is enabled. */
+  lazyLoadingEnabled: boolean;
 }
 
 /**
@@ -392,8 +414,10 @@ export interface DashboardProviderProps {
    * @deprecated Auto-refresh is no longer supported. Use manual refresh via refreshAll().
    */
   refreshInterval?: number;
-  /** Number of widgets to load in each batch (default: 4). */
+  /** Number of widgets to load in each batch (default: 8). */
   batchSize?: number;
+  /** Lazy loading configuration (default: enabled with 200px margin). */
+  lazyLoading?: LazyLoadingConfig;
   /** Children to render. */
   children: React.ReactNode;
 }
@@ -410,6 +434,10 @@ export interface DashboardProps {
   showTitle?: boolean;
   /** Auto-refresh interval in milliseconds. */
   refreshInterval?: number;
+  /** Number of widgets to load in each batch (default: 8). */
+  batchSize?: number;
+  /** Lazy loading configuration (default: enabled with 200px margin). */
+  lazyLoading?: LazyLoadingConfig;
   /** Callback when a widget is clicked. */
   onWidgetClick?: (widget: Widget, result: QueryResult) => void;
   /** Additional CSS class. */

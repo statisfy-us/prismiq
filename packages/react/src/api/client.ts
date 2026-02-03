@@ -55,6 +55,12 @@ export interface ClientConfig {
    * Used when each tenant has their own PostgreSQL schema (e.g., "org_123").
    */
   schemaName?: string;
+  /**
+   * Custom headers to include with every request.
+   * Useful for application-specific headers like row-level security filters.
+   * Keys are header names, values are header values.
+   */
+  customHeaders?: Record<string, string>;
   /** Optional function to get an authentication token. */
   getToken?: () => Promise<string> | string;
 }
@@ -101,6 +107,7 @@ export class PrismiqClient {
   private readonly tenantId: string;
   private readonly userId?: string;
   private readonly schemaName?: string;
+  private readonly customHeaders?: Record<string, string>;
   private readonly getToken?: () => Promise<string> | string;
 
   constructor(config: ClientConfig) {
@@ -109,6 +116,7 @@ export class PrismiqClient {
     this.tenantId = config.tenantId;
     this.userId = config.userId;
     this.schemaName = config.schemaName;
+    this.customHeaders = config.customHeaders;
     this.getToken = config.getToken;
   }
 
@@ -135,6 +143,13 @@ export class PrismiqClient {
     // Add schema name header if provided (for per-tenant schema isolation)
     if (this.schemaName) {
       (headers as Record<string, string>)['X-Schema-Name'] = this.schemaName;
+    }
+
+    // Add custom headers if provided (for application-specific needs)
+    if (this.customHeaders) {
+      for (const [key, value] of Object.entries(this.customHeaders)) {
+        (headers as Record<string, string>)[key] = value;
+      }
     }
 
     // Add authorization header if token provider is configured
