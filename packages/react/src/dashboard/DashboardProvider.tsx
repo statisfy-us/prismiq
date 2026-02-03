@@ -569,25 +569,32 @@ export function DashboardProvider({
       return;
     }
 
+    // Track if this effect has been cancelled (dashboardId changed or unmounted)
+    let isCancelled = false;
+
     // Check if there's already an in-flight fetch
     const inflightFetch = inflightFetches.get(dashboardId);
     if (inflightFetch) {
-      loadedDashboardRef.current = dashboardId;
       setIsLoading(true);
       inflightFetch
         .then((data) => {
+          if (isCancelled) return;
+          loadedDashboardRef.current = dashboardId;
           setDashboardData(data);
           setIsLoading(false);
         })
         .catch((err) => {
+          if (isCancelled) return;
+          // Don't set loadedDashboardRef on failure - allows retry
           setError(err instanceof Error ? err : new Error('Failed to load dashboard'));
           setIsLoading(false);
         });
-      return;
+      return () => {
+        isCancelled = true;
+      };
     }
 
     // Start a new fetch
-    loadedDashboardRef.current = dashboardId;
     setIsLoading(true);
     setError(null);
 
@@ -604,14 +611,23 @@ export function DashboardProvider({
     fetchPromise
       .then((data) => {
         inflightFetches.delete(dashboardId);
+        if (isCancelled) return;
+        // Only mark as loaded on success - allows retry on failure
+        loadedDashboardRef.current = dashboardId;
         setDashboardData(data);
         setIsLoading(false);
       })
       .catch((err) => {
         inflightFetches.delete(dashboardId);
+        if (isCancelled) return;
+        // Don't set loadedDashboardRef on failure - allows retry
         setError(err instanceof Error ? err : new Error('Failed to load dashboard'));
         setIsLoading(false);
       });
+
+    return () => {
+      isCancelled = true;
+    };
   }, [dashboardId, setDashboardData]);
 
   // Execute widget queries when dashboard loads or filters change
