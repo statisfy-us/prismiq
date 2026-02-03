@@ -41,6 +41,9 @@ function DashboardContent({
     widgetResults,
     widgetErrors,
     widgetLoading,
+    widgetRefreshTimes,
+    refreshingWidgets,
+    refreshWidget,
   } = useDashboard();
 
   const { filters, values, setValue, resetAll } = useDashboardFilters();
@@ -61,11 +64,14 @@ function DashboardContent({
             result={widgetResults[w.id] ?? null}
             isLoading={widgetLoading[w.id] ?? false}
             error={widgetErrors[w.id]}
+            lastRefreshed={widgetRefreshTimes[w.id]}
+            isRefreshing={refreshingWidgets.has(w.id)}
+            onRefresh={() => refreshWidget(w.id)}
           />
         )}
       />
     ),
-    [widgetResults, widgetLoading, widgetErrors, lazyLoadingRootMargin]
+    [widgetResults, widgetLoading, widgetErrors, widgetRefreshTimes, refreshingWidgets, refreshWidget, lazyLoadingRootMargin]
   );
 
   // Container styles
