@@ -136,8 +136,10 @@ export function WidgetEditorPage({
     widget?.position ?? { x: 0, y: 0, w: 6, h: 4, minW: 2, minH: 2 }
   );
 
-  // Data source mode - always default to guided
-  const [dataSourceMode, setDataSourceMode] = useState<DataSourceMode>('guided');
+  // Data source mode - default to Advanced when editing existing widget with a query
+  const [dataSourceMode, setDataSourceMode] = useState<DataSourceMode>(
+    widget?.query ? 'advanced' : 'guided'
+  );
 
   // Preview state
   const [previewResult, setPreviewResult] = useState<QueryResult | null>(null);
