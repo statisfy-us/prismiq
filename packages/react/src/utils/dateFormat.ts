@@ -64,8 +64,15 @@ function formatDateWithPattern(date: Date, pattern: string): string {
   const dayNamesShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const dayNamesFull = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
+  // Quarter (1-4)
+  const quarter = Math.ceil(month / 3);
+
   // Replace tokens
   let result = pattern;
+
+  // Quarter - replace before year/month to avoid conflicts
+  result = result.replace(/QQ/g, `Q${quarter}`);
+  result = result.replace(/Q(?!['"])/g, String(quarter));
 
   // Year
   result = result.replace(/yyyy/g, String(year).padStart(4, '0'));

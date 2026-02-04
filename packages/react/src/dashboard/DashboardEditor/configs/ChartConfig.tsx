@@ -357,9 +357,15 @@ export function ChartConfig({
     if (parsed) {
       setGroupByTableId(parsed.tableId);
       setGroupByColumn(parsed.column);
-      setDateTrunc(''); // Reset date truncation when column changes
+
+      // Auto-default to 'day' truncation for date/timestamp columns
+      const table = tables.find((t) => t.id === parsed.tableId);
+      const tableSchema = table ? schema.tables.find((t) => t.name === table.name) : null;
+      const colSchema = tableSchema?.columns.find((c) => c.name === parsed.column);
+      const isDate = colSchema ? isDateColumn(colSchema) : false;
+      setDateTrunc(isDate ? 'day' : '');
     }
-  }, [groupByTableId]);
+  }, [groupByTableId, tables, schema.tables]);
 
   // Stable IDs for measures to avoid key issues with array index
   const measureIdCounter = useRef(0);

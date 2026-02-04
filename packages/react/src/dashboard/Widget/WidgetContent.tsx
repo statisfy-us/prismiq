@@ -16,8 +16,20 @@ import { ResultsTable } from '../../components';
 import { useCrossFilterOptional } from '../../context';
 import { createDateFormatters, pivotQueryResult, parseMarkdownSafe } from '../../utils';
 import type { Widget, WidgetConfig } from '../types';
-import type { QueryResult } from '../../types';
+import type { QueryResult, DateTruncInterval } from '../../types';
 import type { ChartDataPoint, ChartClickParams, CrossFilterConfig } from '../../charts/types';
+
+/**
+ * Map date_trunc granularity to a display format string.
+ * Uses formats compatible with createDateFormatter.
+ */
+const DATE_TRUNC_FORMAT_MAP: Record<DateTruncInterval, string> = {
+  year: 'yyyy',
+  quarter: 'QQ yyyy',
+  month: 'yyyy-MM',
+  week: 'yyyy-MM-dd',
+  day: 'yyyy-MM-dd',
+};
 
 /**
  * Props for WidgetContent.
@@ -325,6 +337,21 @@ export function WidgetContent({
     return undefined;
   }, [widget.type, widget.config.dateFormats]);
 
+  // Auto-derive xAxisFormat from query's date_trunc when no explicit dateFormats configured
+  const derivedXAxisFormat = useMemo((): string | undefined => {
+    if (!widget.query) return undefined;
+    // Find the x-axis column (first non-aggregated column, or the configured x_axis)
+    const xAxisCol = widget.config.x_axis ?? widget.query.columns[0]?.column;
+    if (!xAxisCol) return undefined;
+
+    const col = widget.query.columns.find(
+      (c) => c.column === xAxisCol && c.date_trunc
+    );
+    if (!col?.date_trunc) return undefined;
+
+    return DATE_TRUNC_FORMAT_MAP[col.date_trunc];
+  }, [widget.query, widget.config.x_axis]);
+
   // Container style
   const containerStyle: React.CSSProperties = {
     flex: 1,
@@ -435,7 +462,7 @@ export function WidgetContent({
           showLegend={showLegend}
           showDataLabels={showDataLabels}
           colors={colors}
-          xAxisFormat={widget.config.dateFormats?.[xAxis]}
+          xAxisFormat={widget.config.dateFormats?.[xAxis] ?? derivedXAxisFormat}
           yAxisFormat={widget.config.valueFormat ?? 'number'}
           currencySymbol={widget.config.currencySymbol}
           compactNotation={widget.config.compactNotation}
@@ -459,7 +486,7 @@ export function WidgetContent({
           showLegend={showLegend}
           showDataLabels={showDataLabels}
           colors={colors}
-          xAxisFormat={widget.config.dateFormats?.[xAxis]}
+          xAxisFormat={widget.config.dateFormats?.[xAxis] ?? derivedXAxisFormat}
           referenceLines={widget.config.referenceLines}
           height="100%"
           crossFilter={crossFilterConfig}
@@ -477,7 +504,7 @@ export function WidgetContent({
           stacked={widget.config.stacked}
           showLegend={showLegend}
           colors={colors}
-          xAxisFormat={widget.config.dateFormats?.[xAxis]}
+          xAxisFormat={widget.config.dateFormats?.[xAxis] ?? derivedXAxisFormat}
           height="100%"
           crossFilter={crossFilterConfig}
           selectedValue={selectedValue}
@@ -494,7 +521,7 @@ export function WidgetContent({
           showLegend={showLegend}
           showLabels={showDataLabels}
           colors={colors}
-          labelFormat={widget.config.dateFormats?.[xAxis]}
+          labelFormat={widget.config.dateFormats?.[xAxis] ?? derivedXAxisFormat}
           height="100%"
           crossFilter={crossFilterConfig}
           selectedValue={selectedValue}

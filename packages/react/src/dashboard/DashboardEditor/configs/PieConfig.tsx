@@ -210,8 +210,12 @@ export function PieConfig({
   // Handle label column change
   const handleLabelChange = useCallback((value: string) => {
     setLabelColumn(value);
-    setDateTrunc(''); // Reset date truncation when column changes
-  }, []);
+
+    // Auto-default to 'day' truncation for date/timestamp columns
+    const colSchema = currentTable?.columns.find((c) => c.name === value);
+    const isDate = colSchema ? isDateColumn(colSchema) : false;
+    setDateTrunc(isDate ? 'day' : '');
+  }, [currentTable]);
 
   // Styles
   const containerStyle: React.CSSProperties = {
