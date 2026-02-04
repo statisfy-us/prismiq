@@ -202,15 +202,9 @@ export function ChartConfig({
     return options;
   }, [tables, schema.tables]);
 
-  // Get columns for measures (from all selected tables)
+  // Get numeric columns for measures (from all selected tables)
   const measureColumnOptions = useMemo(() => {
     const options: { value: string; label: string }[] = [];
-
-    // Wildcard option for count(*)
-    const firstTable = tables[0];
-    if (firstTable) {
-      options.push({ value: `${firstTable.id}.*`, label: '* (All rows)' });
-    }
 
     for (const table of tables) {
       const tableSchema = schema.tables.find((t) => t.name === table.name);
