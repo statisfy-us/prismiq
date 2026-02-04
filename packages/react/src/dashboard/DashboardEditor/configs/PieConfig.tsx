@@ -108,13 +108,18 @@ export function PieConfig({
   const measureCol = query?.columns.find((c) => c.aggregation !== 'none');
   const initialValueColumn = measureCol?.column ?? '';
   const initialAggregation = measureCol?.aggregation ?? 'sum';
+  // Remap filter table_ids to 't1' since PieConfig only uses single-table queries
+  const initialFilters = (query?.filters ?? []).map((f) => ({
+    ...f,
+    table_id: 't1',
+  }));
 
   const [selectedTable, setSelectedTable] = useState(initialTable);
   const [labelColumn, setLabelColumn] = useState(initialLabel);
   const [dateTrunc, setDateTrunc] = useState<DateTruncInterval | ''>(initialDateTrunc);
   const [valueColumn, setValueColumn] = useState(initialValueColumn);
   const [aggregation, setAggregation] = useState<AggregationType>(initialAggregation);
-  const [filters, setFilters] = useState<FilterDefinition[]>(query?.filters ?? []);
+  const [filters, setFilters] = useState<FilterDefinition[]>(initialFilters);
 
   // Get table options with display names
   const tableOptions = useMemo(() => {

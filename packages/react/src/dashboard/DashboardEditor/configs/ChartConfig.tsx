@@ -359,6 +359,10 @@ export function ChartConfig({
     setJoins((prev) =>
       prev.filter((j) => tableIds.has(j.from_table_id) && tableIds.has(j.to_table_id))
     );
+    // Clear filters that reference removed tables
+    setFilters((prev) =>
+      prev.filter((f) => tableIds.has(f.table_id))
+    );
     // Clear group by if its table was removed
     if (!tableIds.has(groupByTableId)) {
       setGroupByColumn('');

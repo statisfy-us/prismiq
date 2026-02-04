@@ -79,11 +79,16 @@ export function MetricConfig({
   const initialTable = query?.tables[0]?.name ?? '';
   const initialAggregation = query?.columns[0]?.aggregation ?? 'count';
   const initialColumn = query?.columns[0]?.column ?? '*';
+  // Remap filter table_ids to 't1' since MetricConfig only uses single-table queries
+  const initialFilters = (query?.filters ?? []).map((f) => ({
+    ...f,
+    table_id: 't1',
+  }));
 
   const [selectedTable, setSelectedTable] = useState(initialTable);
   const [aggregation, setAggregation] = useState<AggregationType>(initialAggregation);
   const [selectedColumn, setSelectedColumn] = useState(initialColumn);
-  const [filters, setFilters] = useState<FilterDefinition[]>(query?.filters ?? []);
+  const [filters, setFilters] = useState<FilterDefinition[]>(initialFilters);
 
   // Get table options with display names
   const tableOptions = useMemo(() => {

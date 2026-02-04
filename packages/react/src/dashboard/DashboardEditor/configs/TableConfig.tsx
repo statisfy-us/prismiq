@@ -44,10 +44,15 @@ export function TableConfig({
   // Extract state from existing query
   const initialTable = query?.tables[0]?.name ?? '';
   const initialColumns = query?.columns.map((c) => c.column) ?? [];
+  // Remap filter table_ids to 't1' since TableConfig only uses single-table queries
+  const initialFilters = (query?.filters ?? []).map((f) => ({
+    ...f,
+    table_id: 't1',
+  }));
 
   const [selectedTable, setSelectedTable] = useState(initialTable);
   const [selectedColumns, setSelectedColumns] = useState<string[]>(initialColumns);
-  const [filters, setFilters] = useState<FilterDefinition[]>(query?.filters ?? []);
+  const [filters, setFilters] = useState<FilterDefinition[]>(initialFilters);
   const [limit, setLimit] = useState(query?.limit ?? 100);
 
   // Get table options with display names
