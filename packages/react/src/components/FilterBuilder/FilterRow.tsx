@@ -169,16 +169,21 @@ export function FilterRow({
     return options;
   }, [tables, schema]);
 
+  // Get current table for passing to FilterValueInput
+  const currentTable = useMemo(
+    () => tables.find((t) => t.id === filter.table_id),
+    [tables, filter.table_id]
+  );
+
   // Get current column's schema for type-aware operators
   const currentColumnSchema = useMemo(() => {
-    const table = tables.find((t) => t.id === filter.table_id);
-    if (!table) return undefined;
+    if (!currentTable) return undefined;
 
-    const tableSchema = schema.tables.find((t) => t.name === table.name);
+    const tableSchema = schema.tables.find((t) => t.name === currentTable.name);
     if (!tableSchema) return undefined;
 
     return tableSchema.columns.find((c) => c.name === filter.column);
-  }, [tables, schema, filter.table_id, filter.column]);
+  }, [currentTable, schema, filter.column]);
 
   const operatorOptions = useMemo(
     () => getOperatorsForType(currentColumnSchema?.data_type),
@@ -247,6 +252,8 @@ export function FilterRow({
           value={filter.value}
           onChange={handleValueChange}
           dataType={currentColumnSchema?.data_type}
+          tableName={currentTable?.name}
+          columnName={filter.column}
         />
       </div>
 
