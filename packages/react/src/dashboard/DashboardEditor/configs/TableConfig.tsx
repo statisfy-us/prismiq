@@ -10,6 +10,7 @@
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useTheme } from '../../../theme';
+import { useSchema } from '../../../hooks/useSchema';
 import { Select } from '../../../components/ui/Select';
 import { Checkbox } from '../../../components/ui/Checkbox';
 import { FilterBuilder } from '../../../components/FilterBuilder';
@@ -38,6 +39,7 @@ export function TableConfig({
   onChange,
 }: TableConfigProps): JSX.Element {
   const { theme } = useTheme();
+  const { getDisplayName } = useSchema();
 
   // Extract state from existing query
   const initialTable = query?.tables[0]?.name ?? '';
@@ -48,13 +50,13 @@ export function TableConfig({
   const [filters, setFilters] = useState<FilterDefinition[]>(query?.filters ?? []);
   const [limit, setLimit] = useState(query?.limit ?? 100);
 
-  // Get table options
+  // Get table options with display names
   const tableOptions = useMemo(() => {
     return schema.tables.map((t) => ({
       value: t.name,
-      label: t.name,
+      label: getDisplayName(t.name),
     }));
-  }, [schema.tables]);
+  }, [schema.tables, getDisplayName]);
 
   // Get current table schema
   const currentTable = useMemo(() => {

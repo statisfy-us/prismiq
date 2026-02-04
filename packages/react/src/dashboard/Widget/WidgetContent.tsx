@@ -400,7 +400,18 @@ export function WidgetContent({
     );
   }
 
-  // Handle empty result
+  // Handle "pending load" state for lazy loading:
+  // When widget just became visible, result is null but isLoading hasn't been set yet.
+  // Show loading state instead of "No data" to avoid flash of empty state.
+  if (!result && !error && widget.query) {
+    return (
+      <div style={containerStyle}>
+        <LoadingState />
+      </div>
+    );
+  }
+
+  // Handle empty result (query returned 0 rows)
   if (!result || result.row_count === 0) {
     return (
       <div style={containerStyle}>

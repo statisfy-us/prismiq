@@ -17,6 +17,7 @@ import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { Checkbox } from '../../components/ui/Checkbox';
 import { Icon } from '../../components/ui/Icon';
+import { Tooltip } from '../../components/ui/Tooltip';
 import { SavedQueryPicker } from '../../components/SavedQueryPicker';
 import { QueryBuilder } from '../../components/QueryBuilder';
 import { WidgetTypeSelector } from './WidgetTypeSelector';
@@ -303,9 +304,12 @@ export function WidgetEditorPage({
     borderRight: `1px solid ${theme.colors.border}`,
     overflow: 'auto',
     padding: theme.spacing.md,
+    paddingBottom: '100px', // Extra space to ensure bottom sections are visible
     display: 'flex',
     flexDirection: 'column',
     gap: theme.spacing.lg,
+    height: '100%',
+    maxHeight: '100%',
   };
 
   const mainPanelStyle: React.CSSProperties = {
@@ -359,7 +363,7 @@ export function WidgetEditorPage({
   };
 
   const sectionStyle: React.CSSProperties = {
-    marginBottom: theme.spacing.md,
+    // Note: Parent has flex gap for spacing between sections
   };
 
   const sectionTitleStyle: React.CSSProperties = {
@@ -721,20 +725,33 @@ export function WidgetEditorPage({
                 <span style={{ fontSize: theme.fontSizes.sm, fontWeight: 500, marginRight: 'auto' }}>
                   Data Source
                 </span>
-                <button
-                  type="button"
-                  style={tabStyle(dataSourceMode === 'guided')}
-                  onClick={() => setDataSourceMode('guided')}
+                <Tooltip
+                  content="Quick setup: pick columns from dropdowns to build your chart"
+                  position="bottom"
+                  style={{ whiteSpace: 'normal' }}
                 >
-                  Guided
-                </button>
-                <button
-                  type="button"
-                  style={tabStyle(dataSourceMode === 'advanced')}
-                  onClick={() => setDataSourceMode('advanced')}
+                  <button
+                    type="button"
+                    style={tabStyle(dataSourceMode === 'guided')}
+                    onClick={() => setDataSourceMode('guided')}
+                  >
+                    Guided
+                  </button>
+                </Tooltip>
+                <Tooltip
+                  content="Full control: combine tables, add filters, and create custom calculations"
+                  position="bottom"
+                  style={{ whiteSpace: 'normal' }}
                 >
-                  Advanced
-                </button>
+                  <button
+                    type="button"
+                    style={tabStyle(dataSourceMode === 'advanced')}
+                    onClick={() => setDataSourceMode('advanced')}
+                  >
+                    Advanced
+                  </button>
+                </Tooltip>
+                {/* Saved Query tab hidden for now - uncomment when feature is ready
                 <button
                   type="button"
                   style={tabStyle(dataSourceMode === 'saved')}
@@ -742,6 +759,7 @@ export function WidgetEditorPage({
                 >
                   Saved Query
                 </button>
+                */}
               </div>
 
               <div style={dataSourceContentStyle}>

@@ -16,7 +16,7 @@ import {
 } from 'react';
 
 import { PrismiqClient, type ClientConfig } from '../api/client';
-import type { DatabaseSchema, QueryDefinition, QueryResult } from '../types';
+import type { DatabaseSchema, DataSourceMeta, QueryDefinition, QueryResult } from '../types';
 
 // ============================================================================
 // Context Types
@@ -30,6 +30,8 @@ export interface AnalyticsContextValue {
   client: PrismiqClient;
   /** The database schema, or null if not yet loaded. */
   schema: DatabaseSchema | null;
+  /** Data source metadata (display names, descriptions), or empty array if not loaded. */
+  dataSources: DataSourceMeta[];
   /** Whether the schema is currently loading. */
   isLoading: boolean;
   /** Error that occurred during schema loading, if any. */
@@ -167,6 +169,7 @@ export function AnalyticsProvider({
 
   // Schema state
   const [schema, setSchema] = useState<DatabaseSchema | null>(null);
+  const [dataSources, setDataSources] = useState<DataSourceMeta[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -187,14 +190,19 @@ export function AnalyticsProvider({
   onSchemaLoadRef.current = onSchemaLoad;
   onSchemaErrorRef.current = onSchemaError;
 
-  // Fetch schema function - stable reference
+  // Fetch schema and data sources function - stable reference
   const fetchSchema = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
     try {
-      const fetchedSchema = await client.getSchema();
+      // Fetch schema and data sources in parallel
+      const [fetchedSchema, fetchedDataSources] = await Promise.all([
+        client.getSchema(),
+        client.getDataSources().catch(() => [] as DataSourceMeta[]), // Non-critical, fallback to empty
+      ]);
       setSchema(fetchedSchema);
+      setDataSources(fetchedDataSources);
       onSchemaLoadRef.current?.(fetchedSchema);
     } catch (err) {
       const schemaError = err instanceof Error ? err : new Error(String(err));
@@ -222,6 +230,7 @@ export function AnalyticsProvider({
     () => ({
       client,
       schema,
+      dataSources,
       isLoading,
       error,
       refetchSchema,
@@ -229,7 +238,7 @@ export function AnalyticsProvider({
       userId,
       schemaName,
     }),
-    [client, schema, isLoading, error, refetchSchema, tenantId, userId, schemaName]
+    [client, schema, dataSources, isLoading, error, refetchSchema, tenantId, userId, schemaName]
   );
 
   // Memoize callbacks

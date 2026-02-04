@@ -43,6 +43,7 @@ export type {
   TableSchema,
   Relationship,
   DatabaseSchema,
+  DataSourceMeta,
   // Query types
   QueryTable,
   JoinType,

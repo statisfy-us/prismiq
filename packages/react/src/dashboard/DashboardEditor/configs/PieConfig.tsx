@@ -9,6 +9,7 @@
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useTheme } from '../../../theme';
+import { useSchema } from '../../../hooks/useSchema';
 import { Select } from '../../../components/ui/Select';
 import { FilterBuilder } from '../../../components/FilterBuilder';
 import type {
@@ -97,6 +98,7 @@ export function PieConfig({
   onChange,
 }: PieConfigProps): JSX.Element {
   const { theme } = useTheme();
+  const { getDisplayName } = useSchema();
 
   // Extract state from existing query
   const initialTable = query?.tables[0]?.name ?? '';
@@ -114,13 +116,13 @@ export function PieConfig({
   const [aggregation, setAggregation] = useState<AggregationType>(initialAggregation);
   const [filters, setFilters] = useState<FilterDefinition[]>(query?.filters ?? []);
 
-  // Get table options
+  // Get table options with display names
   const tableOptions = useMemo(() => {
     return schema.tables.map((t) => ({
       value: t.name,
-      label: t.name,
+      label: getDisplayName(t.name),
     }));
-  }, [schema.tables]);
+  }, [schema.tables, getDisplayName]);
 
   // Get current table schema
   const currentTable = useMemo(() => {

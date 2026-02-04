@@ -264,6 +264,10 @@ export function DashboardProvider({
   // Track which dashboard has been loaded to prevent duplicate loads
   const loadedDashboardRef = useRef<string | null>(null);
 
+  // AbortController for canceling in-flight widget queries
+  // This prevents connection pool exhaustion when navigating between dashboards
+  const abortControllerRef = useRef<AbortController | null>(null);
+
   /**
    * Helper to set dashboard data and initialize filter defaults.
    */
@@ -302,6 +306,7 @@ export function DashboardProvider({
    * @param currentFilters - Current filter values
    * @param currentCrossFilters - Current cross-filter values
    * @param bypassCache - If true, bypass cache and force fresh data
+   * @param signal - Optional AbortSignal for cancellation
    */
   const executeWidgetQuery = useCallback(
     async (
@@ -309,7 +314,8 @@ export function DashboardProvider({
       currentDashboard: Dashboard,
       currentFilters: FilterValue[],
       currentCrossFilters: CrossFilter[],
-      bypassCache: boolean = false
+      bypassCache: boolean = false,
+      signal?: AbortSignal
     ) => {
       if (!widget.query) {
         // Text widgets don't have queries
@@ -338,18 +344,29 @@ export function DashboardProvider({
         // Apply cross-filters from other widgets
         query = applyCrossFiltersToQuery(query, currentCrossFilters, widget.id);
 
-        const result = await client.executeQuery(query, bypassCache);
+        const result = await client.executeQuery(query, bypassCache, signal);
+
+        // Don't update state if request was aborted
+        if (signal?.aborted) return;
+
         setWidgetResults((prev) => ({ ...prev, [widget.id]: result }));
 
         // Update refresh time from cache metadata or current time
         const refreshTime = result.cached_at ?? Date.now() / 1000;
         setWidgetRefreshTimes((prev) => ({ ...prev, [widget.id]: refreshTime }));
       } catch (err) {
+        // Don't update state for aborted requests
+        if (err instanceof Error && err.name === 'AbortError') {
+          return;
+        }
         setWidgetErrors((prev) => ({
           ...prev,
           [widget.id]: err instanceof Error ? err : new Error('Query failed'),
         }));
       } finally {
+        // Don't update loading state if aborted
+        if (signal?.aborted) return;
+
         setWidgetLoading((prev) => ({ ...prev, [widget.id]: false }));
         if (bypassCache) {
           setRefreshingWidgets((prev) => {
@@ -365,6 +382,8 @@ export function DashboardProvider({
 
   /**
    * Execute widget queries in batches.
+   *
+   * @param signal - Optional AbortSignal for cancellation
    */
   const executeWidgetsInBatches = useCallback(
     async (
@@ -373,13 +392,17 @@ export function DashboardProvider({
       currentFilters: FilterValue[],
       currentCrossFilters: CrossFilter[],
       bypassCache: boolean = false,
-      currentBatchSize: number = batchSize
+      currentBatchSize: number = batchSize,
+      signal?: AbortSignal
     ) => {
       // Filter to widgets that have queries
       const widgetsWithQueries = widgets.filter((w) => w.query !== null);
 
       // Process in batches
       for (let i = 0; i < widgetsWithQueries.length; i += currentBatchSize) {
+        // Check if aborted before processing next batch
+        if (signal?.aborted) return;
+
         const batch = widgetsWithQueries.slice(i, i + currentBatchSize);
 
         // Execute batch in parallel
@@ -390,7 +413,8 @@ export function DashboardProvider({
               currentDashboard,
               currentFilters,
               currentCrossFilters,
-              bypassCache
+              bypassCache,
+              signal
             )
           )
         );
@@ -411,15 +435,20 @@ export function DashboardProvider({
       const requestId = Math.random().toString(36).substring(2, 11);
       requestIdRef.current = requestId;
 
+      // Use the existing abort controller (created per dashboard)
+      const signal = abortControllerRef.current?.signal;
+
       await executeWidgetsInBatches(
         currentDashboard.widgets,
         currentDashboard,
         currentFilters,
         currentCrossFilters,
-        false // Don't bypass cache on initial load
+        false, // Don't bypass cache on initial load
+        batchSize,
+        signal
       );
     },
-    [executeWidgetsInBatches]
+    [executeWidgetsInBatches, batchSize]
   );
 
   /**
@@ -661,12 +690,17 @@ export function DashboardProvider({
     );
 
     if (widgetsToLoad.length > 0) {
+      // Use the existing abort controller (created per dashboard)
+      const signal = abortControllerRef.current?.signal;
+
       executeWidgetsInBatches(
         widgetsToLoad,
         dashboard,
         filterValues,
         crossFilters,
-        false // Don't bypass cache
+        false, // Don't bypass cache
+        batchSize,
+        signal
       );
     }
   }, [
@@ -679,6 +713,7 @@ export function DashboardProvider({
     filterValues,
     crossFilters,
     executeWidgetsInBatches,
+    batchSize,
   ]);
 
   // When filters change with lazy loading: re-execute all previously visible widgets
@@ -700,12 +735,20 @@ export function DashboardProvider({
     );
 
     if (widgetsToRefresh.length > 0) {
+      // Cancel previous requests when filters change - we need fresh data
+      // Create a new controller so new requests aren't immediately aborted
+      abortControllerRef.current?.abort();
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
       executeWidgetsInBatches(
         widgetsToRefresh,
         dashboard,
         filterValues,
         crossFilters,
-        false
+        false,
+        batchSize,
+        controller.signal
       );
     }
   }, [
@@ -718,7 +761,21 @@ export function DashboardProvider({
     filterValues,
     crossFilters,
     executeWidgetsInBatches,
+    batchSize,
   ]);
+
+  // Create a single AbortController per dashboard load
+  // This controller is used for ALL widget queries and aborted when navigating away
+  useEffect(() => {
+    // Create new controller for this dashboard
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    // Cleanup: abort ALL in-flight requests when dashboard changes or component unmounts
+    return () => {
+      controller.abort();
+    };
+  }, [dashboardId]);
 
   // Context value
   const contextValue = useMemo<DashboardContextValue>(
