@@ -248,18 +248,20 @@ export function ChartConfig({
   useEffect(() => {
     if (tables.length === 0 || !groupByColumn) return;
 
-    // Check if we have at least one valid measure
-    const validMeasures = measures.filter((m) => m.column);
+    // Check if we have at least one valid measure (count doesn't need a column)
+    const validMeasures = measures.filter((m) => m.aggregation === 'count' || m.column);
     if (validMeasures.length === 0) return;
 
     // Build columns: group by column + measure columns
     const columns = [
       // Group by column (no aggregation, with optional date truncation)
+      // Alias preserves original column name when date_trunc transforms the SQL output name
       {
         table_id: groupByTableId,
         column: groupByColumn,
         aggregation: 'none' as AggregationType,
         date_trunc: dateTrunc || undefined,
+        alias: dateTrunc ? groupByColumn : undefined,
       },
       // Measure columns (with aggregation) - parse table_id.column format
       ...(() => {
@@ -272,6 +274,18 @@ export function ChartConfig({
         const invalidColumns: string[] = [];
 
         validMeasures.forEach((m, i) => {
+          const measureAlias = validMeasures.length > 1 ? `value_${i + 1}` : 'value';
+
+          // count uses *, no column needed
+          if (m.aggregation === 'count' && (!m.column || m.column.endsWith('.*') || m.column === '*')) {
+            parsedMeasures.push({
+              table_id: m.table_id ?? tables[0]?.id ?? 't1',
+              column: '*',
+              aggregation: m.aggregation,
+              alias: measureAlias,
+            });
+            return;
+          }
           const parsed = parseColumnRef(m.column, tables[0]?.id ?? 't1');
           if (!parsed) {
             invalidColumns.push(m.column);
@@ -281,7 +295,7 @@ export function ChartConfig({
             table_id: parsed.tableId,
             column: parsed.column,
             aggregation: m.aggregation,
-            alias: validMeasures.length > 1 ? `value_${i + 1}` : undefined,
+            alias: measureAlias,
           });
         });
 
@@ -357,9 +371,15 @@ export function ChartConfig({
     if (parsed) {
       setGroupByTableId(parsed.tableId);
       setGroupByColumn(parsed.column);
-      setDateTrunc(''); // Reset date truncation when column changes
+
+      // Auto-default to 'day' truncation for date/timestamp columns
+      const table = tables.find((t) => t.id === parsed.tableId);
+      const tableSchema = table ? schema.tables.find((t) => t.name === table.name) : null;
+      const colSchema = tableSchema?.columns.find((c) => c.name === parsed.column);
+      const isDate = colSchema ? isDateColumn(colSchema) : false;
+      setDateTrunc(isDate ? 'day' : '');
     }
-  }, [groupByTableId]);
+  }, [groupByTableId, tables, schema.tables]);
 
   // Stable IDs for measures to avoid key issues with array index
   const measureIdCounter = useRef(0);
@@ -529,16 +549,20 @@ export function ChartConfig({
                 options={AGGREGATIONS}
                 style={{ width: '120px' }}
               />
-              <span style={{ color: theme.colors.textMuted }}>of</span>
-              {measureColumnOptions.length > 0 ? (
-                <Select
-                  value={measure.column}
-                  onChange={(value) => updateMeasure(index, { column: value })}
-                  options={[{ value: '', label: 'Select column...' }, ...measureColumnOptions]}
-                  style={{ flex: 1 }}
-                />
-              ) : (
-                <span style={{ ...helpTextStyle, flex: 1 }}>No numeric columns</span>
+              {measure.aggregation !== 'count' && (
+                <>
+                  <span style={{ color: theme.colors.textMuted }}>of</span>
+                  {measureColumnOptions.length > 0 ? (
+                    <Select
+                      value={measure.column}
+                      onChange={(value) => updateMeasure(index, { column: value })}
+                      options={[{ value: '', label: 'Select column...' }, ...measureColumnOptions]}
+                      style={{ flex: 1 }}
+                    />
+                  ) : (
+                    <span style={{ ...helpTextStyle, flex: 1 }}>No numeric columns</span>
+                  )}
+                </>
               )}
               {measures.length > 1 && (
                 <Button variant="ghost" size="sm" onClick={() => removeMeasure(index)}>

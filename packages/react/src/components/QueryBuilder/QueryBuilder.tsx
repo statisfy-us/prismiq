@@ -12,6 +12,7 @@ import {
 
 import { useAnalytics, useSchema, useQuery as useQueryHook } from '../../hooks';
 import type {
+  CalculatedField,
   ColumnSelection,
   ColumnSchema,
   FilterDefinition,
@@ -21,7 +22,9 @@ import type {
   SavedQuery,
   SortDefinition,
   TableSchema,
+  TimeSeriesConfig as TimeSeriesConfigType,
 } from '../../types';
+import { CalculatedFieldBuilder } from '../CalculatedFieldBuilder';
 import { ColumnSelector } from '../ColumnSelector';
 import { FilterBuilder } from '../FilterBuilder';
 import { JoinBuilder } from '../JoinBuilder';
@@ -29,6 +32,8 @@ import { ResultsTable } from '../ResultsTable';
 import { SavedQueryPicker } from '../SavedQueryPicker';
 import { SchemaExplorer } from '../SchemaExplorer';
 import { SortBuilder } from '../SortBuilder';
+import { TimeSeriesConfig } from '../TimeSeriesConfig';
+import { CollapsibleSection } from '../ui/CollapsibleSection';
 import { QueryBuilderToolbar } from './QueryBuilderToolbar';
 import { QueryPreview } from './QueryPreview';
 
@@ -385,6 +390,25 @@ export function QueryBuilder({
     setQuery((prev) => ({ ...prev, order_by: sorts }));
   }, []);
 
+  // Handle time series change
+  const handleTimeSeriesChange = useCallback(
+    (timeSeries: TimeSeriesConfigType | undefined) => {
+      setQuery((prev) => ({ ...prev, time_series: timeSeries }));
+    },
+    []
+  );
+
+  // Handle calculated fields change
+  const handleCalculatedFieldsChange = useCallback(
+    (calculatedFields: CalculatedField[]) => {
+      setQuery((prev) => ({
+        ...prev,
+        calculated_fields: calculatedFields.length > 0 ? calculatedFields : undefined,
+      }));
+    },
+    []
+  );
+
   // Handle joins change
   const handleJoinsChange = useCallback((joins: JoinDefinition[]) => {
     setQuery((prev) => ({ ...prev, joins }));
@@ -483,6 +507,30 @@ export function QueryBuilder({
               onChange={handleSortsChange}
               schema={schema}
             />
+
+            <CollapsibleSection
+              title="Calculated Fields"
+              defaultOpen={(query.calculated_fields?.length ?? 0) > 0}
+            >
+              <CalculatedFieldBuilder
+                fields={query.calculated_fields ?? []}
+                onChange={handleCalculatedFieldsChange}
+                tables={query.tables}
+                schema={schema}
+              />
+            </CollapsibleSection>
+
+            <CollapsibleSection
+              title="Time Series"
+              defaultOpen={query.time_series !== undefined}
+            >
+              <TimeSeriesConfig
+                schema={schema}
+                tables={query.tables}
+                config={query.time_series}
+                onChange={handleTimeSeriesChange}
+              />
+            </CollapsibleSection>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--prismiq-spacing-sm)' }}>
