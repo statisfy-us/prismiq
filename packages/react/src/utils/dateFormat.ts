@@ -1,7 +1,7 @@
 /**
  * Date formatting utilities for converting .NET format strings to JavaScript date formatters.
  *
- * Supports common .NET date format patterns used by RevealBI.
+ * Supports common .NET date format patterns.
  */
 
 /**
