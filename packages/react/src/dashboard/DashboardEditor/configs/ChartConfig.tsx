@@ -137,14 +137,21 @@ export function ChartConfig({
   const initialMeasures: MeasureConfig[] =
     query?.columns
       .filter((c) => c.aggregation !== 'none')
-      .map((c) => ({
-        // Store as table-qualified ref so parseColumnRef can resolve it correctly
-        column: c.table_id ? `${c.table_id}.${c.column}` : c.column,
-        aggregation: c.aggregation,
-        table_id: c.table_id,
-        // Preserve original alias to maintain compatibility with widget config
-        alias: c.alias,
-      })) ?? [];
+      .map((c) => {
+        // Sanitize: '*' is only valid with 'count' aggregation
+        // For other aggregations, clear the column so user must select a valid one
+        const isStarWithNonCount = (c.column === '*' || c.column.endsWith('.*')) && c.aggregation !== 'count';
+        const column = isStarWithNonCount
+          ? ''
+          : c.table_id ? `${c.table_id}.${c.column}` : c.column;
+        return {
+          column,
+          aggregation: c.aggregation,
+          table_id: c.table_id,
+          // Preserve original alias to maintain compatibility with widget config
+          alias: c.alias,
+        };
+      }) ?? [];
   const initialJoins: JoinDefinition[] = query?.joins ?? [];
 
   const [tables, setTables] = useState<QueryTable[]>(initialTables);

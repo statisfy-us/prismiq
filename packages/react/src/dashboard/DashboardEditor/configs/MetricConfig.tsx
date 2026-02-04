@@ -78,7 +78,11 @@ export function MetricConfig({
   // Extract state from existing query if present
   const initialTable = query?.tables[0]?.name ?? '';
   const initialAggregation = query?.columns[0]?.aggregation ?? 'count';
-  const initialColumn = query?.columns[0]?.column ?? '*';
+  // Sanitize: '*' is only valid with 'count' aggregation
+  // For other aggregations that need a column, clear it so user must select a valid one
+  const rawInitialColumn = query?.columns[0]?.column ?? '*';
+  const needsColumnForInitial = AGGREGATIONS.find((a) => a.value === initialAggregation)?.needsColumn ?? false;
+  const initialColumn = (rawInitialColumn === '*' && needsColumnForInitial) ? '' : rawInitialColumn;
   // Remap filter table_ids to 't1' since MetricConfig only uses single-table queries
   const initialFilters = (query?.filters ?? []).map((f) => ({
     ...f,

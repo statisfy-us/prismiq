@@ -106,8 +106,10 @@ export function PieConfig({
   const initialLabel = labelCol?.column ?? '';
   const initialDateTrunc = labelCol?.date_trunc ?? '';
   const measureCol = query?.columns.find((c) => c.aggregation !== 'none');
-  const initialValueColumn = measureCol?.column ?? '';
+  const rawInitialValueColumn = measureCol?.column ?? '';
   const initialAggregation = measureCol?.aggregation ?? 'sum';
+  // Sanitize: '*' is only valid with 'count' aggregation
+  const initialValueColumn = (rawInitialValueColumn === '*' && initialAggregation !== 'count') ? '' : rawInitialValueColumn;
   // Remap filter table_ids to 't1' since PieConfig only uses single-table queries
   const initialFilters = (query?.filters ?? []).map((f) => ({
     ...f,
