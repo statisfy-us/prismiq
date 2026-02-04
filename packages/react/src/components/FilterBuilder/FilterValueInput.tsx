@@ -165,18 +165,21 @@ export function FilterValueInput({
   const [sampleValues, setSampleValues] = useState<string[]>([]);
   const [isLoadingValues, setIsLoadingValues] = useState(false);
   const fetchedRef = useRef<string | null>(null);
+  const fetchSeqRef = useRef(0);
 
   // Fetch sample values when table and column are available
   useEffect(() => {
     if (!tableName || !columnName || !client) {
       setSampleValues([]);
+      setIsLoadingValues(false);
+      fetchedRef.current = null;
       return;
     }
 
     // Avoid refetching for the same column
     const fetchKey = `${tableName}.${columnName}`;
     if (fetchedRef.current === fetchKey) return;
-    fetchedRef.current = fetchKey;
+    const fetchSeq = ++fetchSeqRef.current;
 
     const fetchSamples = async () => {
       setIsLoadingValues(true);
@@ -185,12 +188,18 @@ export function FilterValueInput({
         const stringValues = values
           .filter((v) => v !== null && v !== undefined)
           .map((v) => String(v));
+        if (fetchSeqRef.current !== fetchSeq) return;
         setSampleValues(stringValues);
+        fetchedRef.current = fetchKey;
       } catch (err) {
+        if (fetchSeqRef.current !== fetchSeq) return;
         console.error('Failed to fetch sample values:', err);
         setSampleValues([]);
+        fetchedRef.current = null;
       } finally {
-        setIsLoadingValues(false);
+        if (fetchSeqRef.current === fetchSeq) {
+          setIsLoadingValues(false);
+        }
       }
     };
 
@@ -381,7 +390,7 @@ export function FilterValueInput({
           >
             {filteredOptions.map((optionValue, index) => (
               <div
-                key={optionValue}
+                key={`${optionValue}-${index}`}
                 onClick={() => handleOptionSelect(optionValue)}
                 onMouseEnter={() => setHighlightedIndex(index)}
                 style={{

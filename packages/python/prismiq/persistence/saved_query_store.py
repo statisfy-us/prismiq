@@ -6,7 +6,7 @@ import json
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, List
 
 from sqlalchemy import (
     Boolean,
@@ -89,7 +89,7 @@ class SavedQueryStore:
         tenant_id: str,
         user_id: str | None = None,
         schema_name: str | None = None,
-    ) -> list[SavedQuery]:
+    ) -> List[SavedQuery]:
         """List saved queries for a tenant.
 
         Returns queries owned by the user or shared with all users. If
@@ -306,7 +306,7 @@ class SavedQueryStore:
         )
 
     @staticmethod
-    def _compile_query(stmt: Any) -> tuple[str, list[Any]]:
+    def _compile_query(stmt: Any) -> tuple[str, List[Any]]:
         """Compile a SQLAlchemy statement for asyncpg execution.
 
         Converts SQLAlchemy Core statements to SQL strings with positional
