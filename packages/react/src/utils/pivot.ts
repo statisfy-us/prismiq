@@ -2,6 +2,7 @@
  * Pivot utility for transforming query results from long format to wide format.
  */
 
+import { createDateFormatter } from './dateFormat';
 import type { QueryResult } from '../types';
 
 export interface PivotConfig {
@@ -11,6 +12,8 @@ export interface PivotConfig {
   valueColumn: string;
   /** Columns to keep as-is (dimension/grouping columns). */
   dimensionColumns: string[];
+  /** Optional date format string for pivot column values (date-fns format). */
+  pivotColumnFormat?: string;
 }
 
 /**
@@ -31,11 +34,39 @@ export interface PivotConfig {
  * @param config - Pivot configuration
  * @returns Pivoted query result
  */
+/**
+ * Format a value for use as a pivot column header.
+ * If it looks like a date and a format is provided, format it.
+ */
+function formatPivotValue(value: unknown, dateFormat?: string): string {
+  const strValue = String(value);
+
+  if (!dateFormat) {
+    return strValue;
+  }
+
+  // Try to parse as ISO date
+  try {
+    // Check if it looks like a date string
+    if (strValue.match(/^\d{4}-\d{2}-\d{2}/)) {
+      const formatter = createDateFormatter(dateFormat);
+      const formatted = formatter(strValue);
+      if (formatted && formatted !== strValue) {
+        return formatted;
+      }
+    }
+  } catch {
+    // If parsing fails, return original string
+  }
+
+  return strValue;
+}
+
 export function pivotQueryResult(
   result: QueryResult,
   config: PivotConfig
 ): QueryResult {
-  const { pivotColumn, valueColumn, dimensionColumns } = config;
+  const { pivotColumn, valueColumn, dimensionColumns, pivotColumnFormat } = config;
 
   // Find column indices
   const pivotColIndex = result.columns.indexOf(pivotColumn);
@@ -49,9 +80,19 @@ export function pivotQueryResult(
   }
 
   // Get unique pivot values (these become new columns)
-  const pivotValues = Array.from(
+  // Keep track of raw values for grouping and formatted values for display
+  const rawPivotValues = Array.from(
     new Set(result.rows.map((row) => String(row[pivotColIndex])))
   ).sort();
+
+  // Create mapping from raw value to formatted display value
+  const pivotValueToDisplay = new Map<string, string>();
+  for (const raw of rawPivotValues) {
+    pivotValueToDisplay.set(raw, formatPivotValue(raw, pivotColumnFormat));
+  }
+
+  // Formatted values for column headers
+  const pivotValues = rawPivotValues;
 
   // Build dimension column indices
   const dimIndices = dimensionColumns
@@ -78,8 +119,9 @@ export function pivotQueryResult(
     grouped.get(key)!.set(pivotValue, value);
   }
 
-  // Build pivoted result
-  const newColumns = [...dimensionColumns, ...pivotValues];
+  // Build pivoted result - use formatted display values for column headers
+  const displayColumns = pivotValues.map((pv) => pivotValueToDisplay.get(pv) ?? pv);
+  const newColumns = [...dimensionColumns, ...displayColumns];
   const newRows: unknown[][] = [];
 
   for (const [_key, valueMap] of grouped.entries()) {

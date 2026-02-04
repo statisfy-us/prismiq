@@ -560,11 +560,26 @@ export function WidgetContent({
           (col) => col !== widget.config.pivot_column && col !== widget.config.value_column
         );
 
+        // Get date format for pivot column from config or query
+        let pivotColumnFormat: string | undefined;
+        if (widget.config.dateFormats?.[widget.config.pivot_column]) {
+          pivotColumnFormat = widget.config.dateFormats[widget.config.pivot_column];
+        } else if (widget.query) {
+          // Try to get format from query column definition
+          const pivotCol = widget.query.columns.find(
+            (c) => c.alias === widget.config.pivot_column || c.column === widget.config.pivot_column
+          );
+          if (pivotCol?.date_format) {
+            pivotColumnFormat = pivotCol.date_format;
+          }
+        }
+
         // Pivot the data
         tableResult = pivotQueryResult(result, {
           pivotColumn: widget.config.pivot_column,
           valueColumn: widget.config.value_column,
           dimensionColumns,
+          pivotColumnFormat,
         });
       }
 

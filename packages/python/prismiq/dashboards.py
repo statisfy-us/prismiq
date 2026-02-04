@@ -68,6 +68,12 @@ class WidgetConfig(BaseModel):
     y_axis: list[str] | None = None
     """Columns to use for Y axis (multi-series)."""
 
+    series_column: str | None = None
+    """Column that defines series for multi-series charts (e.g., category column in long-format data)."""
+
+    max_series: int | None = None
+    """Maximum number of series to display (top N by total value)."""
+
     orientation: str | None = None
     """Chart orientation: 'horizontal' or 'vertical'."""
 
@@ -83,12 +89,42 @@ class WidgetConfig(BaseModel):
     colors: list[str] | None = None
     """Custom color palette for the chart."""
 
+    # Value formatting options
+    valueFormat: str | None = None
+    """Value format for chart axes (e.g., 'currency', 'percent')."""
+
+    currencySymbol: str | None = None
+    """Currency symbol when valueFormat is 'currency'."""
+
+    compactNotation: str | None = None
+    """Compact notation mode (K, M, B, T)."""
+
+    decimalDigits: int | None = None
+    """Number of decimal digits to show."""
+
+    # Reference lines for charts
+    referenceLines: list[dict] | None = None
+    """Reference lines (thresholds, goals) for charts."""
+
+    # Cross-filter options
+    cross_filter: dict | None = None
+    """Cross-filter configuration for this widget."""
+
     # MetricCard options
     format: str | None = None
     """Number format for metric values."""
 
     trend_comparison: str | None = None
     """Period for trend comparison."""
+
+    showTrend: bool | None = None
+    """Whether to show trend indicator."""
+
+    trendPeriod: str | None = None
+    """Comparison period for trend calculation."""
+
+    trendDateColumn: str | None = None
+    """Date column to use for trend comparison."""
 
     # Table options
     page_size: int | None = None
@@ -97,12 +133,28 @@ class WidgetConfig(BaseModel):
     sortable: bool | None = None
     """Whether table columns are sortable."""
 
+    pivot_column: str | None = None
+    """Column to pivot (for pivot tables). Unique values become columns."""
+
+    value_column: str | None = None
+    """Column containing values to distribute across pivoted columns."""
+
+    # Date formatting
+    dateFormats: dict[str, str] | None = None
+    """Date format strings for datetime columns (column name -> date-fns format string)."""
+
     # Text options
     content: str | None = None
     """Text content for text widgets."""
 
     markdown: bool | None = None
     """Whether to render content as markdown."""
+
+    alignment: str | None = None
+    """Text alignment for text widgets."""
+
+    fontSize: str | None = None
+    """Font size for text widgets."""
 
 
 class Widget(BaseModel):

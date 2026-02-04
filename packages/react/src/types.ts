@@ -150,6 +150,8 @@ export interface ColumnSelection {
   alias?: string;
   /** Date truncation unit for date/timestamp columns. */
   date_trunc?: DateTruncInterval;
+  /** Date format string for formatting date values in output. */
+  date_format?: string;
 }
 
 /**

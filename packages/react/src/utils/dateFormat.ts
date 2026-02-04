@@ -79,17 +79,24 @@ function formatDateWithPattern(date: Date, pattern: string): string {
   result = result.replace(/yyyy/g, String(year).padStart(4, '0'));
   result = result.replace(/yy/g, String(year % 100).padStart(2, '0'));
 
-  // Month
-  result = result.replace(/MMMM/g, monthNamesFull[month - 1] || '');
-  result = result.replace(/MMM/g, monthNamesShort[month - 1] || '');
+  // Month - use placeholders without pattern letters to avoid subsequent replacements
+  // Using «» brackets which won't appear in date format patterns
+  result = result.replace(/MMMM/g, '«1»');
+  result = result.replace(/MMM/g, '«2»');
   result = result.replace(/MM/g, String(month).padStart(2, '0'));
   result = result.replace(/M/g, String(month));
 
-  // Day
-  result = result.replace(/dddd/g, dayNamesFull[date.getDay()] || '');
-  result = result.replace(/ddd/g, dayNamesShort[date.getDay()] || '');
+  // Day - use placeholders for day names
+  result = result.replace(/dddd/g, '«3»');
+  result = result.replace(/ddd/g, '«4»');
   result = result.replace(/dd/g, String(day).padStart(2, '0'));
   result = result.replace(/d/g, String(day));
+
+  // Replace month/day name placeholders at the end (after all pattern matching is done)
+  result = result.replace(/«1»/g, monthNamesFull[month - 1] || '');
+  result = result.replace(/«2»/g, monthNamesShort[month - 1] || '');
+  result = result.replace(/«3»/g, dayNamesFull[date.getDay()] || '');
+  result = result.replace(/«4»/g, dayNamesShort[date.getDay()] || '');
 
   // Hours (24-hour)
   result = result.replace(/HH/g, String(hours).padStart(2, '0'));

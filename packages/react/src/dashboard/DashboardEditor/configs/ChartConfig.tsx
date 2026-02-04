@@ -51,6 +51,8 @@ interface MeasureConfig {
   aggregation: AggregationType;
   /** Source table ID for multi-table queries. */
   table_id?: string;
+  /** Optional alias for the result column. Preserved from original query. */
+  alias?: string;
 }
 
 /**
@@ -140,6 +142,8 @@ export function ChartConfig({
         column: c.table_id ? `${c.table_id}.${c.column}` : c.column,
         aggregation: c.aggregation,
         table_id: c.table_id,
+        // Preserve original alias to maintain compatibility with widget config
+        alias: c.alias,
       })) ?? [];
   const initialJoins: JoinDefinition[] = query?.joins ?? [];
 
@@ -276,7 +280,8 @@ export function ChartConfig({
         const invalidColumns: string[] = [];
 
         validMeasures.forEach((m, i) => {
-          const measureAlias = validMeasures.length > 1 ? `value_${i + 1}` : 'value';
+          // Use preserved alias if available, otherwise generate default
+          const measureAlias = m.alias ?? (validMeasures.length > 1 ? `value_${i + 1}` : 'value');
 
           // count uses *, no column needed
           if (m.aggregation === 'count' && (!m.column || m.column.endsWith('.*') || m.column === '*')) {
