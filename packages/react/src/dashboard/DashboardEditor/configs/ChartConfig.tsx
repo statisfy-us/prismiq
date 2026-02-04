@@ -255,11 +255,13 @@ export function ChartConfig({
     // Build columns: group by column + measure columns
     const columns = [
       // Group by column (no aggregation, with optional date truncation)
+      // Alias preserves original column name when date_trunc transforms the SQL output name
       {
         table_id: groupByTableId,
         column: groupByColumn,
         aggregation: 'none' as AggregationType,
         date_trunc: dateTrunc || undefined,
+        alias: dateTrunc ? groupByColumn : undefined,
       },
       // Measure columns (with aggregation) - parse table_id.column format
       ...(() => {
@@ -272,13 +274,13 @@ export function ChartConfig({
         const invalidColumns: string[] = [];
 
         validMeasures.forEach((m, i) => {
-          // count uses *, no column needed
+          // count uses *, no column needed — always alias so the result column name is predictable
           if (m.aggregation === 'count') {
             parsedMeasures.push({
               table_id: tables[0]?.id ?? 't1',
               column: '*',
               aggregation: m.aggregation,
-              alias: validMeasures.length > 1 ? `value_${i + 1}` : undefined,
+              alias: validMeasures.length > 1 ? `value_${i + 1}` : 'count',
             });
             return;
           }

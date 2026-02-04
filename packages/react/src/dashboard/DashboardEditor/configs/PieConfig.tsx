@@ -167,13 +167,14 @@ export function PieConfig({
     const tables = [{ id: tableId, name: selectedTable }];
 
     // Build columns: label column + value column
+    // Alias preserves original column name when date_trunc transforms the SQL output name
     const columns = [
-      // Label column (no aggregation, with optional date truncation)
       {
         table_id: tableId,
         column: labelColumn,
         aggregation: 'none' as AggregationType,
         date_trunc: dateTrunc || undefined,
+        alias: dateTrunc ? labelColumn : undefined,
       },
       // Value column (with aggregation)
       {
