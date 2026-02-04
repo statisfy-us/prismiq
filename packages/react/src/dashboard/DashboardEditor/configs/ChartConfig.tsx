@@ -202,9 +202,15 @@ export function ChartConfig({
     return options;
   }, [tables, schema.tables]);
 
-  // Get numeric columns for measures (from all selected tables)
+  // Get columns for measures (from all selected tables)
   const measureColumnOptions = useMemo(() => {
     const options: { value: string; label: string }[] = [];
+
+    // Wildcard option for count(*)
+    const firstTable = tables[0];
+    if (firstTable) {
+      options.push({ value: `${firstTable.id}.*`, label: '* (All rows)' });
+    }
 
     for (const table of tables) {
       const tableSchema = schema.tables.find((t) => t.name === table.name);
@@ -274,13 +280,15 @@ export function ChartConfig({
         const invalidColumns: string[] = [];
 
         validMeasures.forEach((m, i) => {
-          // count uses *, no column needed — always alias so the result column name is predictable
-          if (m.aggregation === 'count') {
+          const measureAlias = validMeasures.length > 1 ? `value_${i + 1}` : 'value';
+
+          // count uses *, no column needed
+          if (m.aggregation === 'count' && (!m.column || m.column.endsWith('.*') || m.column === '*')) {
             parsedMeasures.push({
               table_id: tables[0]?.id ?? 't1',
               column: '*',
               aggregation: m.aggregation,
-              alias: validMeasures.length > 1 ? `value_${i + 1}` : 'count',
+              alias: measureAlias,
             });
             return;
           }
@@ -293,7 +301,7 @@ export function ChartConfig({
             table_id: parsed.tableId,
             column: parsed.column,
             aggregation: m.aggregation,
-            alias: validMeasures.length > 1 ? `value_${i + 1}` : undefined,
+            alias: measureAlias,
           });
         });
 
