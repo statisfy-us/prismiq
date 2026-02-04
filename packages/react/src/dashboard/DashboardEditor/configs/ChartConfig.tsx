@@ -285,7 +285,7 @@ export function ChartConfig({
           // count uses *, no column needed
           if (m.aggregation === 'count' && (!m.column || m.column.endsWith('.*') || m.column === '*')) {
             parsedMeasures.push({
-              table_id: tables[0]?.id ?? 't1',
+              table_id: m.table_id ?? tables[0]?.id ?? 't1',
               column: '*',
               aggregation: m.aggregation,
               alias: measureAlias,

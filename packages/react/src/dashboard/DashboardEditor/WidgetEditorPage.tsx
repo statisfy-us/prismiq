@@ -136,9 +136,9 @@ export function WidgetEditorPage({
     widget?.position ?? { x: 0, y: 0, w: 6, h: 4, minW: 2, minH: 2 }
   );
 
-  // Data source mode - default to Advanced when editing existing widget with a query
+  // Data source mode - restore saved mode for existing widgets, default to 'guided' for new ones
   const [dataSourceMode, setDataSourceMode] = useState<DataSourceMode>(
-    widget?.query ? 'advanced' : 'guided'
+    isNew ? 'guided' : (widget?.dataSourceMode ?? 'guided')
   );
 
   // Preview state
@@ -226,9 +226,10 @@ export function WidgetEditorPage({
       query,
       position,
       hyperlink,
+      dataSourceMode,
     };
     onSave(savedWidget);
-  }, [widget, type, title, config, query, position, hyperlink, onSave]);
+  }, [widget, type, title, config, query, position, hyperlink, dataSourceMode, onSave]);
 
   // Column select options for config
   const columnSelectOptions = useMemo(() => {

@@ -177,6 +177,8 @@ export interface Widget {
   config: WidgetConfig;
   /** Optional hyperlink to external URL (displayed as link icon in header). */
   hyperlink?: WidgetHyperlink;
+  /** Data source mode last used when editing this widget. */
+  dataSourceMode?: 'guided' | 'advanced' | 'saved';
   /** Creation timestamp (ISO string). */
   created_at?: string;
   /** Last update timestamp (ISO string). */

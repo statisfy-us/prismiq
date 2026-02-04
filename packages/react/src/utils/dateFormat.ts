@@ -70,9 +70,10 @@ function formatDateWithPattern(date: Date, pattern: string): string {
   // Replace tokens
   let result = pattern;
 
-  // Quarter - replace before year/month to avoid conflicts
-  result = result.replace(/QQ/g, `Q${quarter}`);
+  // Quarter - use placeholder to avoid the single-Q pass reprocessing the Q inserted by QQ
+  result = result.replace(/QQ/g, '__QUARTER_PLACEHOLDER__');
   result = result.replace(/Q(?!['"])/g, String(quarter));
+  result = result.replace(/__QUARTER_PLACEHOLDER__/g, `Q${quarter}`);
 
   // Year
   result = result.replace(/yyyy/g, String(year).padStart(4, '0'));
