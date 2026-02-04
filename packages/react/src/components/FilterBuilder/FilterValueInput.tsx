@@ -167,6 +167,14 @@ export function FilterValueInput({
   const fetchedRef = useRef<string | null>(null);
   const fetchSeqRef = useRef(0);
 
+  // Combobox state for dropdown (must be declared before conditional returns)
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
+  const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
   // Fetch sample values when table and column are available
   useEffect(() => {
     if (!tableName || !columnName || !client) {
@@ -206,81 +214,7 @@ export function FilterValueInput({
     fetchSamples();
   }, [client, tableName, columnName]);
 
-  // No input needed for null operators
-  if (operator === 'is_null' || operator === 'is_not_null') {
-    return <></>;
-  }
-
-  // Between operator needs two inputs
-  if (operator === 'between') {
-    const [min, max] = Array.isArray(value) ? value : [undefined, undefined];
-
-    return (
-      <div className={className} style={containerStyles}>
-        <Input
-          inputSize="sm"
-          type={inputType}
-          placeholder="Min"
-          value={formatValue(min)}
-          disabled={disabled}
-          onChange={(e) => {
-            const newMin = parseValue(e.target.value, dataType);
-            onChange([newMin, max]);
-          }}
-          style={{ flex: 1 }}
-        />
-        <span style={{ color: 'var(--prismiq-color-text-muted)' }}>and</span>
-        <Input
-          inputSize="sm"
-          type={inputType}
-          placeholder="Max"
-          value={formatValue(max)}
-          disabled={disabled}
-          onChange={(e) => {
-            const newMax = parseValue(e.target.value, dataType);
-            onChange([min, newMax]);
-          }}
-          style={{ flex: 1 }}
-        />
-      </div>
-    );
-  }
-
-  // IN, NOT IN, and IN OR NULL operators need comma-separated values
-  if (operator === 'in_' || operator === 'not_in' || operator === 'in_or_null') {
-    const handleMultiChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const values = e.target.value
-        .split(',')
-        .map((v) => v.trim())
-        .filter(Boolean)
-        .map((v) => parseValue(v, dataType));
-      onChange(values);
-    };
-
-    return (
-      <div className={className} style={containerStyles}>
-        <Input
-          inputSize="sm"
-          type="text"
-          placeholder="value1, value2, ..."
-          value={formatValue(value)}
-          disabled={disabled}
-          onChange={handleMultiChange}
-          style={{ flex: 1 }}
-        />
-      </div>
-    );
-  }
-
-  // Combobox state for dropdown
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
-  const inputRef = useRef<HTMLInputElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // Filter sample values based on current input
+  // Filter sample values based on current input (computed before hooks that depend on it)
   const currentValueStr = formatValue(value);
   const filteredOptions = sampleValues.filter((v) =>
     v.toLowerCase().includes(currentValueStr.toLowerCase())
@@ -355,6 +289,72 @@ export function FilterValueInput({
     },
     [isDropdownOpen, filteredOptions, highlightedIndex, handleOptionSelect]
   );
+
+  // No input needed for null operators
+  if (operator === 'is_null' || operator === 'is_not_null') {
+    return <></>;
+  }
+
+  // Between operator needs two inputs
+  if (operator === 'between') {
+    const [min, max] = Array.isArray(value) ? value : [undefined, undefined];
+
+    return (
+      <div className={className} style={containerStyles}>
+        <Input
+          inputSize="sm"
+          type={inputType}
+          placeholder="Min"
+          value={formatValue(min)}
+          disabled={disabled}
+          onChange={(e) => {
+            const newMin = parseValue(e.target.value, dataType);
+            onChange([newMin, max]);
+          }}
+          style={{ flex: 1 }}
+        />
+        <span style={{ color: 'var(--prismiq-color-text-muted)' }}>and</span>
+        <Input
+          inputSize="sm"
+          type={inputType}
+          placeholder="Max"
+          value={formatValue(max)}
+          disabled={disabled}
+          onChange={(e) => {
+            const newMax = parseValue(e.target.value, dataType);
+            onChange([min, newMax]);
+          }}
+          style={{ flex: 1 }}
+        />
+      </div>
+    );
+  }
+
+  // IN, NOT IN, and IN OR NULL operators need comma-separated values
+  if (operator === 'in_' || operator === 'not_in' || operator === 'in_or_null') {
+    const handleMultiChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const values = e.target.value
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean)
+        .map((v) => parseValue(v, dataType));
+      onChange(values);
+    };
+
+    return (
+      <div className={className} style={containerStyles}>
+        <Input
+          inputSize="sm"
+          type="text"
+          placeholder="value1, value2, ..."
+          value={formatValue(value)}
+          disabled={disabled}
+          onChange={handleMultiChange}
+          style={{ flex: 1 }}
+        />
+      </div>
+    );
+  }
 
   // Single value input with custom combobox dropdown
   return (

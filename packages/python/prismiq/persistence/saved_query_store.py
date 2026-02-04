@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import builtins
 import json
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, List
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
     Boolean,
@@ -89,7 +90,7 @@ class SavedQueryStore:
         tenant_id: str,
         user_id: str | None = None,
         schema_name: str | None = None,
-    ) -> List[SavedQuery]:
+    ) -> builtins.list[SavedQuery]:
         """List saved queries for a tenant.
 
         Returns queries owned by the user or shared with all users. If
@@ -306,7 +307,7 @@ class SavedQueryStore:
         )
 
     @staticmethod
-    def _compile_query(stmt: Any) -> tuple[str, List[Any]]:
+    def _compile_query(stmt: Any) -> tuple[str, builtins.list[Any]]:
         """Compile a SQLAlchemy statement for asyncpg execution.
 
         Converts SQLAlchemy Core statements to SQL strings with positional
