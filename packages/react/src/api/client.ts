@@ -123,10 +123,13 @@ export class PrismiqClient {
 
   /**
    * Make an authenticated request to the API.
+   *
+   * @param path - API path (starting with /)
+   * @param options - Fetch options including signal for cancellation
    */
   private async request<T>(
     path: string,
-    options: RequestInit = {}
+    options: RequestInit & { signal?: AbortSignal } = {}
   ): Promise<T> {
     const url = `${this.endpoint}${path}`;
 
@@ -353,15 +356,18 @@ export class PrismiqClient {
    *
    * @param query - The query definition to execute.
    * @param bypassCache - If true, bypass cache and re-execute query.
+   * @param signal - Optional AbortSignal for cancellation.
    * @returns The query result with all rows and cache metadata.
    */
   async executeQuery(
     query: QueryDefinition,
-    bypassCache: boolean = false
+    bypassCache: boolean = false,
+    signal?: AbortSignal
   ): Promise<QueryResult> {
     return this.request<QueryResult>('/query/execute', {
       method: 'POST',
       body: JSON.stringify({ query, bypass_cache: bypassCache }),
+      signal,
     });
   }
 
