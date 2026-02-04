@@ -248,8 +248,8 @@ export function ChartConfig({
   useEffect(() => {
     if (tables.length === 0 || !groupByColumn) return;
 
-    // Check if we have at least one valid measure
-    const validMeasures = measures.filter((m) => m.column);
+    // Check if we have at least one valid measure (count doesn't need a column)
+    const validMeasures = measures.filter((m) => m.aggregation === 'count' || m.column);
     if (validMeasures.length === 0) return;
 
     // Build columns: group by column + measure columns
@@ -272,6 +272,16 @@ export function ChartConfig({
         const invalidColumns: string[] = [];
 
         validMeasures.forEach((m, i) => {
+          // count uses *, no column needed
+          if (m.aggregation === 'count') {
+            parsedMeasures.push({
+              table_id: tables[0]?.id ?? 't1',
+              column: '*',
+              aggregation: m.aggregation,
+              alias: validMeasures.length > 1 ? `value_${i + 1}` : undefined,
+            });
+            return;
+          }
           const parsed = parseColumnRef(m.column, tables[0]?.id ?? 't1');
           if (!parsed) {
             invalidColumns.push(m.column);
@@ -535,16 +545,20 @@ export function ChartConfig({
                 options={AGGREGATIONS}
                 style={{ width: '120px' }}
               />
-              <span style={{ color: theme.colors.textMuted }}>of</span>
-              {measureColumnOptions.length > 0 ? (
-                <Select
-                  value={measure.column}
-                  onChange={(value) => updateMeasure(index, { column: value })}
-                  options={[{ value: '', label: 'Select column...' }, ...measureColumnOptions]}
-                  style={{ flex: 1 }}
-                />
-              ) : (
-                <span style={{ ...helpTextStyle, flex: 1 }}>No numeric columns</span>
+              {measure.aggregation !== 'count' && (
+                <>
+                  <span style={{ color: theme.colors.textMuted }}>of</span>
+                  {measureColumnOptions.length > 0 ? (
+                    <Select
+                      value={measure.column}
+                      onChange={(value) => updateMeasure(index, { column: value })}
+                      options={[{ value: '', label: 'Select column...' }, ...measureColumnOptions]}
+                      style={{ flex: 1 }}
+                    />
+                  ) : (
+                    <span style={{ ...helpTextStyle, flex: 1 }}>No numeric columns</span>
+                  )}
+                </>
               )}
               {measures.length > 1 && (
                 <Button variant="ghost" size="sm" onClick={() => removeMeasure(index)}>
