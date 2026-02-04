@@ -10,6 +10,7 @@
 
 import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useTheme } from '../../../theme';
+import { useSchema } from '../../../hooks/useSchema';
 import { Select } from '../../../components/ui/Select';
 import { FilterBuilder } from '../../../components/FilterBuilder';
 import type {
@@ -72,6 +73,7 @@ export function MetricConfig({
   onChange,
 }: MetricConfigProps): JSX.Element {
   const { theme } = useTheme();
+  const { getDisplayName } = useSchema();
 
   // Extract state from existing query if present
   const initialTable = query?.tables[0]?.name ?? '';
@@ -83,13 +85,13 @@ export function MetricConfig({
   const [selectedColumn, setSelectedColumn] = useState(initialColumn);
   const [filters, setFilters] = useState<FilterDefinition[]>(query?.filters ?? []);
 
-  // Get table options
+  // Get table options with display names
   const tableOptions = useMemo(() => {
     return schema.tables.map((t) => ({
       value: t.name,
-      label: t.name,
+      label: getDisplayName(t.name),
     }));
-  }, [schema.tables]);
+  }, [schema.tables, getDisplayName]);
 
   // Get current table schema
   const currentTable = useMemo(() => {

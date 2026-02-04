@@ -9,6 +9,7 @@
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useTheme } from '../../../theme';
+import { useSchema } from '../../../hooks/useSchema';
 import { Select } from '../../../components/ui/Select';
 import { Button } from '../../../components/ui/Button';
 import { Icon } from '../../../components/ui/Icon';
@@ -123,6 +124,7 @@ export function ChartConfig({
   onChange,
 }: ChartConfigProps): JSX.Element {
   const { theme } = useTheme();
+  const { getDisplayName } = useSchema();
 
   // Extract state from existing query
   const initialTables: QueryTable[] = query?.tables ?? [];
@@ -164,9 +166,9 @@ export function ChartConfig({
   const tableOptions = useMemo(() => {
     return schema.tables.map((t) => ({
       value: t.name,
-      label: t.name,
+      label: getDisplayName(t.name),
     }));
-  }, [schema.tables]);
+  }, [schema.tables, getDisplayName]);
 
   // Get current primary table schema
   const currentTable = useMemo(() => {

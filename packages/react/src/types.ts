@@ -63,6 +63,20 @@ export interface DatabaseSchema {
   relationships: Relationship[];
 }
 
+/**
+ * Metadata for a data source (table/view) including display name and description.
+ */
+export interface DataSourceMeta {
+  /** Unique identifier for the data source. */
+  id: string;
+  /** PostgreSQL table/view name. */
+  table: string;
+  /** Human-readable display name for the UI. */
+  title: string;
+  /** Description or subtitle explaining the data source. */
+  subtitle: string;
+}
+
 // ============================================================================
 // Query Types - Query definition models
 // ============================================================================

@@ -10,6 +10,7 @@ import type {
   DashboardPinContextsResponse,
   DashboardUpdate,
   DatabaseSchema,
+  DataSourceMeta,
   ExecuteSQLRequest,
   PinnedDashboard,
   PinnedDashboardsResponse,
@@ -302,6 +303,18 @@ export class PrismiqClient {
     const path = `/tables/${encodeURIComponent(tableName)}/columns/${encodeURIComponent(columnName)}/sample?limit=${limit}`;
     const result = await this.request<{ values: unknown[] }>(path);
     return result.values;
+  }
+
+  /**
+   * Get data source metadata including display names and descriptions.
+   *
+   * Returns metadata for all exposed tables/views that can be used
+   * to show user-friendly names in the UI instead of raw table names.
+   *
+   * @returns Array of data source metadata.
+   */
+  async getDataSources(): Promise<DataSourceMeta[]> {
+    return this.request<DataSourceMeta[]>('/data-sources');
   }
 
   // ============================================================================

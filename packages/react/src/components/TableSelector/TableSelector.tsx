@@ -7,6 +7,7 @@
 
 import { useCallback, useMemo } from 'react';
 import { useTheme } from '../../theme';
+import { useSchema } from '../../hooks/useSchema';
 import type { DatabaseSchema, QueryTable } from '../../types';
 import { Icon, Select, Badge } from '../ui';
 
@@ -61,6 +62,7 @@ export function TableSelector({
   className,
 }: TableSelectorProps): JSX.Element {
   const { theme } = useTheme();
+  const { getDisplayName } = useSchema();
 
   // Get table options excluding already selected tables
   const availableTableOptions = useMemo(() => {
@@ -69,9 +71,9 @@ export function TableSelector({
       .filter((t) => !selectedNames.has(t.name))
       .map((t) => ({
         value: t.name,
-        label: `${t.name} (${t.columns.length} cols)`,
+        label: getDisplayName(t.name),
       }));
-  }, [schema.tables, tables]);
+  }, [schema.tables, tables, getDisplayName]);
 
   // Get suggested tables based on relationships
   const suggestedTables = useMemo(() => {
@@ -198,14 +200,14 @@ export function TableSelector({
           {tables.map((table, index) => (
             <div key={table.id} style={tableChipStyle}>
               <Icon name="table" size={14} />
-              <span>{table.name}</span>
+              <span>{getDisplayName(table.name)}</span>
               {index === 0 && <Badge size="sm" variant="default">primary</Badge>}
               {tables.length > 1 && (
                 <button
                   type="button"
                   style={removeButtonStyle}
                   onClick={() => handleRemoveTable(table.id)}
-                  aria-label={`Remove ${table.name}`}
+                  aria-label={`Remove ${getDisplayName(table.name)}`}
                 >
                   <Icon name="x" size={12} />
                 </button>
@@ -245,7 +247,7 @@ export function TableSelector({
                   title={suggestion.relationship}
                 >
                   <Icon name="plus" size={10} />
-                  {suggestion.table}
+                  {getDisplayName(suggestion.table)}
                 </button>
               ))}
             </div>
