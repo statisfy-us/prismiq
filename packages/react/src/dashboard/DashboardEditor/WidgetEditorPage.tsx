@@ -297,7 +297,7 @@ export function WidgetEditorPage({
     flex: 1,
     overflow: 'hidden',
     display: 'grid',
-    gridTemplateColumns: '320px 1fr',
+    gridTemplateColumns: '360px 1fr',
     gridTemplateRows: '1fr',
   };
 

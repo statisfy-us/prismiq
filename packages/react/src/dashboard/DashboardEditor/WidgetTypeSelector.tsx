@@ -155,8 +155,6 @@ export function WidgetTypeSelector({
     fontSize: theme.fontSizes.xs,
     color: theme.colors.textMuted,
     whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
   };
 
   return (
