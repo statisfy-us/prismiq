@@ -295,10 +295,10 @@ export function WidgetEditorPage({
 
   const bodyStyle: React.CSSProperties = {
     flex: 1,
-    minHeight: 0,
-    overflow: 'auto',
+    overflow: 'hidden',
     display: 'grid',
     gridTemplateColumns: '320px 1fr',
+    gridTemplateRows: '1fr',
   };
 
   const leftPanelStyle: React.CSSProperties = {
@@ -308,10 +308,14 @@ export function WidgetEditorPage({
     display: 'flex',
     flexDirection: 'column',
     gap: theme.spacing.lg,
+    overflow: 'auto',
+    height: '100%',
   };
 
   const mainPanelStyle: React.CSSProperties = {
     minWidth: 0,
+    overflow: 'auto',
+    height: '100%',
   };
 
   const previewPanelStyle: React.CSSProperties = {
@@ -345,7 +349,7 @@ export function WidgetEditorPage({
 
   const dataSourceContentStyle: React.CSSProperties = {
     padding: theme.spacing.md,
-    paddingBottom: theme.spacing.xl,
+    paddingBottom: '200px', // Extra padding to create scroll room for filters
   };
 
   const sectionStyle: React.CSSProperties = {
