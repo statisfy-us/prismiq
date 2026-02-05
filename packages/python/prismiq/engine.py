@@ -107,11 +107,12 @@ class PrismiqEngine:
         enable_metrics: bool = True,
         persist_dashboards: bool = False,
         skip_table_creation: bool = False,
+        database_url_write: str | None = None,
     ) -> None:
         """Initialize the Prismiq engine.
 
         Args:
-            database_url: PostgreSQL connection URL.
+            database_url: PostgreSQL connection URL (used for reads).
             exposed_tables: List of tables to expose. If None, all tables are exposed.
             query_timeout: Maximum query execution time in seconds.
             max_rows: Maximum number of rows to return per query.
@@ -124,8 +125,11 @@ class PrismiqEngine:
             persist_dashboards: Store dashboards in PostgreSQL (default: False uses in-memory).
             skip_table_creation: Skip automatic table creation (default: False).
                 Use when tables are managed externally (e.g., via Alembic migrations).
+            database_url_write: Optional separate URL for write operations (INSERT/UPDATE/DELETE).
+                If not provided, database_url is used for both reads and writes.
         """
         self._database_url = database_url
+        self._database_url_write = database_url_write
         self._exposed_tables = exposed_tables
         self._query_timeout = query_timeout
         self._max_rows = max_rows
@@ -155,6 +159,7 @@ class PrismiqEngine:
 
         # These will be initialized in startup()
         self._pool: Pool | None = None
+        self._pool_write: Pool | None = None  # Separate pool for writes (or same as _pool)
         self._introspector: SchemaIntrospector | None = None
         self._executor: QueryExecutor | None = None
         self._builder: QueryBuilder | None = None
@@ -211,12 +216,22 @@ class PrismiqEngine:
         Creates the database connection pool and introspects the schema.
         Must be called before using other methods.
         """
-        # Create connection pool
+        # Create connection pool for reads
         self._pool = await asyncpg.create_pool(
             self._database_url,
             min_size=1,
             max_size=10,
         )
+
+        # Create separate write pool if write URL provided, otherwise reuse read pool
+        if self._database_url_write:
+            self._pool_write = await asyncpg.create_pool(
+                self._database_url_write,
+                min_size=1,
+                max_size=5,
+            )
+        else:
+            self._pool_write = self._pool
 
         # Create schema introspector with optional caching
         introspector_kwargs: dict[str, Any] = {
@@ -245,9 +260,15 @@ class PrismiqEngine:
         if self._persist_dashboards:
             # Create tables if they don't exist (skip if managed externally via Alembic)
             if not self._skip_table_creation:
-                await ensure_tables(self._pool)
-            self._dashboard_store = PostgresDashboardStore(self._pool)
-            self._saved_query_store = SavedQueryStore(self._pool)
+                await ensure_tables(self._pool_write)
+            # Use write pool for dashboard store (handles INSERT/UPDATE/DELETE)
+            # Read pool for read operations
+            self._dashboard_store = PostgresDashboardStore(
+                self._pool, write_pool=self._pool_write
+            )
+            self._saved_query_store = SavedQueryStore(
+                self._pool, write_pool=self._pool_write
+            )
         else:
             self._dashboard_store = InMemoryDashboardStore()
             # SavedQueryStore requires PostgreSQL - no in-memory fallback
@@ -263,6 +284,11 @@ class PrismiqEngine:
         Closes the database connection pool. Should be called on
         application shutdown.
         """
+        # Close write pool first (if separate from read pool)
+        if self._pool_write and self._pool_write is not self._pool:
+            await self._pool_write.close()
+            self._pool_write = None
+
         if self._pool:
             await self._pool.close()
             self._pool = None
