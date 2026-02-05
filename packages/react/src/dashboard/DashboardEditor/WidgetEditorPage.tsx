@@ -295,6 +295,7 @@ export function WidgetEditorPage({
 
   const bodyStyle: React.CSSProperties = {
     flex: 1,
+    minHeight: 0,
     overflow: 'auto',
     display: 'grid',
     gridTemplateColumns: '320px 1fr',
