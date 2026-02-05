@@ -294,45 +294,35 @@ export function WidgetEditorPage({
 
   const bodyStyle: React.CSSProperties = {
     flex: 1,
-    display: 'flex',
-    minHeight: 0,
+    overflowY: 'auto',
+  };
+
+  const bodyInnerStyle: React.CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: '320px 1fr',
+    minHeight: '100%',
   };
 
   const leftPanelStyle: React.CSSProperties = {
-    width: '320px',
-    flexShrink: 0,
     borderRight: `1px solid ${theme.colors.border}`,
-    overflow: 'auto',
     padding: theme.spacing.md,
-    paddingBottom: '100px', // Extra space to ensure bottom sections are visible
+    paddingBottom: theme.spacing.xl,
     display: 'flex',
     flexDirection: 'column',
     gap: theme.spacing.lg,
-    height: '100%',
-    maxHeight: '100%',
   };
 
   const mainPanelStyle: React.CSSProperties = {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    minHeight: 0,
+    minWidth: 0,
   };
 
   const previewPanelStyle: React.CSSProperties = {
-    height: '300px',
-    flexShrink: 0,
-    padding: theme.spacing.md,
+    height: '440px',
+    padding: theme.spacing.lg,
     borderBottom: `1px solid ${theme.colors.border}`,
   };
 
-  const dataSourcePanelStyle: React.CSSProperties = {
-    flex: '1 1 auto',
-    display: 'flex',
-    flexDirection: 'column',
-    minHeight: 0,
-    overflow: 'hidden',
-  };
+  const dataSourcePanelStyle: React.CSSProperties = {};
 
   const dataSourceHeaderStyle: React.CSSProperties = {
     display: 'flex',
@@ -355,11 +345,8 @@ export function WidgetEditorPage({
   });
 
   const dataSourceContentStyle: React.CSSProperties = {
-    flex: '1 1 auto',
-    overflow: 'auto',
     padding: theme.spacing.md,
-    paddingBottom: '100px', // Extra space to ensure filter buttons are visible
-    minHeight: '250px',
+    paddingBottom: theme.spacing.xl,
   };
 
   const sectionStyle: React.CSSProperties = {
@@ -662,6 +649,7 @@ export function WidgetEditorPage({
 
       {/* Body */}
       <div style={bodyStyle}>
+        <div style={bodyInnerStyle}>
         {/* Left Panel - Type & Config */}
         <div style={leftPanelStyle}>
           {/* Widget Type */}
@@ -795,6 +783,7 @@ export function WidgetEditorPage({
               </div>
             </div>
           )}
+        </div>
         </div>
       </div>
     </div>
