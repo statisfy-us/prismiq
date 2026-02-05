@@ -68,15 +68,22 @@ class PostgresDashboardStore:
     All operations are scoped to a tenant_id for multi-tenant security.
     Supports per-tenant PostgreSQL schema isolation via schema_name
     parameter.
+
+    Supports read/write pool separation for read replica configurations.
+    Read operations (SELECT) use the primary pool, while write operations
+    (INSERT, UPDATE, DELETE) use the write pool.
     """
 
-    def __init__(self, pool: Pool) -> None:
+    def __init__(self, pool: Pool, write_pool: Pool | None = None) -> None:
         """Initialize PostgresDashboardStore.
 
         Args:
-            pool: asyncpg connection pool
+            pool: asyncpg connection pool for read operations (SELECT)
+            write_pool: Optional separate pool for write operations (INSERT/UPDATE/DELETE).
+                If not provided, the primary pool is used for both reads and writes.
         """
         self._pool = pool
+        self._pool_write = write_pool or pool
 
     async def _set_search_path(self, conn: Any, schema_name: str | None) -> None:
         """Set PostgreSQL search_path for schema isolation.
@@ -251,7 +258,7 @@ class PostgresDashboardStore:
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING *
         """
-        async with self._pool.acquire() as conn:
+        async with self._pool_write.acquire() as conn:
             await self._set_search_path(conn, schema_name)
             row = await conn.fetchrow(
                 query,
@@ -318,7 +325,7 @@ class PostgresDashboardStore:
             params.append(update.allowed_viewers)
             param_num += 1
 
-        async with self._pool.acquire() as conn:
+        async with self._pool_write.acquire() as conn:
             await self._set_search_path(conn, schema_name)
             # Handle widgets update if provided (replace all widgets)
             if update.widgets is not None:
@@ -381,7 +388,7 @@ class PostgresDashboardStore:
             schema_name: PostgreSQL schema name for per-tenant schema isolation.
         """
         query = "DELETE FROM prismiq_dashboards WHERE id = $1 AND tenant_id = $2"
-        async with self._pool.acquire() as conn:
+        async with self._pool_write.acquire() as conn:
             await self._set_search_path(conn, schema_name)
             result = await conn.execute(query, int(dashboard_id), tenant_id)
             return result == "DELETE 1"
@@ -419,7 +426,7 @@ class PostgresDashboardStore:
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING *
         """
-        async with self._pool.acquire() as conn:
+        async with self._pool_write.acquire() as conn:
             await self._set_search_path(conn, schema_name)
             row = await conn.fetchrow(
                 query,
@@ -516,7 +523,7 @@ class PostgresDashboardStore:
             RETURNING w.*
         """  # noqa: S608
 
-        async with self._pool.acquire() as conn:
+        async with self._pool_write.acquire() as conn:
             await self._set_search_path(conn, schema_name)
             row = await conn.fetchrow(query, *params)
             if not row:
@@ -543,7 +550,7 @@ class PostgresDashboardStore:
             AND w.id = $1
             AND d.tenant_id = $2
         """
-        async with self._pool.acquire() as conn:
+        async with self._pool_write.acquire() as conn:
             await self._set_search_path(conn, schema_name)
             result = await conn.execute(query, int(widget_id), tenant_id)
             return result == "DELETE 1"
@@ -595,7 +602,7 @@ class PostgresDashboardStore:
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING *
         """
-        async with self._pool.acquire() as conn:
+        async with self._pool_write.acquire() as conn:
             await self._set_search_path(conn, schema_name)
             row = await conn.fetchrow(
                 insert_query,
@@ -630,7 +637,7 @@ class PostgresDashboardStore:
         if not dashboard:
             return False
 
-        async with self._pool.acquire() as conn, conn.transaction():
+        async with self._pool_write.acquire() as conn, conn.transaction():
             await self._set_search_path(conn, schema_name)
             for pos in positions:
                 widget_id = pos.get("widget_id") or pos.get("id")
@@ -775,7 +782,7 @@ class PostgresDashboardStore:
 
         t = _pinned_dashboards_table
 
-        async with self._pool.acquire() as conn:
+        async with self._pool_write.acquire() as conn:
             await self._set_search_path(conn, schema_name)
             # Determine position if not provided using SQLAlchemy Core
             if position is None:
@@ -846,7 +853,7 @@ class PostgresDashboardStore:
         )
         sql, params = self._compile_query(stmt)
 
-        async with self._pool.acquire() as conn:
+        async with self._pool_write.acquire() as conn:
             await self._set_search_path(conn, schema_name)
             result = await conn.execute(sql, *params)
             return result == "DELETE 1"
@@ -959,7 +966,7 @@ class PostgresDashboardStore:
         # Convert provided IDs to UUIDs
         provided_ids = [int(d_id) for d_id in dashboard_ids]
 
-        async with self._pool.acquire() as conn, conn.transaction():
+        async with self._pool_write.acquire() as conn, conn.transaction():
             await self._set_search_path(conn, schema_name)
             # First, get any remaining pins not in dashboard_ids, ordered by current position
             if provided_ids:

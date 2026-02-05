@@ -54,15 +54,22 @@ class SavedQueryStore:
     All operations are scoped to a tenant_id for multi-tenant security.
     Supports per-tenant PostgreSQL schema isolation via schema_name
     parameter.
+
+    Supports read/write pool separation for read replica configurations.
+    Read operations (SELECT) use the primary pool, while write operations
+    (INSERT, UPDATE, DELETE) use the write pool.
     """
 
-    def __init__(self, pool: Pool) -> None:
+    def __init__(self, pool: Pool, write_pool: Pool | None = None) -> None:
         """Initialize SavedQueryStore.
 
         Args:
-            pool: asyncpg connection pool
+            pool: asyncpg connection pool for read operations (SELECT)
+            write_pool: Optional separate pool for write operations (INSERT/UPDATE/DELETE).
+                If not provided, the primary pool is used for both reads and writes.
         """
         self._pool = pool
+        self._pool_write = write_pool or pool
 
     async def _set_search_path(self, conn: Any, schema_name: str | None) -> None:
         """Set PostgreSQL search_path for schema isolation.
@@ -187,7 +194,7 @@ class SavedQueryStore:
         )
 
         sql, params = self._compile_query(stmt)
-        async with self._pool.acquire() as conn:
+        async with self._pool_write.acquire() as conn:
             await self._set_search_path(conn, schema_name)
             row = await conn.fetchrow(sql, *params)
             return self._row_to_saved_query(row)
@@ -249,7 +256,7 @@ class SavedQueryStore:
             stmt = stmt.where(t.c.owner_id == user_id)
 
         sql, params = self._compile_query(stmt)
-        async with self._pool.acquire() as conn:
+        async with self._pool_write.acquire() as conn:
             await self._set_search_path(conn, schema_name)
             row = await conn.fetchrow(sql, *params)
             if not row:
@@ -283,7 +290,7 @@ class SavedQueryStore:
             stmt = stmt.where(t.c.owner_id == user_id)
 
         sql, params = self._compile_query(stmt)
-        async with self._pool.acquire() as conn:
+        async with self._pool_write.acquire() as conn:
             await self._set_search_path(conn, schema_name)
             result = await conn.execute(sql, *params)
             return result == "DELETE 1"
