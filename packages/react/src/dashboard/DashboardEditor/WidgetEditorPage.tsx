@@ -245,9 +245,8 @@ export function WidgetEditorPage({
 
   // Styles
   const containerStyle: React.CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
     height: '100%',
+    overflowY: 'auto',
     backgroundColor: theme.colors.background,
     fontFamily: theme.fonts.sans,
   };
@@ -259,6 +258,9 @@ export function WidgetEditorPage({
     padding: `${theme.spacing.md} ${theme.spacing.lg}`,
     borderBottom: `1px solid ${theme.colors.border}`,
     backgroundColor: theme.colors.surface,
+    position: 'sticky',
+    top: 0,
+    zIndex: 10,
   };
 
   const headerLeftStyle: React.CSSProperties = {
@@ -293,14 +295,8 @@ export function WidgetEditorPage({
   };
 
   const bodyStyle: React.CSSProperties = {
-    flex: 1,
-    overflowY: 'auto',
-  };
-
-  const bodyInnerStyle: React.CSSProperties = {
     display: 'grid',
     gridTemplateColumns: '320px 1fr',
-    minHeight: '100%',
   };
 
   const leftPanelStyle: React.CSSProperties = {
@@ -320,6 +316,7 @@ export function WidgetEditorPage({
     height: '440px',
     padding: theme.spacing.lg,
     borderBottom: `1px solid ${theme.colors.border}`,
+    overflow: 'hidden',
   };
 
   const dataSourcePanelStyle: React.CSSProperties = {};
@@ -649,7 +646,6 @@ export function WidgetEditorPage({
 
       {/* Body */}
       <div style={bodyStyle}>
-        <div style={bodyInnerStyle}>
         {/* Left Panel - Type & Config */}
         <div style={leftPanelStyle}>
           {/* Widget Type */}
@@ -783,7 +779,6 @@ export function WidgetEditorPage({
               </div>
             </div>
           )}
-        </div>
         </div>
       </div>
     </div>
