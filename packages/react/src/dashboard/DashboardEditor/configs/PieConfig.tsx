@@ -164,9 +164,17 @@ export function PieConfig({
     }));
   }, [currentTable]);
 
+  // Check if current aggregation is valid for PieConfig
+  const isValidAggregation = useMemo(() => {
+    return AGGREGATIONS.some((a) => a.value === aggregation);
+  }, [aggregation]);
+
   // Build and emit query when config changes
   useEffect(() => {
     if (!selectedTable || !labelColumn) return;
+
+    // Don't emit if aggregation is not valid for PieConfig (e.g., 'none' from calculated fields)
+    if (!isValidAggregation) return;
 
     // For count, we don't need a value column
     const needsValueColumn = aggregation !== 'count';
@@ -206,7 +214,7 @@ export function PieConfig({
     };
 
     onChange(queryDef);
-  }, [selectedTable, labelColumn, dateTrunc, valueColumn, aggregation, filters, onChange]);
+  }, [selectedTable, labelColumn, dateTrunc, valueColumn, aggregation, isValidAggregation, filters, onChange]);
 
   // Handle table change
   const handleTableChange = useCallback((value: string) => {
