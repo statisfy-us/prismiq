@@ -245,7 +245,9 @@ export function WidgetEditorPage({
 
   // Styles
   const containerStyle: React.CSSProperties = {
-    minHeight: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
     backgroundColor: theme.colors.background,
     fontFamily: theme.fonts.sans,
   };
@@ -257,9 +259,7 @@ export function WidgetEditorPage({
     padding: `${theme.spacing.md} ${theme.spacing.lg}`,
     borderBottom: `1px solid ${theme.colors.border}`,
     backgroundColor: theme.colors.surface,
-    position: 'sticky',
-    top: 0,
-    zIndex: 10,
+    flexShrink: 0,
   };
 
   const headerLeftStyle: React.CSSProperties = {
@@ -294,6 +294,8 @@ export function WidgetEditorPage({
   };
 
   const bodyStyle: React.CSSProperties = {
+    flex: 1,
+    overflow: 'auto',
     display: 'grid',
     gridTemplateColumns: '320px 1fr',
   };
