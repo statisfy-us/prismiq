@@ -295,10 +295,9 @@ export function WidgetEditorPage({
 
   const bodyStyle: React.CSSProperties = {
     flex: 1,
-    overflow: 'hidden',
+    overflow: 'auto',
     display: 'grid',
     gridTemplateColumns: '360px 1fr',
-    gridTemplateRows: '1fr',
   };
 
   const leftPanelStyle: React.CSSProperties = {
@@ -308,14 +307,10 @@ export function WidgetEditorPage({
     display: 'flex',
     flexDirection: 'column',
     gap: theme.spacing.lg,
-    overflow: 'auto',
-    height: '100%',
   };
 
   const mainPanelStyle: React.CSSProperties = {
     minWidth: 0,
-    overflow: 'auto',
-    height: '100%',
   };
 
   const previewPanelStyle: React.CSSProperties = {
