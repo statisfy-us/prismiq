@@ -53,7 +53,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx",
     "clean": "rm -rf dist",
-    "size": "tsup && du -sh dist/*"
+    "size": "tsup && du -sh dist/*",
+    "prepublishOnly": "npm run typecheck && npm run build"
   },
   "peerDependencies": {
     "echarts": "^5.4.0 || ^6.0.0",

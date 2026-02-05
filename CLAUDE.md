@@ -142,7 +142,7 @@ If a task fails during autonomous execution:
 
 ## Project Goal
 
-Replace Reveal BI with a customizable, embeddable analytics solution that:
+An open-source embeddable analytics solution that:
 - Exposes PostgreSQL tables directly (no predefined metrics/dimensions)
 - Provides a visual query builder (joins, filters, aggregations)
 - Renders charts and dashboards

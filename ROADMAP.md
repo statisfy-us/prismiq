@@ -2,7 +2,7 @@
 
 ## Product Vision
 
-Prismiq is an **embeddable analytics SDK** that lets developers add dashboards and reports to their applications. It replaces tools like Reveal BI, Metabase Embedded, and Looker Embedded.
+Prismiq is an **embeddable analytics SDK** that lets developers add dashboards and reports to their applications.
 
 **Key Differentiators:**
 - React components (not iframe)
