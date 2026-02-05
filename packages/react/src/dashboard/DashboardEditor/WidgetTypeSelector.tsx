@@ -123,6 +123,7 @@ export function WidgetTypeSelector({
     border: `2px solid ${isSelected ? theme.colors.primary : theme.colors.border}`,
     cursor: 'pointer',
     transition: 'all 0.15s ease',
+    minWidth: 0, // Allow grid item to shrink below content width
   });
 
   const iconStyle = (isSelected: boolean): React.CSSProperties => ({

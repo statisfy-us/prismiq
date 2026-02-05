@@ -259,6 +259,7 @@ export function WidgetEditorPage({
     padding: `${theme.spacing.md} ${theme.spacing.lg}`,
     borderBottom: `1px solid ${theme.colors.border}`,
     backgroundColor: theme.colors.surface,
+    flexShrink: 0,
   };
 
   const headerLeftStyle: React.CSSProperties = {
@@ -294,45 +295,37 @@ export function WidgetEditorPage({
 
   const bodyStyle: React.CSSProperties = {
     flex: 1,
-    display: 'flex',
-    minHeight: 0,
+    overflow: 'hidden',
+    display: 'grid',
+    gridTemplateColumns: '320px 1fr',
+    gridTemplateRows: '1fr',
   };
 
   const leftPanelStyle: React.CSSProperties = {
-    width: '320px',
-    flexShrink: 0,
     borderRight: `1px solid ${theme.colors.border}`,
-    overflow: 'auto',
     padding: theme.spacing.md,
-    paddingBottom: '100px', // Extra space to ensure bottom sections are visible
+    paddingBottom: theme.spacing.xl,
     display: 'flex',
     flexDirection: 'column',
     gap: theme.spacing.lg,
+    overflow: 'auto',
     height: '100%',
-    maxHeight: '100%',
   };
 
   const mainPanelStyle: React.CSSProperties = {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    minHeight: 0,
+    minWidth: 0,
+    overflow: 'auto',
+    height: '100%',
   };
 
   const previewPanelStyle: React.CSSProperties = {
-    height: '300px',
-    flexShrink: 0,
-    padding: theme.spacing.md,
+    height: '440px',
+    padding: theme.spacing.lg,
     borderBottom: `1px solid ${theme.colors.border}`,
-  };
-
-  const dataSourcePanelStyle: React.CSSProperties = {
-    flex: '1 1 auto',
-    display: 'flex',
-    flexDirection: 'column',
-    minHeight: 0,
     overflow: 'hidden',
   };
+
+  const dataSourcePanelStyle: React.CSSProperties = {};
 
   const dataSourceHeaderStyle: React.CSSProperties = {
     display: 'flex',
@@ -355,11 +348,8 @@ export function WidgetEditorPage({
   });
 
   const dataSourceContentStyle: React.CSSProperties = {
-    flex: '1 1 auto',
-    overflow: 'auto',
     padding: theme.spacing.md,
-    paddingBottom: '100px', // Extra space to ensure filter buttons are visible
-    minHeight: '250px',
+    paddingBottom: '200px', // Extra padding to create scroll room for filters
   };
 
   const sectionStyle: React.CSSProperties = {
