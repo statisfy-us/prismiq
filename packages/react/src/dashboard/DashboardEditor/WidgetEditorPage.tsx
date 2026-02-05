@@ -245,8 +245,7 @@ export function WidgetEditorPage({
 
   // Styles
   const containerStyle: React.CSSProperties = {
-    height: '100%',
-    overflowY: 'auto',
+    minHeight: '100%',
     backgroundColor: theme.colors.background,
     fontFamily: theme.fonts.sans,
   };
