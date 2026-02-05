@@ -122,9 +122,17 @@ export function MetricConfig({
     return AGGREGATIONS.find((a) => a.value === aggregation)?.needsColumn ?? false;
   }, [aggregation]);
 
+  // Check if current aggregation is valid for MetricConfig
+  const isValidAggregation = useMemo(() => {
+    return AGGREGATIONS.some((a) => a.value === aggregation);
+  }, [aggregation]);
+
   // Build and emit query when config changes
   useEffect(() => {
     if (!selectedTable) return;
+
+    // Don't emit if aggregation is not valid for MetricConfig (e.g., 'none' from calculated fields)
+    if (!isValidAggregation) return;
 
     const tableId = 't1';
     const tables = [{ id: tableId, name: selectedTable }];
@@ -149,7 +157,7 @@ export function MetricConfig({
     };
 
     onChange(queryDef);
-  }, [selectedTable, aggregation, selectedColumn, needsColumn, filters, onChange]);
+  }, [selectedTable, aggregation, selectedColumn, needsColumn, isValidAggregation, filters, onChange]);
 
   // Handle table change
   const handleTableChange = useCallback((value: string) => {
