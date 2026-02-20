@@ -9,7 +9,7 @@ exposes schema, validation, and query execution endpoints.
 from __future__ import annotations
 
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import date
 from typing import TYPE_CHECKING, Any
 
@@ -28,6 +28,7 @@ from prismiq.dashboards import (
     WidgetUpdate,
 )
 from prismiq.filter_merge import FilterValue, merge_filters
+from prismiq.llm.types import ChatRequest
 from prismiq.logging import get_logger
 from prismiq.permissions import (
     can_delete_dashboard,
@@ -1885,5 +1886,83 @@ def create_router(
             schema_name=auth.schema_name,
         )
         return SuccessResponse(message="Pins reordered successfully")
+
+    # ========================================================================
+    # LLM Agent Endpoints
+    # ========================================================================
+
+    @router.get("/llm/status")
+    async def llm_status() -> dict[str, Any]:
+        """Get the LLM agent status.
+
+        Returns whether the LLM is enabled, and if so, the provider and model.
+        """
+        if not engine.llm_enabled or not engine.llm_config:
+            return {"enabled": False}
+
+        return {
+            "enabled": True,
+            "provider": engine.llm_config.provider.value,
+            "model": engine.llm_config.model,
+        }
+
+    @router.post("/llm/chat")
+    async def llm_chat(
+        request: ChatRequest,
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> Any:
+        """Chat with the LLM agent for SQL assistance.
+
+        Streams SSE chunks containing text, SQL, tool calls/results, and errors.
+
+        Args:
+            request: Chat request with message, history, and optional current SQL.
+            auth: Authentication context with tenant and schema info.
+
+        Returns:
+            StreamingResponse with SSE-formatted chunks.
+
+        Raises:
+            400: If the LLM is not enabled.
+        """
+        from fastapi.responses import StreamingResponse
+
+        from prismiq.llm.agent import run_agent_stream
+
+        if not engine.llm_enabled or not engine.llm_provider:
+            raise HTTPException(status_code=400, detail="LLM agent is not enabled")
+
+        provider = engine.llm_provider
+
+        async def event_generator() -> AsyncIterator[str]:
+            try:
+                async for chunk in run_agent_stream(
+                    provider=provider,
+                    engine=engine,
+                    user_message=request.message,
+                    history=request.history,
+                    current_sql=request.current_sql,
+                    schema_name=auth.schema_name,
+                ):
+                    # Format as SSE
+                    data = chunk.model_dump_json()
+                    yield f"data: {data}\n\n"
+            except (TypeError, AttributeError, ImportError):
+                raise
+            except Exception as e:
+                import json
+
+                error_data = json.dumps({"type": "error", "content": str(e)})
+                yield f"data: {error_data}\n\n"
+
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     return router
