@@ -577,12 +577,17 @@ class QueryBuilder:
         # SELECT clause - with time series support
         select_clause = self._build_select(query, table_refs, calc_sql_map)
 
-        # FROM clause
-        from_clause = self._build_from(query, table_refs)
+        # Partition filters: ON-clause (for outer joins) vs WHERE-clause
+        on_filters, where_filters = self._partition_filters(query, calc_sql_map)
 
-        # WHERE clause
+        # FROM clause (ON-clause params come first: $1, $2, ...)
+        from_clause, params = self._build_from(
+            query, table_refs, table_map, on_filters, calc_sql_map, params
+        )
+
+        # WHERE clause (params continue: $N+1, ...)
         where_clause, params = self._build_where(
-            query.filters, table_refs, table_map, calc_sql_map, params
+            where_filters, table_refs, table_map, calc_sql_map, params
         )
 
         # GROUP BY clause - with time series support
@@ -757,13 +762,79 @@ class QueryBuilder:
 
         return col_ref
 
-    def _build_from(self, query: QueryDefinition, table_refs: dict[str, str]) -> str:
+    def _partition_filters(
+        self,
+        query: QueryDefinition,
+        calc_sql_map: dict[str, str],
+    ) -> tuple[dict[int, list[FilterDefinition]], list[FilterDefinition]]:
+        """Split filters into ON-clause and WHERE-clause groups.
+
+        Filters on the nullable side of an outer join are moved to the ON clause
+        so that the join semantics are preserved (LEFT JOIN stays LEFT JOIN).
+
+        Returns:
+            Tuple of (on_filters, where_filters) where on_filters is keyed by
+            join index in query.joins.
+        """
+        if not query.joins or not query.filters:
+            return {}, list(query.filters)
+
+        # Build a map of table_id -> set of join indices where that table is
+        # on the nullable side.
+        nullable_side: dict[str, set[int]] = {}
+        for i, join in enumerate(query.joins):
+            match join.join_type:
+                case JoinType.LEFT:
+                    nullable_side.setdefault(join.to_table_id, set()).add(i)
+                case JoinType.RIGHT:
+                    nullable_side.setdefault(join.from_table_id, set()).add(i)
+                case JoinType.FULL:
+                    nullable_side.setdefault(join.to_table_id, set()).add(i)
+                    nullable_side.setdefault(join.from_table_id, set()).add(i)
+                case JoinType.INNER:
+                    pass
+
+        on_filters: dict[int, list[FilterDefinition]] = {}
+        where_filters: list[FilterDefinition] = []
+
+        for f in query.filters:
+            # Exceptions: always stay in WHERE
+            if f.sql_expression or f.column in calc_sql_map:
+                where_filters.append(f)
+                continue
+
+            join_indices = nullable_side.get(f.table_id)
+            if join_indices:
+                # Place on the first (lowest-index) matching join's ON clause.
+                # A table can appear on the nullable side of multiple joins
+                # (e.g., two FULL JOINs), but we must not duplicate the filter
+                # or params will be corrupted.
+                idx = min(join_indices)
+                on_filters.setdefault(idx, []).append(f)
+            else:
+                where_filters.append(f)
+
+        return on_filters, where_filters
+
+    def _build_from(
+        self,
+        query: QueryDefinition,
+        table_refs: dict[str, str],
+        table_map: dict[str, str],
+        on_filters: dict[int, list[FilterDefinition]],
+        calc_sql_map: dict[str, str],
+        params: list[Any],
+    ) -> tuple[str, list[Any]]:
         """Build the FROM clause including JOINs.
 
         Uses schema-qualified table names if schema_name is set.
+        ON-clause filters are appended to the appropriate JOIN conditions.
+
+        Returns:
+            Tuple of (from_clause_sql, params).
         """
         if not query.tables:
-            return ""
+            return "", params
 
         # Track which tables are already in the FROM clause
         tables_in_from: set[str] = set()
@@ -776,7 +847,7 @@ class QueryBuilder:
         tables_in_from.add(first_table.id)
 
         # Add JOINs
-        for join in query.joins:
+        for i, join in enumerate(query.joins):
             # Find the table being joined (to_table)
             to_table = query.get_table_by_id(join.to_table_id)
             if to_table is None:
@@ -795,10 +866,18 @@ class QueryBuilder:
                 f"{from_ref}.{self._quote_identifier(join.from_column)} = "
                 f"{to_ref}.{self._quote_identifier(join.to_column)}"
             )
+
+            # Append ON-clause filters for this join
+            for f in on_filters.get(i, []):
+                col_ref, data_type = self._resolve_filter_col_ref(
+                    f, table_refs, table_map, calc_sql_map
+                )
+                condition, params = self._build_condition(col_ref, f, data_type, params)
+                sql += f" AND {condition}"
+
             tables_in_from.add(join.to_table_id)
 
         # Add any remaining tables that aren't joined (creates implicit cross join)
-        # This handles cases where columns are selected from multiple tables without explicit joins
         for qt in query.tables[1:]:
             if qt.id not in tables_in_from:
                 table_sql = self._quote_table(qt.name)
@@ -807,7 +886,7 @@ class QueryBuilder:
                 sql += f", {table_sql}"
                 tables_in_from.add(qt.id)
 
-        return sql
+        return sql, params
 
     def _join_type_sql(self, join_type: JoinType) -> str:
         """Convert JoinType enum to SQL keyword."""
@@ -817,6 +896,38 @@ class QueryBuilder:
             JoinType.RIGHT: "RIGHT",
             JoinType.FULL: "FULL",
         }.get(join_type, "INNER")
+
+    def _resolve_filter_col_ref(
+        self,
+        f: FilterDefinition,
+        table_refs: dict[str, str],
+        table_map: dict[str, str],
+        calc_sql_map: dict[str, str],
+    ) -> tuple[str, str | None]:
+        """Resolve a filter to its column reference SQL and data type.
+
+        Returns:
+            Tuple of (col_ref_sql, data_type). data_type is None for
+            calculated fields / sql_expression filters.
+        """
+        if f.sql_expression:
+            return f"({f.sql_expression})", None
+        if f.column in calc_sql_map:
+            return f"({calc_sql_map[f.column]})", None
+
+        table_ref = table_refs[f.table_id]
+        col_ref = f"{table_ref}.{self._quote_identifier(f.column)}"
+
+        data_type: str | None = None
+        table_name = table_map.get(f.table_id)
+        if table_name:
+            table = self._schema.get_table(table_name)
+            if table:
+                column = table.get_column(f.column)
+                if column:
+                    data_type = column.data_type
+
+        return col_ref, data_type
 
     def _build_where(
         self,
@@ -832,30 +943,9 @@ class QueryBuilder:
 
         conditions: list[str] = []
         for f in filters:
-            # Handle filter with inline sql_expression (e.g., calculated field)
-            if f.sql_expression:
-                col_ref = f"({f.sql_expression})"
-                # No type coercion for calculated fields (type not known from schema)
-                data_type = None
-            # Handle calculated field references - expand to SQL expression
-            elif f.column in calc_sql_map:
-                col_ref = f"({calc_sql_map[f.column]})"
-                # No type coercion for calculated fields (type not known from schema)
-                data_type = None
-            else:
-                table_ref = table_refs[f.table_id]
-                col_ref = f"{table_ref}.{self._quote_identifier(f.column)}"
-
-                # Get column data type for value coercion
-                table_name = table_map.get(f.table_id)
-                data_type = None
-                if table_name:
-                    table = self._schema.get_table(table_name)
-                    if table:
-                        column = table.get_column(f.column)
-                        if column:
-                            data_type = column.data_type
-
+            col_ref, data_type = self._resolve_filter_col_ref(
+                f, table_refs, table_map, calc_sql_map
+            )
             condition, params = self._build_condition(col_ref, f, data_type, params)
             conditions.append(condition)
 
