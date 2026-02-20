@@ -105,7 +105,9 @@ The AI SQL Assistant is an optional LLM-powered chat panel that helps users writ
 │                │  GET /llm/status        │  │   ├── get_schema_overview
 │                │────────────────────►  │  │   ├── get_table_details
 │                │                        │  │   ├── get_relationships
-│                │                        │  │   └── validate_sql │
+│                │                        │  │   ├── validate_sql
+│                │                        │  │   ├── execute_sql  │
+│                │                        │  │   └── get_column_values
 │                │                        │  └── LLM Provider     │
 │                │                        │       └── Gemini      │
 └────────────────┘                        └──────────────────────┘
@@ -223,7 +225,7 @@ function ChatUI() {
 
 ### LLM Tools
 
-The agent has access to four schema inspection tools:
+The agent has access to six tools:
 
 | Tool | Description |
 |------|-------------|
@@ -231,8 +233,10 @@ The agent has access to four schema inspection tools:
 | `get_table_details` | Detailed schema of a specific table |
 | `get_relationships` | Foreign key relationships between tables |
 | `validate_sql` | Validate SQL syntax and table/column existence |
+| `execute_sql` | Execute a query and validate widget compatibility |
+| `get_column_values` | Get distinct sample values from a column for filters |
 
-These tools allow the LLM to explore your database schema before generating queries, ensuring accurate column names and proper joins.
+These tools allow the LLM to explore your database schema, look up actual column values for accurate WHERE clauses, and execute queries to verify results before presenting them to the user.
 
 ### System Prompt
 
@@ -317,6 +321,7 @@ data: {"type": "done"}
 | `sql` | Extracted SQL block (from ```sql code blocks) |
 | `tool_call` | Tool invocation (tool_name + tool_args) |
 | `tool_result` | Tool execution result |
+| `status` | Status update (progress notifications) |
 | `error` | Error message |
 | `done` | Stream complete |
 

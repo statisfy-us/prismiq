@@ -355,7 +355,7 @@ class TestExecuteTool:
         ctx = WidgetContext(widget_type="pie_chart")
         result = await execute_tool(
             "execute_sql",
-            {"sql": "SELECT a, b, c, d, e FROM table"},
+            {"sql": 'SELECT "a", "b", "c", "d", "e" FROM "public"."wide_table"'},
             mock_engine,
             widget_context=ctx,
         )
