@@ -156,7 +156,7 @@ export function ChatPanel({ currentSql, onApplySql }: ChatPanelProps): JSX.Eleme
   };
 
   return (
-    <div style={containerStyle} className="prismiq-chat-panel">
+    <div style={containerStyle} className="prismiq-chat-panel" data-testid="chat-panel-root">
       {/* Header */}
       <div style={headerStyle}>
         <div style={headerTitleStyle}>

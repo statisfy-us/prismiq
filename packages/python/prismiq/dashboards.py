@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, model_validator
 
 from prismiq.types import QueryDefinition
 
@@ -157,7 +157,7 @@ class WidgetConfig(BaseModel):
     """Font size for text widgets."""
 
     # Raw SQL (for SQL mode widgets)
-    raw_sql: str | None = None
+    raw_sql: StrictStr | None = None
     """Raw SQL query for SQL-mode widgets. When set, query should be None."""
 
     # Editor metadata
