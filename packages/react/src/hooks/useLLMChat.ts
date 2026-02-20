@@ -2,7 +2,7 @@
  * Hook for interacting with the LLM chat agent.
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useAnalytics } from '../context';
 import type { ChatMessage } from '../types';
 
@@ -36,10 +36,13 @@ export function useLLMChat(): UseLLMChatResult {
   const [suggestedSql, setSuggestedSql] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const isStreamingRef = useRef(false);
+  const messagesRef = useRef<ChatMessage[]>([]);
+  messagesRef.current = messages;
 
   const sendMessage = useCallback(
     async (message: string, currentSql: string | null) => {
-      if (!client || isStreaming) return;
+      if (!client || isStreamingRef.current) return;
 
       // Cancel any previous streaming request
       abortRef.current?.abort();
@@ -49,6 +52,7 @@ export function useLLMChat(): UseLLMChatResult {
       // Add user message to history
       const userMsg: ChatMessage = { role: 'user', content: message };
       setMessages((prev) => [...prev, userMsg]);
+      isStreamingRef.current = true;
       setIsStreaming(true);
       setStreamingContent('');
       setSuggestedSql(null);
@@ -58,7 +62,9 @@ export function useLLMChat(): UseLLMChatResult {
       let lastSql: string | null = null;
 
       try {
-        const history = messages.map((m) => ({
+        // History is prior conversation only — the current user message is sent
+        // separately as the `message` param (backend appends it independently).
+        const history = messagesRef.current.map((m) => ({
           role: m.role,
           content: m.content,
         }));
@@ -93,6 +99,7 @@ export function useLLMChat(): UseLLMChatResult {
           setError(err.message);
         }
       } finally {
+        isStreamingRef.current = false;
         setIsStreaming(false);
 
         // Add assistant message to history
@@ -107,8 +114,13 @@ export function useLLMChat(): UseLLMChatResult {
         setStreamingContent('');
       }
     },
-    [client, isStreaming, messages]
+    [client]
   );
+
+  // Cancel any in-flight request on unmount
+  useEffect(() => {
+    return () => { abortRef.current?.abort(); };
+  }, []);
 
   const clearHistory = useCallback(() => {
     abortRef.current?.abort();

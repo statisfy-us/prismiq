@@ -36,7 +36,7 @@ class TestExtractSqlBlocks:
         assert _extract_sql_blocks(text) == ["SELECT * FROM users"]
 
     def test_multiple_blocks(self) -> None:
-        text = "First:\n```sql\nSELECT 1\n```\n" "Second:\n```sql\nSELECT 2\n```"
+        text = "First:\n```sql\nSELECT 1\n```\nSecond:\n```sql\nSELECT 2\n```"
         result = _extract_sql_blocks(text)
         assert len(result) == 2
         assert result[0] == "SELECT 1"

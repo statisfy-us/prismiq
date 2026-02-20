@@ -97,27 +97,32 @@ class TestToolDefinitions:
         """Test that ALL_TOOLS contains the expected tools."""
         assert len(ALL_TOOLS) == 4
 
-    def test_tool_names(self) -> None:
-        """Test that tools have expected names."""
-        names = {t.name for t in ALL_TOOLS}
-        assert names == {
+    @pytest.mark.parametrize(
+        "expected_name",
+        [
             "get_schema_overview",
             "get_table_details",
             "get_relationships",
             "validate_sql",
-        }
+        ],
+    )
+    def test_tool_name_present(self, expected_name: str) -> None:
+        """Test that expected tool names are present in ALL_TOOLS."""
+        names = {t.name for t in ALL_TOOLS}
+        assert expected_name in names
 
-    def test_get_table_details_has_required_param(self) -> None:
-        """Test that get_table_details requires table_name."""
-        params = TOOL_GET_TABLE_DETAILS.parameters
+    @pytest.mark.parametrize(
+        "tool,required_param",
+        [
+            (TOOL_GET_TABLE_DETAILS, "table_name"),
+            (TOOL_VALIDATE_SQL, "sql"),
+        ],
+    )
+    def test_tool_has_required_param(self, tool: object, required_param: str) -> None:
+        """Test that tools declare their required parameters."""
+        params = tool.parameters  # type: ignore[attr-defined]
         assert "required" in params
-        assert "table_name" in params["required"]
-
-    def test_validate_sql_has_required_param(self) -> None:
-        """Test that validate_sql requires sql."""
-        params = TOOL_VALIDATE_SQL.parameters
-        assert "required" in params
-        assert "sql" in params["required"]
+        assert required_param in params["required"]
 
 
 # ============================================================================

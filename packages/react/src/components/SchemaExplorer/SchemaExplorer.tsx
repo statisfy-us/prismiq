@@ -201,6 +201,7 @@ export function SchemaExplorer({
       style={{ ...containerStyles, ...style }}
       role="tree"
       aria-label="Database schema"
+      data-testid="schema-explorer-root"
     >
       <div style={headerStyles}>
         <Icon name="table" size={16} style={{ color: 'var(--prismiq-color-primary)' }} />
@@ -216,6 +217,7 @@ export function SchemaExplorer({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{ width: '100%' }}
+            data-testid="schema-explorer-search"
           />
         </div>
       )}

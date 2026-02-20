@@ -692,12 +692,12 @@ export function DashboardProvider({
 
     // Find widgets that:
     // 1. Are currently visible
-    // 2. Have a query (not text widgets)
+    // 2. Have a query or raw SQL (not text widgets)
     // 3. Haven't been loaded yet
     // 4. Aren't currently loading
     const widgetsToLoad = dashboard.widgets.filter((w) =>
       visibleWidgets.has(w.id) &&
-      w.query !== null &&
+      (w.query !== null || (w.config?.data_source_mode === 'sql' && w.config?.raw_sql)) &&
       !widgetResults[w.id] &&
       !widgetLoading[w.id]
     );
@@ -743,7 +743,7 @@ export function DashboardProvider({
     // Re-execute widgets that have been visible (they have data that needs refreshing)
     const widgetsToRefresh = dashboard.widgets.filter((w) =>
       everVisibleWidgets.has(w.id) &&
-      w.query !== null &&
+      (w.query !== null || (w.config?.data_source_mode === 'sql' && w.config?.raw_sql)) &&
       widgetResults[w.id] // Only re-execute if previously loaded
     );
 

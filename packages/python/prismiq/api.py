@@ -1947,12 +1947,18 @@ def create_router(
                     # Format as SSE
                     data = chunk.model_dump_json()
                     yield f"data: {data}\n\n"
-            except (TypeError, AttributeError, ImportError):
-                raise
-            except Exception as e:
+            except Exception:
                 import json
+                import uuid
 
-                error_data = json.dumps({"type": "error", "content": str(e)})
+                error_id = uuid.uuid4().hex[:8]
+                _logger.exception(f"LLM chat stream error [{error_id}]")
+                error_data = json.dumps(
+                    {
+                        "type": "error",
+                        "content": f"Internal server error (ref: {error_id})",
+                    }
+                )
                 yield f"data: {error_data}\n\n"
 
         return StreamingResponse(

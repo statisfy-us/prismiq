@@ -15,6 +15,8 @@ export interface UseLLMStatusResult {
   model: string | undefined;
   /** Whether the status is still loading. */
   isLoading: boolean;
+  /** Error from the status check, if any. */
+  error: Error | null;
 }
 
 /**
@@ -28,6 +30,7 @@ export function useLLMStatus(): UseLLMStatusResult {
   const { client } = useAnalytics();
   const [status, setStatus] = useState<LLMStatus>({ enabled: false });
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
     if (!client) {
@@ -39,11 +42,17 @@ export function useLLMStatus(): UseLLMStatusResult {
 
     client.getLLMStatus()
       .then((result) => {
-        if (!cancelled) setStatus(result);
+        if (!cancelled) {
+          setStatus(result);
+          setError(null);
+        }
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         // Backend doesn't support LLM — that's fine
-        if (!cancelled) setStatus({ enabled: false });
+        if (!cancelled) {
+          setStatus({ enabled: false });
+          setError(err instanceof Error ? err : new Error(String(err)));
+        }
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -57,5 +66,6 @@ export function useLLMStatus(): UseLLMStatusResult {
     provider: status.provider,
     model: status.model,
     isLoading,
+    error,
   };
 }

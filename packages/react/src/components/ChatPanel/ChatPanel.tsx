@@ -11,13 +11,9 @@ import { useLLMChat } from '../../hooks/useLLMChat';
 import { Button } from '../ui/Button';
 import { Icon } from '../ui/Icon';
 import { ChatBubble } from './ChatBubble';
+import type { ChatPanelProps } from './types';
 
-export interface ChatPanelProps {
-  /** Current SQL in the editor (passed as context to the agent). */
-  currentSql: string | null;
-  /** Callback when the user wants to apply SQL to the editor. */
-  onApplySql: (sql: string) => void;
-}
+export type { ChatPanelProps } from './types';
 
 export function ChatPanel({ currentSql, onApplySql }: ChatPanelProps): JSX.Element {
   const { theme } = useTheme();
@@ -168,7 +164,7 @@ export function ChatPanel({ currentSql, onApplySql }: ChatPanelProps): JSX.Eleme
           <span>SQL Assistant</span>
         </div>
         {messages.length > 0 && (
-          <Button variant="ghost" size="sm" onClick={clearHistory}>
+          <Button variant="ghost" size="sm" onClick={clearHistory} data-testid="chat-clear">
             Clear
           </Button>
         )}
@@ -176,32 +172,32 @@ export function ChatPanel({ currentSql, onApplySql }: ChatPanelProps): JSX.Eleme
 
       {/* Messages */}
       {messages.length === 0 && !isStreaming ? (
-        <div style={emptyStyle}>
+        <div style={emptyStyle} data-testid="chat-empty">
           Ask me to help write SQL queries.{'\n'}
           I can see your database schema and validate queries.
         </div>
       ) : (
-        <div style={messagesStyle}>
+        <div style={messagesStyle} data-testid="chat-messages">
           {messages.map((msg, i) => (
             <ChatBubble key={i} message={msg} onApplySql={onApplySql} />
           ))}
           {isStreaming && streamingContent && (
-            <div style={streamingStyle}>{streamingContent}{'▍'}</div>
+            <div style={streamingStyle} data-testid="chat-streaming">{streamingContent}{'▍'}</div>
           )}
           {isStreaming && !streamingContent && (
-            <div style={streamingStyle}>Thinking...</div>
+            <div style={streamingStyle} data-testid="chat-streaming">Thinking...</div>
           )}
           <div ref={messagesEndRef} />
         </div>
       )}
 
       {/* Error */}
-      {error && <div style={errorStyle}>{error}</div>}
+      {error && <div style={errorStyle} data-testid="chat-error">{error}</div>}
 
       {/* Suggested SQL quick-apply */}
       {suggestedSql && !isStreaming && (
         <div style={suggestedSqlStyle}>
-          <Button variant="primary" size="sm" onClick={() => onApplySql(suggestedSql)}>
+          <Button variant="primary" size="sm" onClick={() => onApplySql(suggestedSql)} data-testid="chat-apply-sql">
             Apply SQL to Editor
           </Button>
         </div>
@@ -217,12 +213,14 @@ export function ChatPanel({ currentSql, onApplySql }: ChatPanelProps): JSX.Eleme
           placeholder="Ask about your data..."
           rows={1}
           disabled={isStreaming}
+          data-testid="chat-input"
         />
         <Button
           variant="primary"
           size="sm"
           onClick={handleSend}
           disabled={isStreaming || !input.trim()}
+          data-testid="chat-send"
         >
           <Icon name="play" size={16} />
         </Button>

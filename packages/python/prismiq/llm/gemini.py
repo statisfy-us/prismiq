@@ -55,10 +55,7 @@ class GeminiProvider(LLMProvider):
         return self._client
 
     def _convert_user_messages(self, messages: list[ChatMessage]) -> tuple[str | None, list[Any]]:
-        """Convert ChatMessages to Gemini Content objects for initial context.
-
-        Only handles system and user messages (for building initial history).
-        """
+        """Convert ChatMessages to Gemini Content objects for initial context."""
         from google.genai.types import Content, Part  # type: ignore[import-untyped]
 
         system_instruction: str | None = None
@@ -68,6 +65,10 @@ class GeminiProvider(LLMProvider):
             if msg.role == ChatRole.SYSTEM:
                 system_instruction = msg.content
             elif msg.role == ChatRole.USER:
+                contents.append(Content(role="user", parts=[Part(text=msg.content)]))
+            elif msg.role == ChatRole.ASSISTANT:
+                contents.append(Content(role="model", parts=[Part(text=msg.content)]))
+            elif msg.role == ChatRole.TOOL:
                 contents.append(Content(role="user", parts=[Part(text=msg.content)]))
 
         return system_instruction, contents

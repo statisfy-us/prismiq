@@ -237,7 +237,7 @@ export function CustomSQLEditor({
   };
 
   return (
-    <div className={className} style={{ ...containerStyles, ...style }}>
+    <div className={className} style={{ ...containerStyles, ...style }} data-testid="custom-sql-editor">
       <div style={editorWrapperStyles}>
         <textarea
           value={sql}
@@ -250,6 +250,7 @@ export function CustomSQLEditor({
           spellCheck={false}
           autoComplete="off"
           autoCapitalize="off"
+          data-testid="custom-sql-textarea"
         />
 
         {validation && !validation.valid && (
@@ -284,6 +285,7 @@ export function CustomSQLEditor({
             disabled={!canExecute}
             style={mergedButtonStyles}
             type="button"
+            data-testid="custom-sql-run-button"
           >
             {isLoading ? 'Executing...' : 'Run Query'}
             <span style={{ fontSize: '11px', opacity: 0.7 }}>(Cmd+Enter)</span>

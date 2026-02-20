@@ -178,6 +178,11 @@ class PrismiqEngine:
         self._llm_provider: LLMProvider | None = None
 
     @property
+    def schema_name(self) -> str:
+        """Get the default PostgreSQL schema name."""
+        return self._schema_name
+
+    @property
     def cache(self) -> CacheBackend | None:
         """Get the cache backend."""
         return self._cache

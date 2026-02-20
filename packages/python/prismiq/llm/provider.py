@@ -133,7 +133,7 @@ class LLMProvider(abc.ABC):
                     ChatMessage(
                         role=ChatRole.TOOL,
                         content=result,
-                        tool_call_id=tc.name,
+                        tool_call_id=tc.id,
                     )
                 )
         else:

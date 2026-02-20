@@ -8,37 +8,47 @@
 import { useMemo } from 'react';
 import { useTheme } from '../../theme';
 import { Button } from '../ui/Button';
-import type { ChatMessage } from '../../types';
+import type { ChatBubbleProps } from './types';
 
-export interface ChatBubbleProps {
-  /** The chat message to render. */
-  message: ChatMessage;
-  /** Callback when user clicks "Apply to Editor" on a SQL block. */
-  onApplySql?: (sql: string) => void;
-}
+export type { ChatBubbleProps } from './types';
 
 /**
  * Parse message content and split into text and SQL blocks.
  */
 function parseContent(content: string): Array<{ type: 'text' | 'sql'; value: string }> {
+  const startToken = '```sql';
+  const endToken = '```';
   const parts: Array<{ type: 'text' | 'sql'; value: string }> = [];
-  const regex = /```sql\s*\n([\s\S]*?)\n\s*```/g;
-  let lastIndex = 0;
-  let match;
+  let cursor = 0;
 
-  while ((match = regex.exec(content)) !== null) {
-    // Text before the SQL block
-    if (match.index > lastIndex) {
-      parts.push({ type: 'text', value: content.slice(lastIndex, match.index) });
+  while (cursor < content.length) {
+    const start = content.indexOf(startToken, cursor);
+    if (start === -1) break;
+
+    // Push text before this SQL block
+    if (start > cursor) {
+      parts.push({ type: 'text', value: content.slice(cursor, start) });
     }
-    // SQL block
-    parts.push({ type: 'sql', value: (match[1] ?? '').trim() });
-    lastIndex = match.index + match[0].length;
+
+    // Find the newline after ```sql
+    const sqlStart = content.indexOf('\n', start + startToken.length);
+    if (sqlStart === -1) break;
+
+    // Find closing ```
+    const end = content.indexOf(endToken, sqlStart + 1);
+    if (end === -1) break;
+
+    const sql = content.slice(sqlStart + 1, end).trim();
+    if (sql) {
+      parts.push({ type: 'sql', value: sql });
+    }
+
+    cursor = end + endToken.length;
   }
 
   // Remaining text
-  if (lastIndex < content.length) {
-    parts.push({ type: 'text', value: content.slice(lastIndex) });
+  if (cursor < content.length) {
+    parts.push({ type: 'text', value: content.slice(cursor) });
   }
 
   return parts;
@@ -85,7 +95,7 @@ export function ChatBubble({ message, onApplySql }: ChatBubbleProps): JSX.Elemen
       {parts.map((part, i) => {
         if (part.type === 'sql') {
           return (
-            <div key={i}>
+            <div key={i} data-testid={`chat-sql-${i}`}>
               <pre style={sqlBlockStyle}>
                 <code>{part.value}</code>
               </pre>
@@ -95,6 +105,7 @@ export function ChatBubble({ message, onApplySql }: ChatBubbleProps): JSX.Elemen
                     variant="ghost"
                     size="sm"
                     onClick={() => onApplySql(part.value)}
+                    data-testid={`apply-sql-btn-${i}`}
                   >
                     Apply to Editor
                   </Button>

@@ -56,7 +56,7 @@ async def run_agent_stream(
     """
     # Build system prompt with schema context
     schema = await engine.get_schema(schema_name=schema_name)
-    effective_schema = schema_name or "public"
+    effective_schema = schema_name or engine.schema_name
     system_prompt = build_system_prompt(schema, effective_schema)
 
     # Build message list
@@ -76,7 +76,7 @@ async def run_agent_stream(
 
     # Create tool executor bound to the engine
     async def tool_executor(name: str, arguments: dict[str, Any]) -> str:
-        _logger.info("Executing tool: %s(%s)", name, arguments)
+        _logger.info("Executing tool: %s (keys: %s)", name, list(arguments.keys()))
         return await execute_tool(name, arguments, engine, schema_name=schema_name)
 
     # Run the provider's chat loop (handles tool calls + provider-specific quirks)

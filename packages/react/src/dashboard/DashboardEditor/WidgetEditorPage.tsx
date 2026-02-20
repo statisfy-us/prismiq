@@ -125,7 +125,7 @@ export function WidgetEditorPage({
 }: WidgetEditorPageProps): JSX.Element {
   const { theme } = useTheme();
   const { client } = useAnalytics();
-  const { enabled: llmEnabled } = useLLMStatus();
+  const { enabled: llmEnabled, isLoading: llmStatusLoading } = useLLMStatus();
 
   // Determine if this is a new widget
   const isNew = widget === null;
@@ -876,7 +876,7 @@ export function WidgetEditorPage({
                 {dataSourceMode === 'sql' && (
                   <div style={{ display: 'flex', gap: 0, height: '100%', minHeight: '400px' }}>
                     {/* Schema Reference Panel */}
-                    <div style={{
+                    <div data-testid="schema-panel" style={{
                       width: schemaOpen ? '220px' : '36px',
                       flexShrink: 0,
                       transition: 'width 0.2s ease',
@@ -898,6 +898,7 @@ export function WidgetEditorPage({
                               type="button"
                               onClick={() => setSchemaOpen(false)}
                               title="Collapse schema panel"
+                              data-testid="schema-toggle-open"
                               style={{
                                 display: 'flex',
                                 alignItems: 'center',
@@ -922,6 +923,7 @@ export function WidgetEditorPage({
                           type="button"
                           onClick={() => setSchemaOpen(true)}
                           title="Show schema browser"
+                          data-testid="schema-toggle-collapsed"
                           style={{
                             display: 'flex',
                             flexDirection: 'column',
@@ -949,7 +951,7 @@ export function WidgetEditorPage({
                         </button>
                       )}
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ flex: 1, minWidth: 0 }} data-testid="sql-editor">
                       <CustomSQLEditor
                         initialSql={rawSql}
                         onSqlChange={setRawSql}
@@ -958,8 +960,8 @@ export function WidgetEditorPage({
                         placeholder="Write your SQL query here..."
                       />
                     </div>
-                    {llmEnabled && (
-                      <div style={{ width: '340px', flexShrink: 0 }}>
+                    {!llmStatusLoading && llmEnabled && (
+                      <div style={{ width: '340px', flexShrink: 0 }} data-testid="chat-panel">
                         <ChatPanel
                           currentSql={rawSql || null}
                           onApplySql={handleApplySql}
