@@ -654,7 +654,7 @@ class QueryBuilder:
             elif cf.expression:
                 # Fall back to parsing on-demand. This is a secondary code path
                 # that won't resolve inter-field references correctly. Prefer
-                # providing sql_expression from resolve_calculated_fields().
+                # providing sql_expression pre-computed with inter-field deps resolved.
                 try:
                     parser = ExpressionParser()
                     ast = parser.parse(cf.expression)

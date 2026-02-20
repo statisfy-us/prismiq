@@ -38,11 +38,8 @@ __version__ = "0.1.0"
 # Authentication (no external dependencies)
 from prismiq.auth import AuthContext, SimpleAuthContext, create_header_auth_dependency
 
-# Calculated field processor (no external dependencies)
-from prismiq.calculated_field_processor import preprocess_calculated_fields
-
 # Calculated fields (no external dependencies)
-from prismiq.calculated_fields import ExpressionParser, has_aggregation, resolve_calculated_fields
+from prismiq.calculated_fields import ExpressionParser
 
 # Dashboard store interface (no external dependencies)
 from prismiq.dashboard_store import DashboardStore, InMemoryDashboardStore
@@ -120,9 +117,6 @@ from prismiq.sql_utils import (
     quote_identifier,
     validate_identifier,
 )
-
-# SQLAlchemy builder (only depends on sql_utils)
-from prismiq.sqlalchemy_builder import build_sql_from_dict
 
 # Time series utilities (no external dependencies)
 from prismiq.timeseries import (
@@ -481,7 +475,6 @@ __all__ = [
     # Version
     "__version__",
     "add_trend_column",
-    "build_sql_from_dict",
     "calculate_moving_average",
     # Transform utilities (lightweight)
     "calculate_percent_of_total",
@@ -521,18 +514,15 @@ __all__ = [
     "get_interval_format",
     "get_logger",
     "get_request_id",
-    "has_aggregation",
     "limit_result",
     "merge_filters",
     "metrics",
     "parse_number",
     "pivot_data",
-    "preprocess_calculated_fields",
     "quote_identifier",
     "record_cache_hit",
     "record_query_execution",
     "record_request",
-    "resolve_calculated_fields",
     "resolve_date_filter",
     "resolve_date_preset",
     "set_active_connections",
