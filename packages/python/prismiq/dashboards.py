@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -103,11 +103,11 @@ class WidgetConfig(BaseModel):
     """Number of decimal digits to show."""
 
     # Reference lines for charts
-    referenceLines: list[dict] | None = None
+    referenceLines: list[dict[str, Any]] | None = None
     """Reference lines (thresholds, goals) for charts."""
 
     # Cross-filter options
-    cross_filter: dict | None = None
+    cross_filter: dict[str, Any] | None = None
     """Cross-filter configuration for this widget."""
 
     # MetricCard options
@@ -155,6 +155,10 @@ class WidgetConfig(BaseModel):
 
     fontSize: str | None = None
     """Font size for text widgets."""
+
+    # Editor metadata
+    data_source_mode: Literal["guided", "advanced", "saved"] | None = None
+    """Editor mode used to build this widget ('guided', 'advanced', or 'saved')."""
 
 
 class Widget(BaseModel):

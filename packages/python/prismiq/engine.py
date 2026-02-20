@@ -263,12 +263,8 @@ class PrismiqEngine:
                 await ensure_tables(self._pool_write)
             # Use write pool for dashboard store (handles INSERT/UPDATE/DELETE)
             # Read pool for read operations
-            self._dashboard_store = PostgresDashboardStore(
-                self._pool, write_pool=self._pool_write
-            )
-            self._saved_query_store = SavedQueryStore(
-                self._pool, write_pool=self._pool_write
-            )
+            self._dashboard_store = PostgresDashboardStore(self._pool, write_pool=self._pool_write)
+            self._saved_query_store = SavedQueryStore(self._pool, write_pool=self._pool_write)
         else:
             self._dashboard_store = InMemoryDashboardStore()
             # SavedQueryStore requires PostgreSQL - no in-memory fallback

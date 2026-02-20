@@ -5,13 +5,13 @@ from __future__ import annotations
 import builtins
 import json
 import logging
-import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
     Boolean,
     Column,
+    Integer,
     MetaData,
     String,
     Table,
@@ -20,7 +20,7 @@ from sqlalchemy import (
     select,
     update,
 )
-from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP, UUID
+from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP
 
 from prismiq.types import QueryDefinition, SavedQuery, SavedQueryCreate, SavedQueryUpdate
 
@@ -29,13 +29,22 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger(__name__)
 
+
+def _parse_int_id(value: str) -> int:
+    """Parse a string ID to integer, raising ValueError with a clear message."""
+    try:
+        return int(value)
+    except (ValueError, TypeError) as e:
+        raise ValueError(f"Invalid ID format: '{value}'. Expected an integer.") from e
+
+
 # SQLAlchemy Table definition for saved queries (used for query generation)
 # quote=True ensures all identifiers are double-quoted in generated SQL
 _metadata = MetaData()
 _saved_queries_table = Table(
     "prismiq_saved_queries",
     _metadata,
-    Column("id", UUID, primary_key=True, quote=True),
+    Column("id", Integer, primary_key=True, autoincrement=True, quote=True),
     Column("tenant_id", String(255), nullable=False, quote=True),
     Column("name", String(255), nullable=False, quote=True),
     Column("description", String, nullable=True, quote=True),
@@ -146,7 +155,7 @@ class SavedQueryStore:
         """
         t = _saved_queries_table
         stmt = select(t).where(
-            t.c.id == uuid.UUID(query_id),
+            t.c.id == _parse_int_id(query_id),
             t.c.tenant_id == tenant_id,
         )
 
@@ -173,14 +182,12 @@ class SavedQueryStore:
             owner_id: Optional owner ID.
             schema_name: PostgreSQL schema name for per-tenant schema isolation.
         """
-        query_id = uuid.uuid4()
         now = datetime.now(timezone.utc)
 
         t = _saved_queries_table
         stmt = (
             insert(t)
             .values(
-                id=query_id,
                 tenant_id=tenant_id,
                 name=data.name,
                 description=data.description,
@@ -197,6 +204,10 @@ class SavedQueryStore:
         async with self._pool_write.acquire() as conn:
             await self._set_search_path(conn, schema_name)
             row = await conn.fetchrow(sql, *params)
+            if row is None:
+                raise RuntimeError(
+                    f"Failed to create saved query '{data.name}': INSERT RETURNING produced no row"
+                )
             return self._row_to_saved_query(row)
 
     async def update(
@@ -244,7 +255,7 @@ class SavedQueryStore:
         stmt = (
             update(t)
             .where(
-                t.c.id == uuid.UUID(query_id),
+                t.c.id == _parse_int_id(query_id),
                 t.c.tenant_id == tenant_id,
             )
             .values(**values)
@@ -282,7 +293,7 @@ class SavedQueryStore:
         """
         t = _saved_queries_table
         stmt = delete(t).where(
-            t.c.id == uuid.UUID(query_id),
+            t.c.id == _parse_int_id(query_id),
             t.c.tenant_id == tenant_id,
         )
 
