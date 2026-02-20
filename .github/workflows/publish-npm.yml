@@ -11,8 +11,8 @@ jobs:
     if: startsWith(github.event.release.tag_name, 'react-v')
 
     permissions:
+      id-token: write  # Required for OIDC
       contents: read
-      id-token: write  # Required for npm trusted publishing (OIDC)
 
     steps:
       - uses: actions/checkout@v4
@@ -39,6 +39,4 @@ jobs:
 
       - name: Publish to npm
         working-directory: packages/react
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
