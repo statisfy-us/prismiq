@@ -138,7 +138,7 @@ export async function exportToExcel(
   // Set column widths
   const colWidths = exportColumns.map((col, index) => {
     // Use custom width if specified
-    if (options?.columnWidths?.[col]) {
+    if (options?.columnWidths?.[col] !== undefined) {
       return { wch: options.columnWidths[col] };
     }
 

@@ -27,7 +27,7 @@ export interface UseExportResult {
   /** Export to CSV file */
   exportCSV: () => void;
   /** Export to Excel file */
-  exportExcel: (options?: ExcelExportOptions) => void;
+  exportExcel: (options?: ExcelExportOptions) => Promise<void>;
   /** Whether an export is in progress */
   isExporting: boolean;
   /** Whether export is possible (data is available) */
