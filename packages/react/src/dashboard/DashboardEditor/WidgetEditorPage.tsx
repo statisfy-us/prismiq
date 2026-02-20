@@ -20,6 +20,9 @@ import { Icon } from '../../components/ui/Icon';
 import { Tooltip } from '../../components/ui/Tooltip';
 import { SavedQueryPicker } from '../../components/SavedQueryPicker';
 import { QueryBuilder } from '../../components/QueryBuilder';
+import { CustomSQLEditor } from '../../components/CustomSQLEditor';
+import { ChatPanel } from '../../components/ChatPanel';
+import { useLLMStatus } from '../../hooks/useLLMStatus';
 import { WidgetTypeSelector } from './WidgetTypeSelector';
 import { WidgetPreview } from './WidgetPreview';
 import { GuidedDataConfig } from './GuidedDataConfig';
@@ -58,7 +61,7 @@ export interface WidgetEditorPageProps {
   onCancel: () => void;
 }
 
-type DataSourceMode = 'guided' | 'advanced' | 'saved';
+type DataSourceMode = 'guided' | 'advanced' | 'saved' | 'sql';
 
 // ============================================================================
 // Helpers
@@ -121,6 +124,7 @@ export function WidgetEditorPage({
 }: WidgetEditorPageProps): JSX.Element {
   const { theme } = useTheme();
   const { client } = useAnalytics();
+  const { enabled: llmEnabled } = useLLMStatus();
 
   // Determine if this is a new widget
   const isNew = widget === null;
@@ -136,6 +140,9 @@ export function WidgetEditorPage({
   const [position, setPosition] = useState<WidgetPosition>(
     widget?.position ?? { x: 0, y: 0, w: 6, h: 4, minW: 2, minH: 2 }
   );
+
+  // Raw SQL for SQL mode
+  const [rawSql, setRawSql] = useState<string>(widget?.config?.raw_sql ?? '');
 
   // Data source mode - restore saved mode for existing widgets, default to 'guided' for new ones
   const [dataSourceMode, setDataSourceMode] = useState<DataSourceMode>(
@@ -171,6 +178,27 @@ export function WidgetEditorPage({
 
   // Execute query for preview
   const refreshPreview = useCallback(async () => {
+    // SQL mode: use executeSQL
+    if (dataSourceMode === 'sql') {
+      if (!rawSql.trim() || !client) {
+        setPreviewResult(null);
+        return;
+      }
+      setPreviewLoading(true);
+      setPreviewError(null);
+      try {
+        const result = await client.executeSQL(rawSql);
+        setPreviewResult(result);
+      } catch (err) {
+        setPreviewError(err instanceof Error ? err : new Error('SQL execution failed'));
+        setPreviewResult(null);
+      } finally {
+        setPreviewLoading(false);
+      }
+      return;
+    }
+
+    // Query mode: use executeQuery
     if (!query || !client) {
       setPreviewResult(null);
       return;
@@ -188,17 +216,21 @@ export function WidgetEditorPage({
     } finally {
       setPreviewLoading(false);
     }
-  }, [query, client]);
+  }, [query, rawSql, dataSourceMode, client]);
 
   // Refresh preview when query changes
   useEffect(() => {
+    if (dataSourceMode === 'sql') {
+      // Don't auto-refresh on every keystroke; user must execute manually
+      return;
+    }
     if (query) {
       void refreshPreview();
     } else {
       setPreviewResult(null);
       setPreviewError(null);
     }
-  }, [query, refreshPreview]);
+  }, [query, dataSourceMode, refreshPreview]);
 
   // Check if query uses advanced features not representable in guided mode
   const queryHasAdvancedFeatures = useCallback((q: QueryDefinition | null): boolean => {
@@ -250,19 +282,31 @@ export function WidgetEditorPage({
     setPreviewError(null);
   }, []);
 
+  // Handle applying SQL from the chat panel
+  const handleApplySql = useCallback((sql: string) => {
+    setRawSql(sql);
+  }, []);
+
   // Handle save
   const handleSave = useCallback(() => {
+    const savedConfig = { ...config, data_source_mode: dataSourceMode };
+
+    // SQL mode: store raw_sql in config, clear query
+    if (dataSourceMode === 'sql') {
+      savedConfig.raw_sql = rawSql.trim() || undefined;
+    }
+
     const savedWidget: Widget = {
       id: widget?.id ?? generateId(),
       type,
       title,
-      config: { ...config, data_source_mode: dataSourceMode },
-      query,
+      config: savedConfig,
+      query: dataSourceMode === 'sql' ? null : query,
       position,
       hyperlink,
     };
     onSave(savedWidget);
-  }, [widget, type, title, config, query, position, hyperlink, dataSourceMode, onSave]);
+  }, [widget, type, title, config, query, rawSql, position, hyperlink, dataSourceMode, onSave]);
 
   // Column select options for config
   const columnSelectOptions = useMemo(() => {
@@ -729,6 +773,7 @@ export function WidgetEditorPage({
               title={title}
               config={config}
               query={query}
+              rawSql={dataSourceMode === 'sql' ? rawSql : undefined}
               result={previewResult}
               isLoading={previewLoading}
               error={previewError}
@@ -768,6 +813,20 @@ export function WidgetEditorPage({
                     onClick={() => handleModeSwitch('advanced')}
                   >
                     Advanced
+                  </button>
+                </Tooltip>
+                <Tooltip
+                  content="Write raw SQL queries directly, with optional AI assistance"
+                  position="bottom"
+                  style={{ whiteSpace: 'normal' }}
+                >
+                  <button
+                    type="button"
+                    data-testid="data-source-mode-sql"
+                    style={tabStyle(dataSourceMode === 'sql')}
+                    onClick={() => handleModeSwitch('sql')}
+                  >
+                    SQL
                   </button>
                 </Tooltip>
                 {/* Saved Query tab hidden for now - uncomment when feature is ready
@@ -810,6 +869,28 @@ export function WidgetEditorPage({
                     onSelect={handleSavedQuerySelect}
                     showSave={false}
                   />
+                )}
+
+                {dataSourceMode === 'sql' && (
+                  <div style={{ display: 'flex', gap: 0, height: '100%', minHeight: '400px' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <CustomSQLEditor
+                        initialSql={rawSql}
+                        onSqlChange={setRawSql}
+                        onExecute={() => void refreshPreview()}
+                        showResults={false}
+                        placeholder="Write your SQL query here..."
+                      />
+                    </div>
+                    {llmEnabled && (
+                      <div style={{ width: '340px', flexShrink: 0 }}>
+                        <ChatPanel
+                          currentSql={rawSql || null}
+                          onApplySql={handleApplySql}
+                        />
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>

@@ -4,7 +4,7 @@
  * A simple SQL editor with textarea input, validation, and execution.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useCustomSQL } from '../../hooks/useCustomSQL';
 import { ResultsTable } from '../ResultsTable';
@@ -166,7 +166,16 @@ export function CustomSQLEditor({
 }: CustomSQLEditorProps): JSX.Element {
   // Local state
   const [sql, setSql] = useState(initialSql);
+  const prevInitialSqlRef = useRef(initialSql);
   const [isFocused, setIsFocused] = useState(false);
+
+  // Sync local state when initialSql changes from outside (e.g., "Apply to Editor")
+  useEffect(() => {
+    if (initialSql !== prevInitialSqlRef.current) {
+      prevInitialSqlRef.current = initialSql;
+      setSql(initialSql);
+    }
+  }, [initialSql]);
   const [executeEnabled, setExecuteEnabled] = useState(false);
   const [lastExecutedSql, setLastExecutedSql] = useState<string | null>(null);
 

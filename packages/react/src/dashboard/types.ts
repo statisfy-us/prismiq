@@ -146,9 +146,13 @@ export interface WidgetConfig {
   /** Font size for text widgets. */
   fontSize?: 'Small' | 'Normal' | 'Large' | 'XLarge';
 
+  // Raw SQL (for SQL mode widgets)
+  /** Raw SQL query for SQL-mode widgets. When set, widget.query should be null. */
+  raw_sql?: string;
+
   // Editor metadata
-  /** Editor mode used to build this widget ('guided', 'advanced', or 'saved'). */
-  data_source_mode?: 'guided' | 'advanced' | 'saved';
+  /** Editor mode used to build this widget ('guided', 'advanced', 'saved', or 'sql'). */
+  data_source_mode?: 'guided' | 'advanced' | 'saved' | 'sql';
 }
 
 /**

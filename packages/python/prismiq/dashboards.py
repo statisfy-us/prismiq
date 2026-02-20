@@ -156,9 +156,13 @@ class WidgetConfig(BaseModel):
     fontSize: str | None = None
     """Font size for text widgets."""
 
+    # Raw SQL (for SQL mode widgets)
+    raw_sql: str | None = None
+    """Raw SQL query for SQL-mode widgets. When set, query should be None."""
+
     # Editor metadata
-    data_source_mode: Literal["guided", "advanced", "saved"] | None = None
-    """Editor mode used to build this widget ('guided', 'advanced', or 'saved')."""
+    data_source_mode: Literal["guided", "advanced", "saved", "sql"] | None = None
+    """Editor mode used to build this widget ('guided', 'advanced', 'saved', or 'sql')."""
 
 
 class Widget(BaseModel):

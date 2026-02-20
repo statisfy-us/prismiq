@@ -157,7 +157,9 @@ export function DashboardEditor({
     widgets: WidgetType[],
     currentClient: typeof client
   ) => {
-    const widgetsWithQueries = widgets.filter((w) => w.query);
+    const widgetsWithQueries = widgets.filter(
+      (w) => w.query || (w.config?.data_source_mode === 'sql' && w.config?.raw_sql)
+    );
     if (widgetsWithQueries.length === 0) return;
 
     for (let i = 0; i < widgetsWithQueries.length; i += batchSize) {
@@ -172,7 +174,10 @@ export function DashboardEditor({
       await Promise.all(
         batch.map(async (widget) => {
           try {
-            const result = await currentClient.executeQuery(widget.query!);
+            const isSqlMode = widget.config?.data_source_mode === 'sql' && widget.config?.raw_sql;
+            const result = isSqlMode
+              ? await currentClient.executeSQL(widget.config.raw_sql!)
+              : await currentClient.executeQuery(widget.query!);
             setWidgetResults((prev) => ({ ...prev, [widget.id]: result }));
             setWidgetRefreshTimes((prev) => ({ ...prev, [widget.id]: Math.floor(Date.now() / 1000) }));
           } catch (err) {
@@ -277,14 +282,17 @@ export function DashboardEditor({
   const refreshWidget = useCallback(
     async (widgetId: string, widgetOverride?: WidgetType) => {
       const widget = widgetOverride ?? dashboard.widgets.find((w) => w.id === widgetId);
-      if (!widget?.query || !client) return;
+      const isSqlMode = widget?.config?.data_source_mode === 'sql' && widget?.config?.raw_sql;
+      if ((!widget?.query && !isSqlMode) || !client) return;
 
       setWidgetLoading((prev) => ({ ...prev, [widgetId]: true }));
       setRefreshingWidgets((prev) => new Set(prev).add(widgetId));
 
       try {
         // Pass bypassCache=true to force fresh data on manual refresh
-        const result = await client.executeQuery(widget.query, true);
+        const result = isSqlMode
+          ? await client.executeSQL(widget!.config.raw_sql!)
+          : await client.executeQuery(widget!.query!, true);
         setWidgetResults((prev) => ({ ...prev, [widgetId]: result }));
         setWidgetRefreshTimes((prev) => ({ ...prev, [widgetId]: Math.floor(Date.now() / 1000) }));
         setWidgetErrors((prev) => {
