@@ -27,11 +27,13 @@ export interface UseExportResult {
   /** Export to CSV file */
   exportCSV: () => void;
   /** Export to Excel file */
-  exportExcel: (options?: ExcelExportOptions) => void;
+  exportExcel: (options?: ExcelExportOptions) => Promise<void>;
   /** Whether an export is in progress */
   isExporting: boolean;
   /** Whether export is possible (data is available) */
   canExport: boolean;
+  /** Error from the most recent export attempt, if any */
+  error: Error | null;
 }
 
 /**
@@ -67,6 +69,7 @@ export interface UseExportResult {
 export function useExport(options: UseExportOptions): UseExportResult {
   const { data, filename, columns, headers } = options;
   const [isExporting, setIsExporting] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
   // Check if export is possible
   const canExport = useMemo(() => {
@@ -98,10 +101,11 @@ export function useExport(options: UseExportOptions): UseExportResult {
   }, [canExport, data, generateFilename, columns, headers]);
 
   // Export to Excel
-  const handleExportExcel = useCallback((excelOptions?: ExcelExportOptions) => {
+  const handleExportExcel = useCallback(async (excelOptions?: ExcelExportOptions) => {
     if (!canExport || !data) return;
 
     setIsExporting(true);
+    setError(null);
     try {
       const exportOptions: ExcelExportOptions = {
         filename: generateFilename(),
@@ -109,7 +113,9 @@ export function useExport(options: UseExportOptions): UseExportResult {
         headers,
         ...excelOptions,
       };
-      exportToExcel(data, exportOptions);
+      await exportToExcel(data, exportOptions);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error(String(err)));
     } finally {
       setIsExporting(false);
     }
@@ -120,6 +126,7 @@ export function useExport(options: UseExportOptions): UseExportResult {
     exportExcel: handleExportExcel,
     isExporting,
     canExport,
+    error,
   };
 }
 
