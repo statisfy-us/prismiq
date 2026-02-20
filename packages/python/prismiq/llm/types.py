@@ -11,6 +11,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from prismiq.dashboards import WidgetType
+
 # ============================================================================
 # Configuration
 # ============================================================================
@@ -133,6 +135,7 @@ class StreamChunkType(str, Enum):
     SQL = "sql"
     TOOL_CALL = "tool_call"
     TOOL_RESULT = "tool_result"
+    STATUS = "status"
     ERROR = "error"
     DONE = "done"
 
@@ -156,6 +159,34 @@ class StreamChunk(BaseModel):
 
 
 # ============================================================================
+# Widget Context
+# ============================================================================
+
+
+class WidgetContext(BaseModel):
+    """Context about the target widget for SQL generation.
+
+    Tells the LLM what kind of widget the query is for, so it can
+    generate queries with the correct column structure.
+    """
+
+    widget_type: WidgetType
+    """Widget type."""
+
+    x_axis: str | None = None
+    """Configured x-axis column."""
+
+    y_axis: list[str] | None = None
+    """Configured y-axis column(s)."""
+
+    series_column: str | None = None
+    """Multi-series grouping column."""
+
+    last_error: str | None = None
+    """Last execution error for self-correction."""
+
+
+# ============================================================================
 # API Request
 # ============================================================================
 
@@ -173,3 +204,6 @@ class ChatRequest(BaseModel):
 
     current_sql: str | None = None
     """Current SQL in the editor (for context)."""
+
+    widget_context: WidgetContext | None = None
+    """Optional context about the target widget type."""

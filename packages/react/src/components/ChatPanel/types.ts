@@ -2,7 +2,7 @@
  * Shared types for ChatPanel components.
  */
 
-import type { ChatMessage } from '../../types';
+import type { ChatMessage, WidgetContext } from '../../types';
 
 export interface ChatBubbleProps {
   /** The chat message to render. */
@@ -16,4 +16,6 @@ export interface ChatPanelProps {
   currentSql: string | null;
   /** Callback when the user wants to apply SQL to the editor. */
   onApplySql: (sql: string) => void;
+  /** Optional widget context for targeted SQL generation. */
+  widgetContext?: WidgetContext;
 }

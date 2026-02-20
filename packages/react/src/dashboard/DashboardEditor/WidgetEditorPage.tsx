@@ -45,6 +45,7 @@ import type {
   SavedQuery,
   TableSchema,
   ColumnSchema,
+  WidgetContext,
 } from '../../types';
 
 // ============================================================================
@@ -320,6 +321,15 @@ export function WidgetEditorPage({
       }))
     );
   }, [schema]);
+
+  // Build widget context for the LLM chat assistant
+  const widgetContext = useMemo((): WidgetContext => ({
+    widget_type: type,
+    x_axis: config.x_axis as string | undefined,
+    y_axis: config.y_axis as string[] | undefined,
+    series_column: config.series_column as string | undefined,
+    last_error: previewError?.message,
+  }), [type, config.x_axis, config.y_axis, config.series_column, previewError]);
 
   // Styles
   const containerStyle: React.CSSProperties = {
@@ -965,6 +975,7 @@ export function WidgetEditorPage({
                         <ChatPanel
                           currentSql={rawSql || null}
                           onApplySql={handleApplySql}
+                          widgetContext={widgetContext}
                         />
                       </div>
                     )}

@@ -755,13 +755,15 @@ export class PrismiqClient {
    * @param history - Previous conversation messages.
    * @param currentSql - Current SQL in the editor (for context).
    * @param signal - Optional AbortSignal for cancellation.
+   * @param widgetContext - Optional widget context for targeted SQL generation.
    * @yields StreamChunk objects as the response is generated.
    */
   async *streamChat(
     message: string,
     history: ChatMessage[],
     currentSql: string | null,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    widgetContext?: import('../types').WidgetContext
   ): AsyncGenerator<StreamChunk, void, undefined> {
     const url = `${this.endpoint}/llm/chat`;
 
@@ -777,14 +779,19 @@ export class PrismiqClient {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
+    const body: Record<string, unknown> = {
+      message,
+      history,
+      current_sql: currentSql,
+    };
+    if (widgetContext) {
+      body.widget_context = widgetContext;
+    }
+
     const response = await fetch(url, {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        message,
-        history,
-        current_sql: currentSql,
-      }),
+      body: JSON.stringify(body),
       signal,
     });
 

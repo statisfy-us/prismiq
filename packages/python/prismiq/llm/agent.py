@@ -18,6 +18,7 @@ from prismiq.llm.types import (
     ChatRole,
     StreamChunk,
     StreamChunkType,
+    WidgetContext,
 )
 
 if TYPE_CHECKING:
@@ -28,6 +29,16 @@ _logger = logging.getLogger(__name__)
 
 MAX_TOOL_ITERATIONS = 5
 
+# Human-readable status messages for each tool
+_TOOL_STATUS_MESSAGES: dict[str, str] = {
+    "get_schema_overview": "Exploring available tables...",
+    "get_table_details": "Inspecting table details...",
+    "get_column_values": "Looking up column values...",
+    "get_relationships": "Checking table relationships...",
+    "validate_sql": "Validating SQL syntax...",
+    "execute_sql": "Executing query...",
+}
+
 
 async def run_agent_stream(
     provider: LLMProvider,
@@ -36,6 +47,7 @@ async def run_agent_stream(
     history: list[ChatMessage],
     current_sql: str | None = None,
     schema_name: str | None = None,
+    widget_context: WidgetContext | None = None,
 ) -> AsyncIterator[StreamChunk]:
     """Run the agent loop and stream response chunks.
 
@@ -50,14 +62,18 @@ async def run_agent_stream(
         history: Previous conversation messages.
         current_sql: Current SQL in the editor (for context).
         schema_name: PostgreSQL schema for multi-tenant queries.
+        widget_context: Optional context about the target widget type.
 
     Yields:
         StreamChunk objects for the frontend to consume.
     """
+    # Status: inspecting schema
+    yield StreamChunk(type=StreamChunkType.STATUS, content="Inspecting database schema...")
+
     # Build system prompt with schema context
     schema = await engine.get_schema(schema_name=schema_name)
     effective_schema = schema_name or engine.schema_name
-    system_prompt = build_system_prompt(schema, effective_schema)
+    system_prompt = build_system_prompt(schema, effective_schema, widget_context)
 
     # Build message list
     messages: list[ChatMessage] = [
@@ -77,7 +93,9 @@ async def run_agent_stream(
     # Create tool executor bound to the engine
     async def tool_executor(name: str, arguments: dict[str, Any]) -> str:
         _logger.info("Executing tool: %s (keys: %s)", name, list(arguments.keys()))
-        return await execute_tool(name, arguments, engine, schema_name=schema_name)
+        return await execute_tool(
+            name, arguments, engine, schema_name=schema_name, widget_context=widget_context
+        )
 
     # Run the provider's chat loop (handles tool calls + provider-specific quirks)
     accumulated_text = ""
@@ -87,9 +105,18 @@ async def run_agent_stream(
         execute_tool_fn=tool_executor,
         max_iterations=MAX_TOOL_ITERATIONS,
     ):
+        # Emit status messages before tool calls
+        if chunk.type == StreamChunkType.TOOL_CALL and chunk.tool_name:
+            status_msg = _TOOL_STATUS_MESSAGES.get(chunk.tool_name)
+            if status_msg:
+                yield StreamChunk(type=StreamChunkType.STATUS, content=status_msg)
+
         if chunk.type == StreamChunkType.TEXT:
             accumulated_text += chunk.content
         yield chunk
+
+    # Status: preparing response
+    yield StreamChunk(type=StreamChunkType.STATUS, content="Preparing response...")
 
     # Extract SQL from accumulated text and yield as SQL chunks
     sql_blocks = _extract_sql_blocks(accumulated_text)

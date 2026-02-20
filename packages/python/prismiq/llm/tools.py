@@ -1,18 +1,22 @@
 """Tool definitions and execution for the LLM agent.
 
-The agent can use these tools to inspect the database schema
-and validate SQL queries before suggesting them to the user.
+The agent can use these tools to inspect the database schema,
+validate SQL queries, execute queries, and look up column values.
 """
 
 from __future__ import annotations
 
 import json
+import logging
+import time
 from typing import TYPE_CHECKING, Any
 
-from prismiq.llm.types import ToolDefinition
+from prismiq.llm.types import ToolDefinition, WidgetContext
 
 if TYPE_CHECKING:
     from prismiq.engine import PrismiqEngine
+
+_logger = logging.getLogger(__name__)
 
 # ============================================================================
 # Tool Definitions
@@ -81,11 +85,56 @@ TOOL_VALIDATE_SQL = ToolDefinition(
     },
 )
 
+TOOL_EXECUTE_SQL = ToolDefinition(
+    name="execute_sql",
+    description=(
+        "Execute a SQL query and return results. Use this to verify that your "
+        "generated SQL runs successfully and returns the expected column structure "
+        "for the target widget. Returns columns, types, sample rows, row count, "
+        "and widget compatibility warnings if applicable."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "sql": {
+                "type": "string",
+                "description": "SQL SELECT query to execute.",
+            },
+        },
+        "required": ["sql"],
+    },
+)
+
+TOOL_GET_COLUMN_VALUES = ToolDefinition(
+    name="get_column_values",
+    description=(
+        "Get distinct sample values from a specific column. Use this when you need "
+        "to write WHERE clauses with accurate filter values, or to understand "
+        "what values exist in a column (e.g., status values, categories, regions)."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "table_name": {
+                "type": "string",
+                "description": "Name of the table.",
+            },
+            "column_name": {
+                "type": "string",
+                "description": "Name of the column.",
+            },
+        },
+        "required": ["table_name", "column_name"],
+    },
+)
+
 ALL_TOOLS = [
     TOOL_GET_SCHEMA_OVERVIEW,
     TOOL_GET_TABLE_DETAILS,
     TOOL_GET_RELATIONSHIPS,
     TOOL_VALIDATE_SQL,
+    TOOL_EXECUTE_SQL,
+    TOOL_GET_COLUMN_VALUES,
 ]
 
 
@@ -99,6 +148,7 @@ async def execute_tool(
     arguments: dict[str, Any],
     engine: PrismiqEngine,
     schema_name: str | None = None,
+    widget_context: WidgetContext | None = None,
 ) -> str:
     """Execute a tool and return the result as a string.
 
@@ -107,6 +157,7 @@ async def execute_tool(
         arguments: Arguments for the tool.
         engine: PrismiqEngine instance for database access.
         schema_name: Optional schema name for multi-tenant queries.
+        widget_context: Optional widget context for compatibility validation.
 
     Returns:
         JSON string with the tool result.
@@ -122,6 +173,13 @@ async def execute_tool(
         case "validate_sql":
             sql = arguments.get("sql", "")
             return await _validate_sql(engine, sql, schema_name)
+        case "execute_sql":
+            sql = arguments.get("sql", "")
+            return await _execute_sql(engine, sql, schema_name, widget_context)
+        case "get_column_values":
+            table_name = arguments.get("table_name", "")
+            column_name = arguments.get("column_name", "")
+            return await _get_column_values(engine, table_name, column_name, schema_name)
         case _:
             return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
@@ -208,3 +266,167 @@ async def _validate_sql(engine: PrismiqEngine, sql: str, schema_name: str | None
             "tables": result.tables,
         }
     )
+
+
+async def _execute_sql(
+    engine: PrismiqEngine,
+    sql: str,
+    schema_name: str | None,
+    widget_context: WidgetContext | None,
+) -> str:
+    """Execute a SQL query and return results with optional widget compatibility check."""
+    try:
+        start = time.monotonic()
+        result = await engine.execute_raw_sql(sql, schema_name=schema_name)
+        elapsed_ms = (time.monotonic() - start) * 1000
+    except Exception as e:
+        _logger.warning("execute_sql tool: query failed: %s", e)
+        return json.dumps({"error": str(e)}, default=str)
+
+    # Post-processing outside try/except so bugs are not silently swallowed
+    preview_rows = [[_truncate_value(v) for v in row] for row in result.rows[:5]]
+
+    output: dict[str, Any] = {
+        "columns": result.columns,
+        "column_types": result.column_types,
+        "row_count": result.row_count,
+        "preview_rows": preview_rows,
+        "execution_time_ms": round(elapsed_ms, 1),
+    }
+
+    # Widget compatibility check
+    if widget_context:
+        compat = validate_widget_compatibility(
+            widget_context.widget_type,
+            result.columns,
+            result.column_types,
+            result.row_count,
+        )
+        output["widget_compatibility"] = compat
+
+    return json.dumps(output, default=str)
+
+
+async def _get_column_values(
+    engine: PrismiqEngine,
+    table_name: str,
+    column_name: str,
+    schema_name: str | None,
+) -> str:
+    """Get distinct sample values from a column."""
+    try:
+        values = await engine.sample_column_values(
+            table_name, column_name, limit=50, schema_name=schema_name
+        )
+    except Exception as e:
+        _logger.warning("get_column_values tool failed: %s", e)
+        return json.dumps({"error": str(e)}, default=str)
+
+    return json.dumps({"table": table_name, "column": column_name, "values": values}, default=str)
+
+
+def _truncate_value(value: Any, max_len: int = 100) -> Any:
+    """Truncate long string values to save LLM context tokens."""
+    if isinstance(value, str) and len(value) > max_len:
+        return value[:max_len] + "..."
+    return value
+
+
+# ============================================================================
+# Widget Compatibility Validation
+# ============================================================================
+
+_NUMERIC_TYPES = frozenset(
+    {
+        "integer",
+        "bigint",
+        "smallint",
+        "numeric",
+        "decimal",
+        "real",
+        "double precision",
+        "money",
+    }
+)
+
+_NUMERIC_PREFIXES = ("int", "float", "serial")
+
+
+def _is_numeric_type(pg_type: str) -> bool:
+    """Check if a PostgreSQL type is numeric."""
+    normalized = pg_type.lower().strip()
+    if normalized in _NUMERIC_TYPES:
+        return True
+    return any(normalized.startswith(p) for p in _NUMERIC_PREFIXES)
+
+
+def validate_widget_compatibility(
+    widget_type: str,
+    columns: list[str],
+    column_types: list[str],
+    row_count: int,
+) -> dict[str, Any]:
+    """Check if query result columns are compatible with the widget type.
+
+    Returns a dict with 'compatible' (bool) and 'warnings' (list of strings).
+    """
+    warnings: list[str] = []
+    num_cols = len(columns)
+    numeric_flags = [_is_numeric_type(t) for t in column_types]
+    numeric_count = sum(numeric_flags)
+
+    match widget_type:
+        case "metric":
+            if row_count == 0:
+                warnings.append("Query returns 0 rows; metric needs at least 1 row.")
+            if numeric_count == 0:
+                warnings.append("No numeric columns found; metric needs at least 1 numeric column.")
+
+        case "pie_chart":
+            if num_cols != 2:
+                warnings.append(
+                    f"pie_chart requires exactly 2 columns (label + value) but query returns {num_cols}."
+                )
+            elif numeric_flags[0]:
+                warnings.append(
+                    "pie_chart expects the 1st column to be a label (non-numeric), but it appears numeric."
+                )
+            elif not numeric_flags[1]:
+                warnings.append(
+                    "pie_chart expects the 2nd column to be numeric (value), but it appears non-numeric."
+                )
+
+        case "bar_chart":
+            if num_cols < 2:
+                warnings.append(
+                    f"bar_chart needs at least 2 columns (category + value) but query returns {num_cols}."
+                )
+            elif numeric_count == 0:
+                warnings.append("No numeric columns found for y-axis values.")
+
+        case "line_chart" | "area_chart":
+            if num_cols < 2:
+                warnings.append(
+                    f"{widget_type} needs at least 2 columns (x-axis + y-axis) but query returns {num_cols}."
+                )
+            elif numeric_count == 0:
+                warnings.append("No numeric columns found for y-axis values.")
+
+        case "scatter_chart":
+            if numeric_count < 2:
+                warnings.append(
+                    f"scatter_chart needs at least 2 numeric columns but only found {numeric_count}."
+                )
+
+        case "table" | "text":
+            pass  # Always compatible
+
+        case _:
+            warnings.append(
+                f"Unknown widget type '{widget_type}'; cannot validate column compatibility."
+            )
+
+    return {
+        "compatible": len(warnings) == 0,
+        "warnings": warnings,
+    }

@@ -12,6 +12,7 @@ from prismiq.llm.types import (
     StreamChunkType,
     ToolCallRequest,
     ToolDefinition,
+    WidgetContext,
 )
 
 # ============================================================================
@@ -232,3 +233,70 @@ class TestChatRequest:
         )
         assert req.current_sql == "SELECT * FROM users"
         assert len(req.history) == 2
+
+    def test_request_with_widget_context(self) -> None:
+        """Test request with widget context."""
+        ctx = WidgetContext(widget_type="pie_chart")
+        req = ChatRequest(
+            message="Show revenue by region",
+            widget_context=ctx,
+        )
+        assert req.widget_context is not None
+        assert req.widget_context.widget_type == "pie_chart"
+
+    def test_request_without_widget_context(self) -> None:
+        """Test request without widget context (backward compat)."""
+        req = ChatRequest(message="Hello")
+        assert req.widget_context is None
+
+
+# ============================================================================
+# WidgetContext Tests
+# ============================================================================
+
+
+class TestWidgetContext:
+    """Tests for WidgetContext model."""
+
+    def test_minimal(self) -> None:
+        """Test creating a minimal widget context."""
+        ctx = WidgetContext(widget_type="metric")
+        assert ctx.widget_type == "metric"
+        assert ctx.x_axis is None
+        assert ctx.y_axis is None
+        assert ctx.series_column is None
+        assert ctx.last_error is None
+
+    def test_full(self) -> None:
+        """Test creating a fully populated widget context."""
+        ctx = WidgetContext(
+            widget_type="bar_chart",
+            x_axis="region",
+            y_axis=["revenue", "profit"],
+            series_column="category",
+            last_error="No numeric columns found",
+        )
+        assert ctx.widget_type == "bar_chart"
+        assert ctx.x_axis == "region"
+        assert ctx.y_axis == ["revenue", "profit"]
+        assert ctx.series_column == "category"
+        assert ctx.last_error == "No numeric columns found"
+
+
+# ============================================================================
+# STATUS StreamChunkType Tests
+# ============================================================================
+
+
+class TestStatusChunkType:
+    """Tests for STATUS stream chunk type."""
+
+    def test_status_chunk(self) -> None:
+        """Test creating a status chunk."""
+        chunk = StreamChunk(type=StreamChunkType.STATUS, content="Inspecting database schema...")
+        assert chunk.type == StreamChunkType.STATUS
+        assert chunk.content == "Inspecting database schema..."
+
+    def test_status_enum_value(self) -> None:
+        """Test STATUS enum has correct string value."""
+        assert StreamChunkType.STATUS.value == "status"
