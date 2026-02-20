@@ -4,9 +4,20 @@
  * Uses the xlsx library (SheetJS) for Excel file generation.
  */
 
-import * as XLSX from 'xlsx';
 import type { QueryResult } from '../types';
 import type { ExcelExportOptions, ExportData } from './types';
+
+type XLSXModule = typeof import('xlsx');
+
+async function loadXLSX(): Promise<XLSXModule> {
+  try {
+    return await import('xlsx');
+  } catch {
+    throw new Error(
+      'xlsx is required for Excel export. Install it with: npm install xlsx'
+    );
+  }
+}
 
 /**
  * Check if data is a QueryResult.
@@ -86,10 +97,11 @@ function calculateColumnWidth(values: unknown[]): number {
  * });
  * ```
  */
-export function exportToExcel(
+export async function exportToExcel(
   data: ExportData,
   options?: ExcelExportOptions
-): void {
+): Promise<void> {
+  const XLSX = await loadXLSX();
   const { columns: allColumns, rows } = normalizeData(data);
 
   // Use specified columns or all columns
@@ -123,7 +135,7 @@ export function exportToExcel(
   const worksheet = XLSX.utils.aoa_to_sheet(wsData);
 
   // Set column widths
-  const colWidths: XLSX.ColInfo[] = exportColumns.map((col, index) => {
+  const colWidths = exportColumns.map((col, index) => {
     // Use custom width if specified
     if (options?.columnWidths?.[col]) {
       return { wch: options.columnWidths[col] };
@@ -167,10 +179,11 @@ export function exportToExcel(
  * }, 'full-report');
  * ```
  */
-export function exportMultipleSheets(
+export async function exportMultipleSheets(
   sheets: Record<string, ExportData>,
   filename: string
-): void {
+): Promise<void> {
+  const XLSX = await loadXLSX();
   const workbook = XLSX.utils.book_new();
 
   for (const [sheetName, data] of Object.entries(sheets)) {
@@ -196,7 +209,7 @@ export function exportMultipleSheets(
     const worksheet = XLSX.utils.aoa_to_sheet(wsData);
 
     // Auto-size columns
-    const colWidths: XLSX.ColInfo[] = columns.map((col, index) => {
+    const colWidths = columns.map((col, index) => {
       const columnValues = [columns[index], ...rows.map(r => r[col])];
       return { wch: calculateColumnWidth(columnValues) };
     });

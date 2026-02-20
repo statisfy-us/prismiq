@@ -60,7 +60,7 @@
     "echarts": "^5.4.0 || ^6.0.0",
     "echarts-for-react": "^3.0.0",
     "react": "^18.0.0 || ^19.0.0",
-    "react-grid-layout": "^1.4.0 || ^2.0.0",
+    "react-grid-layout": "^2.0.0",
     "xlsx": "^0.18.0"
   },
   "peerDependenciesMeta": {
@@ -68,9 +68,6 @@
       "optional": true
     },
     "echarts-for-react": {
-      "optional": true
-    },
-    "react-grid-layout": {
       "optional": true
     },
     "xlsx": {

@@ -98,7 +98,7 @@ export function useExport(options: UseExportOptions): UseExportResult {
   }, [canExport, data, generateFilename, columns, headers]);
 
   // Export to Excel
-  const handleExportExcel = useCallback((excelOptions?: ExcelExportOptions) => {
+  const handleExportExcel = useCallback(async (excelOptions?: ExcelExportOptions) => {
     if (!canExport || !data) return;
 
     setIsExporting(true);
@@ -109,7 +109,7 @@ export function useExport(options: UseExportOptions): UseExportResult {
         headers,
         ...excelOptions,
       };
-      exportToExcel(data, exportOptions);
+      await exportToExcel(data, exportOptions);
     } finally {
       setIsExporting(false);
     }
