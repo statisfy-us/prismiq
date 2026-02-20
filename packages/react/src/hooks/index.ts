@@ -61,3 +61,9 @@ export type {
   UseDashboardPinStatusOptions,
   UseDashboardPinStatusResult,
 } from './useDashboardPinStatus';
+
+export { useLLMStatus } from './useLLMStatus';
+export type { UseLLMStatusResult } from './useLLMStatus';
+
+export { useLLMChat } from './useLLMChat';
+export type { UseLLMChatResult } from './useLLMChat';

@@ -235,3 +235,11 @@ export type {
   CalculatedFieldBuilderProps,
   ExpressionEditorProps,
 } from './CalculatedFieldBuilder';
+
+// ============================================================================
+// Chat Panel
+// ============================================================================
+
+export { ChatPanel, ChatBubble } from './ChatPanel';
+
+export type { ChatPanelProps, ChatBubbleProps } from './ChatPanel';

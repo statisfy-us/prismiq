@@ -66,6 +66,12 @@ export type {
   // Custom SQL types
   ExecuteSQLRequest,
   SQLValidationResult,
+  // LLM types
+  ChatRole,
+  ChatMessage,
+  StreamChunkType,
+  StreamChunk,
+  LLMStatus,
   // Pin types
   PinnedDashboard,
   PinnedDashboardsResponse,
@@ -122,6 +128,8 @@ export {
   usePinnedDashboards,
   usePinMutations,
   useDashboardPinStatus,
+  useLLMStatus,
+  useLLMChat,
 } from './hooks';
 export type {
   UseSchemaResult,
@@ -143,6 +151,8 @@ export type {
   UsePinMutationsResult,
   UseDashboardPinStatusOptions,
   UseDashboardPinStatusResult,
+  UseLLMStatusResult,
+  UseLLMChatResult,
 } from './hooks';
 
 // ============================================================================
@@ -271,6 +281,9 @@ export {
   SavedQueryPicker,
   // Custom SQL
   CustomSQLEditor,
+  // Chat Panel
+  ChatPanel,
+  ChatBubble,
 } from './components';
 
 export type {
@@ -336,6 +349,9 @@ export type {
   SavedQueryPickerProps,
   // Custom SQL
   CustomSQLEditorProps,
+  // Chat Panel
+  ChatPanelProps,
+  ChatBubbleProps,
 } from './components';
 
 // ============================================================================

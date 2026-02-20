@@ -5,6 +5,7 @@
  */
 
 import type {
+  ChatMessage,
   Dashboard,
   DashboardCreate,
   DashboardPinContextsResponse,
@@ -12,6 +13,7 @@ import type {
   DatabaseSchema,
   DataSourceMeta,
   ExecuteSQLRequest,
+  LLMStatus,
   PinnedDashboard,
   PinnedDashboardsResponse,
   QueryDefinition,
@@ -20,6 +22,7 @@ import type {
   SavedQueryCreate,
   SavedQueryUpdate,
   SQLValidationResult,
+  StreamChunk,
   TableSchema,
   ValidationResult,
   Widget,
@@ -730,5 +733,101 @@ export class PrismiqClient {
         dashboard_ids: dashboardIds,
       }),
     });
+  }
+
+  // ============================================================================
+  // LLM Methods
+  // ============================================================================
+
+  /**
+   * Get the LLM agent status.
+   *
+   * @returns LLM status including enabled state, provider, and model.
+   */
+  async getLLMStatus(): Promise<LLMStatus> {
+    return this.request<LLMStatus>('/llm/status');
+  }
+
+  /**
+   * Stream a chat response from the LLM agent via SSE.
+   *
+   * @param message - User's message.
+   * @param history - Previous conversation messages.
+   * @param currentSql - Current SQL in the editor (for context).
+   * @param signal - Optional AbortSignal for cancellation.
+   * @yields StreamChunk objects as the response is generated.
+   */
+  async *streamChat(
+    message: string,
+    history: ChatMessage[],
+    currentSql: string | null,
+    signal?: AbortSignal
+  ): AsyncGenerator<StreamChunk, void, undefined> {
+    const url = `${this.endpoint}/llm/chat`;
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Tenant-ID': this.tenantId,
+    };
+    if (this.userId) headers['X-User-ID'] = this.userId;
+    if (this.schemaName) headers['X-Schema-Name'] = this.schemaName;
+    if (this.customHeaders) Object.assign(headers, this.customHeaders);
+    if (this.getToken) {
+      const token = await this.getToken();
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        message,
+        history,
+        current_sql: currentSql,
+      }),
+      signal,
+    });
+
+    if (!response.ok) {
+      throw new PrismiqError(
+        `LLM chat failed: ${response.status} ${response.statusText}`,
+        response.status
+      );
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) return;
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Parse SSE lines
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6).trim();
+            if (data) {
+              try {
+                const chunk = JSON.parse(data) as StreamChunk;
+                yield chunk;
+              } catch {
+                // Skip malformed JSON
+              }
+            }
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
   }
 }
