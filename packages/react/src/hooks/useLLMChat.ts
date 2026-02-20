@@ -4,7 +4,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useAnalytics } from '../context';
-import type { ChatMessage } from '../types';
+import type { ChatMessage, WidgetContext } from '../types';
 
 export interface UseLLMChatResult {
   /** Full conversation history (user + assistant messages). */
@@ -16,11 +16,13 @@ export interface UseLLMChatResult {
   /** Last SQL suggestion extracted from the response. */
   suggestedSql: string | null;
   /** Send a message to the agent. */
-  sendMessage: (message: string, currentSql: string | null) => Promise<void>;
+  sendMessage: (message: string, currentSql: string | null, widgetContext?: WidgetContext) => Promise<void>;
   /** Clear conversation history. */
   clearHistory: () => void;
   /** Error from the last request. */
   error: string | null;
+  /** Current status message from the agent (e.g., "Inspecting schema..."). */
+  statusMessage: string | null;
 }
 
 /**
@@ -35,13 +37,14 @@ export function useLLMChat(): UseLLMChatResult {
   const [streamingContent, setStreamingContent] = useState('');
   const [suggestedSql, setSuggestedSql] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const isStreamingRef = useRef(false);
   const messagesRef = useRef<ChatMessage[]>([]);
   messagesRef.current = messages;
 
   const sendMessage = useCallback(
-    async (message: string, currentSql: string | null) => {
+    async (message: string, currentSql: string | null, widgetContext?: WidgetContext) => {
       if (!client || isStreamingRef.current) return;
 
       // Cancel any previous streaming request
@@ -57,6 +60,7 @@ export function useLLMChat(): UseLLMChatResult {
       setStreamingContent('');
       setSuggestedSql(null);
       setError(null);
+      setStatusMessage(null);
 
       let accumulatedText = '';
       let lastSql: string | null = null;
@@ -73,7 +77,8 @@ export function useLLMChat(): UseLLMChatResult {
           message,
           history,
           currentSql,
-          controller.signal
+          controller.signal,
+          widgetContext
         )) {
           if (controller.signal.aborted) break;
 
@@ -81,16 +86,20 @@ export function useLLMChat(): UseLLMChatResult {
             case 'text':
               accumulatedText += chunk.content ?? '';
               setStreamingContent(accumulatedText);
+              setStatusMessage(null); // Clear status when text starts
               break;
             case 'sql':
               lastSql = chunk.content ?? null;
               setSuggestedSql(lastSql);
               break;
+            case 'status':
+              setStatusMessage(chunk.content ?? null);
+              break;
             case 'error':
               setError(chunk.content ?? 'Unknown error');
               break;
             case 'done':
-              // Final chunk — nothing else to do
+              setStatusMessage(null);
               break;
           }
         }
@@ -101,6 +110,7 @@ export function useLLMChat(): UseLLMChatResult {
       } finally {
         isStreamingRef.current = false;
         setIsStreaming(false);
+        setStatusMessage(null);
 
         // Add assistant message to history
         if (accumulatedText) {
@@ -129,6 +139,7 @@ export function useLLMChat(): UseLLMChatResult {
     setSuggestedSql(null);
     setError(null);
     setIsStreaming(false);
+    setStatusMessage(null);
   }, []);
 
   return {
@@ -139,5 +150,6 @@ export function useLLMChat(): UseLLMChatResult {
     sendMessage,
     clearHistory,
     error,
+    statusMessage,
   };
 }

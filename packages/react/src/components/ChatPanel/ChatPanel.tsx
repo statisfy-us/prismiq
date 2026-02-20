@@ -15,7 +15,7 @@ import type { ChatPanelProps } from './types';
 
 export type { ChatPanelProps } from './types';
 
-export function ChatPanel({ currentSql, onApplySql }: ChatPanelProps): JSX.Element {
+export function ChatPanel({ currentSql, onApplySql, widgetContext }: ChatPanelProps): JSX.Element {
   const { theme } = useTheme();
   const {
     messages,
@@ -25,6 +25,7 @@ export function ChatPanel({ currentSql, onApplySql }: ChatPanelProps): JSX.Eleme
     sendMessage,
     clearHistory,
     error,
+    statusMessage,
   } = useLLMChat();
 
   const [input, setInput] = useState('');
@@ -39,8 +40,8 @@ export function ChatPanel({ currentSql, onApplySql }: ChatPanelProps): JSX.Eleme
     const trimmed = input.trim();
     if (!trimmed) return;
     setInput('');
-    void sendMessage(trimmed, currentSql);
-  }, [input, currentSql, sendMessage]);
+    void sendMessage(trimmed, currentSql, widgetContext);
+  }, [input, currentSql, widgetContext, sendMessage]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -186,6 +187,22 @@ export function ChatPanel({ currentSql, onApplySql }: ChatPanelProps): JSX.Eleme
           )}
           {isStreaming && !streamingContent && (
             <div style={streamingStyle} data-testid="chat-streaming">Thinking...</div>
+          )}
+          {isStreaming && statusMessage && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: theme.spacing.xs,
+                fontSize: theme.fontSizes.xs,
+                color: theme.colors.textMuted,
+                padding: `${theme.spacing.xs} 0`,
+              }}
+              data-testid="chat-status"
+            >
+              <Icon name="sync" size={12} />
+              <span>{statusMessage}</span>
+            </div>
           )}
           <div ref={messagesEndRef} />
         </div>

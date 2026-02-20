@@ -1943,6 +1943,7 @@ def create_router(
                     history=request.history,
                     current_sql=request.current_sql,
                     schema_name=auth.schema_name,
+                    widget_context=request.widget_context,
                 ):
                     # Format as SSE
                     data = chunk.model_dump_json()

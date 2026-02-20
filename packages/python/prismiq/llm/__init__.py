@@ -19,6 +19,7 @@ from prismiq.llm.types import (
     StreamChunkType,
     ToolCallRequest,
     ToolDefinition,
+    WidgetContext,
 )
 
 __all__ = [
@@ -31,4 +32,5 @@ __all__ = [
     "StreamChunkType",
     "ToolCallRequest",
     "ToolDefinition",
+    "WidgetContext",
 ]

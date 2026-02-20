@@ -1005,6 +1005,7 @@ type StreamChunkType =
   | 'sql'          // Extracted SQL block
   | 'tool_call'    // Tool invocation
   | 'tool_result'  // Tool execution result
+  | 'status'       // Status update
   | 'error'        // Error message
   | 'done';        // Stream complete
 ```
@@ -1021,6 +1022,27 @@ interface ChatRequest {
   history?: ChatMessage[];
   /** Current SQL in the editor (provides context to the LLM) */
   current_sql?: string | null;
+  /** Widget context for targeted SQL generation */
+  widget_context?: WidgetContext;
+}
+```
+
+### WidgetContext
+
+Context about the target widget, so the LLM generates queries with the correct column structure.
+
+```typescript
+interface WidgetContext {
+  /** Widget type (see WidgetType) */
+  widget_type: WidgetType;
+  /** Configured x-axis column */
+  x_axis?: string;
+  /** Configured y-axis column(s) */
+  y_axis?: string[];
+  /** Multi-series grouping column */
+  series_column?: string;
+  /** Last execution error for self-correction */
+  last_error?: string;
 }
 ```
 

@@ -670,7 +670,7 @@ export interface ChatMessage {
 /**
  * Types of streaming chunks from the LLM agent.
  */
-export type StreamChunkType = 'text' | 'sql' | 'tool_call' | 'tool_result' | 'error' | 'done';
+export type StreamChunkType = 'text' | 'sql' | 'tool_call' | 'tool_result' | 'status' | 'error' | 'done';
 
 /**
  * A single chunk in a streaming LLM response.
@@ -684,6 +684,25 @@ export interface StreamChunk {
   tool_name?: string;
   /** Tool arguments (for tool_call chunks). */
   tool_args?: Record<string, unknown>;
+}
+
+/**
+ * Context about the target widget for SQL generation.
+ *
+ * Tells the LLM what kind of widget the query is for, so it can
+ * generate queries with the correct column structure.
+ */
+export interface WidgetContext {
+  /** Widget type (matches WidgetType enum values). */
+  widget_type: string;
+  /** Configured x-axis column. */
+  x_axis?: string;
+  /** Configured y-axis column(s). */
+  y_axis?: string[];
+  /** Multi-series grouping column. */
+  series_column?: string;
+  /** Last execution error for self-correction. */
+  last_error?: string;
 }
 
 /**

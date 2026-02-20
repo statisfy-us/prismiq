@@ -819,10 +819,11 @@ The assistant can make tool calls to inspect the database schema before generati
 | `message` | `string` | Yes | User's natural language message |
 | `history` | `ChatMessage[]` | No | Previous conversation messages for context |
 | `current_sql` | `string \| null` | No | Current SQL in the editor (provides context) |
+| `widget_context` | `WidgetContext` | No | Target widget type and column config for SQL generation |
 
 **Response:** Server-Sent Events stream with JSON chunks:
 
-```
+```text
 data: {"type": "text", "content": "Let me look at your schema..."}
 
 data: {"type": "tool_call", "tool_name": "get_schema_overview", "tool_args": {}}
@@ -844,6 +845,7 @@ data: {"type": "done"}
 | `sql` | Extracted SQL query from ```sql code blocks |
 | `tool_call` | Tool invocation (`tool_name` and `tool_args` fields) |
 | `tool_result` | JSON result from tool execution |
+| `status` | Status update (progress notifications) |
 | `error` | Error message (includes correlation ID) |
 | `done` | Stream complete |
 
