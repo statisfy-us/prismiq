@@ -7,13 +7,14 @@ from sqlalchemy import (
     Column,
     ForeignKey,
     Index,
+    Integer,
     MetaData,
     String,
     Table,
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TIMESTAMP, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, TIMESTAMP
 
 metadata = MetaData()
 
@@ -21,7 +22,7 @@ metadata = MetaData()
 dashboards_table = Table(
     "prismiq_dashboards",
     metadata,
-    Column("id", UUID(as_uuid=True), primary_key=True),
+    Column("id", Integer, primary_key=True, autoincrement=True),
     Column("tenant_id", String(255), nullable=False),
     Column("name", String(255), nullable=False),
     Column("description", Text, nullable=True),
@@ -41,10 +42,10 @@ dashboards_table = Table(
 widgets_table = Table(
     "prismiq_widgets",
     metadata,
-    Column("id", UUID(as_uuid=True), primary_key=True),
+    Column("id", Integer, primary_key=True, autoincrement=True),
     Column(
         "dashboard_id",
-        UUID(as_uuid=True),
+        Integer,
         ForeignKey("prismiq_dashboards.id", ondelete="CASCADE"),
         nullable=False,
     ),
@@ -62,7 +63,7 @@ widgets_table = Table(
 saved_queries_table = Table(
     "prismiq_saved_queries",
     metadata,
-    Column("id", UUID(as_uuid=True), primary_key=True),
+    Column("id", Integer, primary_key=True, autoincrement=True),
     Column("tenant_id", String(255), nullable=False),
     Column("name", String(255), nullable=False),
     Column("description", Text, nullable=True),

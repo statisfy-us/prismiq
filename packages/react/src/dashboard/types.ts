@@ -145,6 +145,10 @@ export interface WidgetConfig {
   alignment?: 'Left' | 'Center' | 'Right';
   /** Font size for text widgets. */
   fontSize?: 'Small' | 'Normal' | 'Large' | 'XLarge';
+
+  // Editor metadata
+  /** Editor mode used to build this widget ('guided', 'advanced', or 'saved'). */
+  data_source_mode?: 'guided' | 'advanced' | 'saved';
 }
 
 /**
@@ -177,8 +181,6 @@ export interface Widget {
   config: WidgetConfig;
   /** Optional hyperlink to external URL (displayed as link icon in header). */
   hyperlink?: WidgetHyperlink;
-  /** Data source mode last used when editing this widget. */
-  dataSourceMode?: 'guided' | 'advanced' | 'saved';
   /** Creation timestamp (ISO string). */
   created_at?: string;
   /** Last update timestamp (ISO string). */

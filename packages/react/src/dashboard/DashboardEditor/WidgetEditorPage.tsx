@@ -139,7 +139,7 @@ export function WidgetEditorPage({
 
   // Data source mode - restore saved mode for existing widgets, default to 'guided' for new ones
   const [dataSourceMode, setDataSourceMode] = useState<DataSourceMode>(
-    isNew ? 'guided' : (widget?.dataSourceMode ?? 'guided')
+    isNew ? 'guided' : (widget?.config?.data_source_mode ?? 'guided')
   );
 
   // Preview state
@@ -200,6 +200,38 @@ export function WidgetEditorPage({
     }
   }, [query, refreshPreview]);
 
+  // Check if query uses advanced features not representable in guided mode
+  const queryHasAdvancedFeatures = useCallback((q: QueryDefinition | null): boolean => {
+    if (!q) return false;
+    // Multiple tables with joins
+    if (q.tables && q.tables.length > 1 && q.joins && q.joins.length > 0) return true;
+    // Calculated fields
+    if (q.calculated_fields && q.calculated_fields.length > 0) return true;
+    // Explicit group_by (guided mode auto-derives grouping)
+    if (q.group_by && q.group_by.length > 0) return true;
+    // Custom sort orders
+    if (q.order_by && q.order_by.length > 0) return true;
+    // Pagination settings
+    if (q.limit != null) return true;
+    if (q.offset != null) return true;
+    // Time series configuration
+    if (q.time_series) return true;
+    return false;
+  }, []);
+
+  // Handle mode switch with confirmation for advanced → guided
+  const handleModeSwitch = useCallback((newMode: DataSourceMode) => {
+    if (newMode === 'guided' && (dataSourceMode === 'advanced' || dataSourceMode === 'saved') && queryHasAdvancedFeatures(query)) {
+      const confirmed = window.confirm(
+        'This query uses advanced features (joins, calculated fields) that Guided mode may not fully represent. ' +
+        'The query will be preserved but some settings may not be editable in Guided mode.\n\n' +
+        'Switch to Guided mode?'
+      );
+      if (!confirmed) return;
+    }
+    setDataSourceMode(newMode);
+  }, [dataSourceMode, query, queryHasAdvancedFeatures]);
+
   // Handle saved query selection
   const handleSavedQuerySelect = useCallback((savedQuery: SavedQuery) => {
     setQuery(savedQuery.query);
@@ -223,11 +255,10 @@ export function WidgetEditorPage({
       id: widget?.id ?? generateId(),
       type,
       title,
-      config,
+      config: { ...config, data_source_mode: dataSourceMode },
       query,
       position,
       hyperlink,
-      dataSourceMode,
     };
     onSave(savedWidget);
   }, [widget, type, title, config, query, position, hyperlink, dataSourceMode, onSave]);
@@ -718,7 +749,7 @@ export function WidgetEditorPage({
                   <button
                     type="button"
                     style={tabStyle(dataSourceMode === 'guided')}
-                    onClick={() => setDataSourceMode('guided')}
+                    onClick={() => handleModeSwitch('guided')}
                   >
                     Guided
                   </button>
@@ -731,7 +762,7 @@ export function WidgetEditorPage({
                   <button
                     type="button"
                     style={tabStyle(dataSourceMode === 'advanced')}
-                    onClick={() => setDataSourceMode('advanced')}
+                    onClick={() => handleModeSwitch('advanced')}
                   >
                     Advanced
                   </button>

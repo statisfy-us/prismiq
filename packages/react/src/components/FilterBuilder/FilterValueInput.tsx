@@ -140,6 +140,78 @@ function getInputType(dataType?: string): 'text' | 'number' | 'date' {
   return 'text';
 }
 
+/**
+ * Check if an operator accepts multiple values.
+ */
+function isMultiValueOperator(op: FilterOperator): boolean {
+  return op === 'in_' || op === 'not_in' || op === 'in_or_null';
+}
+
+// ============================================================================
+// Tag styles for multi-value input
+// ============================================================================
+
+const tagContainerStyles: React.CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: '4px',
+  padding: '4px 8px',
+  border: '1px solid var(--prismiq-color-border)',
+  borderRadius: 'var(--prismiq-radius-sm)',
+  backgroundColor: 'var(--prismiq-color-background)',
+  minHeight: '32px',
+  cursor: 'text',
+  flex: 1,
+};
+
+const tagStyles: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '4px',
+  padding: '1px 6px',
+  backgroundColor: 'var(--prismiq-color-surface)',
+  border: '1px solid var(--prismiq-color-border)',
+  borderRadius: 'var(--prismiq-radius-sm)',
+  fontSize: 'var(--prismiq-font-size-sm)',
+  lineHeight: '20px',
+  whiteSpace: 'nowrap',
+};
+
+const tagRemoveStyles: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: '14px',
+  height: '14px',
+  border: 'none',
+  background: 'none',
+  cursor: 'pointer',
+  padding: 0,
+  fontSize: '12px',
+  lineHeight: 1,
+  color: 'var(--prismiq-color-text-muted)',
+  borderRadius: '50%',
+};
+
+const tagInputStyles: React.CSSProperties = {
+  border: 'none',
+  outline: 'none',
+  background: 'none',
+  flex: 1,
+  minWidth: '80px',
+  fontSize: 'var(--prismiq-font-size-sm)',
+  padding: '2px 0',
+  color: 'var(--prismiq-color-text)',
+};
+
+const multiOptionCheckStyles: React.CSSProperties = {
+  marginRight: '6px',
+  color: 'var(--prismiq-color-primary)',
+  fontWeight: 700,
+  fontSize: '12px',
+};
+
 // ============================================================================
 // Component
 // ============================================================================
@@ -160,6 +232,7 @@ export function FilterValueInput({
 }: FilterValueInputProps): JSX.Element {
   const { client } = useAnalytics();
   const inputType = getInputType(dataType);
+  const isMulti = isMultiValueOperator(operator);
 
   // State for sample values
   const [sampleValues, setSampleValues] = useState<string[]>([]);
@@ -174,6 +247,14 @@ export function FilterValueInput({
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Multi-value: text being typed before committing as a tag
+  const [multiInputText, setMultiInputText] = useState('');
+
+  // Reset multi-input text when operator changes (e.g. from in_ to eq)
+  useEffect(() => {
+    setMultiInputText('');
+  }, [operator]);
 
   // Fetch sample values when table and column are available
   useEffect(() => {
@@ -214,23 +295,37 @@ export function FilterValueInput({
     fetchSamples();
   }, [client, tableName, columnName]);
 
-  // Filter sample values based on current input (computed before hooks that depend on it)
-  const currentValueStr = formatValue(value);
-  const filteredOptions = sampleValues.filter((v) =>
-    v.toLowerCase().includes(currentValueStr.toLowerCase())
-  );
+  // Current selected values as string array (for multi-value operators)
+  const selectedValues: string[] = isMulti && Array.isArray(value)
+    ? value
+        .filter((v: unknown) => v !== null && v !== undefined)
+        .map((v: unknown) => String(v))
+    : [];
+
+  // Filter sample values based on current input
+  const currentValueStr = isMulti ? multiInputText : formatValue(value);
+  const filteredOptions = isMulti
+    ? sampleValues.filter(
+        (v) =>
+          v.toLowerCase().includes(multiInputText.toLowerCase()) &&
+          !selectedValues.includes(v)
+      )
+    : sampleValues.filter((v) =>
+        v.toLowerCase().includes(currentValueStr.toLowerCase())
+      );
 
   // Update dropdown position
   const updateDropdownPosition = useCallback(() => {
-    if (inputRef.current) {
-      const rect = inputRef.current.getBoundingClientRect();
+    const el = isMulti ? containerRef.current : inputRef.current;
+    if (el) {
+      const rect = el.getBoundingClientRect();
       setDropdownPosition({
         top: rect.bottom + 4,
         left: rect.left,
         width: rect.width,
       });
     }
-  }, []);
+  }, [isMulti]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -254,6 +349,7 @@ export function FilterValueInput({
     }
   }, [sampleValues.length, updateDropdownPosition]);
 
+  // Single-value: select from dropdown
   const handleOptionSelect = useCallback(
     (optionValue: string) => {
       onChange(parseValue(optionValue, dataType));
@@ -263,7 +359,91 @@ export function FilterValueInput({
     [onChange, dataType]
   );
 
-  const handleKeyDown = useCallback(
+  // Multi-value: add a value to the array
+  const addMultiValue = useCallback(
+    (val: string) => {
+      const trimmed = val.trim();
+      if (!trimmed) return;
+      if (selectedValues.includes(trimmed)) return;
+      const newValues = [...selectedValues, trimmed].map((v) => parseValue(v, dataType));
+      onChange(newValues);
+      setMultiInputText('');
+    },
+    [selectedValues, onChange, dataType]
+  );
+
+  // Multi-value: remove a value from the array
+  const removeMultiValue = useCallback(
+    (val: string) => {
+      const newValues = selectedValues.filter((v) => v !== val).map((v) => parseValue(v, dataType));
+      onChange(newValues.length > 0 ? newValues : []);
+    },
+    [selectedValues, onChange, dataType]
+  );
+
+  // Multi-value: select from dropdown (toggle)
+  const handleMultiOptionSelect = useCallback(
+    (optionValue: string) => {
+      if (selectedValues.includes(optionValue)) {
+        removeMultiValue(optionValue);
+      } else {
+        addMultiValue(optionValue);
+      }
+      setMultiInputText('');
+      // Keep dropdown open for multi-select
+      updateDropdownPosition();
+      inputRef.current?.focus();
+    },
+    [selectedValues, addMultiValue, removeMultiValue, updateDropdownPosition]
+  );
+
+  // Multi-value: handle typing with comma/Enter to commit
+  const handleMultiInputKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Backspace' && multiInputText === '' && selectedValues.length > 0) {
+        // Remove last tag
+        const lastVal = selectedValues[selectedValues.length - 1];
+        if (lastVal !== undefined) removeMultiValue(lastVal);
+        return;
+      }
+
+      if (isDropdownOpen && filteredOptions.length > 0) {
+        switch (e.key) {
+          case 'ArrowDown':
+            e.preventDefault();
+            setHighlightedIndex((prev) => Math.min(prev + 1, filteredOptions.length - 1));
+            return;
+          case 'ArrowUp':
+            e.preventDefault();
+            setHighlightedIndex((prev) => Math.max(prev - 1, 0));
+            return;
+          case 'Enter':
+            e.preventDefault();
+            if (highlightedIndex >= 0 && filteredOptions[highlightedIndex]) {
+              handleMultiOptionSelect(filteredOptions[highlightedIndex]);
+            } else if (multiInputText.trim()) {
+              addMultiValue(multiInputText);
+            }
+            return;
+          case 'Escape':
+            setIsDropdownOpen(false);
+            return;
+        }
+      }
+
+      // Comma or Enter commits the current text as a tag
+      if (e.key === ',' || e.key === 'Enter') {
+        e.preventDefault();
+        addMultiValue(multiInputText);
+      }
+    },
+    [
+      multiInputText, selectedValues, isDropdownOpen, filteredOptions,
+      highlightedIndex, addMultiValue, removeMultiValue, handleMultiOptionSelect,
+    ]
+  );
+
+  const handleSingleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (!isDropdownOpen || filteredOptions.length === 0) return;
 
@@ -330,28 +510,98 @@ export function FilterValueInput({
     );
   }
 
-  // IN, NOT IN, and IN OR NULL operators need comma-separated values
-  if (operator === 'in_' || operator === 'not_in' || operator === 'in_or_null') {
-    const handleMultiChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const values = e.target.value
-        .split(',')
-        .map((v) => v.trim())
-        .filter(Boolean)
-        .map((v) => parseValue(v, dataType));
-      onChange(values);
-    };
-
+  // IN, NOT IN, and IN OR NULL: tag-based multi-select with dropdown
+  if (isMulti) {
     return (
       <div className={className} style={containerStyles}>
-        <Input
-          inputSize="sm"
-          type="text"
-          placeholder="value1, value2, ..."
-          value={formatValue(value)}
-          disabled={disabled}
-          onChange={handleMultiChange}
-          style={{ flex: 1 }}
-        />
+        <div ref={containerRef} style={comboboxContainerStyles}>
+          <div
+            style={tagContainerStyles}
+            onClick={() => inputRef.current?.focus()}
+          >
+            {selectedValues.map((val) => (
+              <span key={val} style={tagStyles}>
+                {val}
+                <button
+                  type="button"
+                  style={tagRemoveStyles}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeMultiValue(val);
+                  }}
+                  tabIndex={-1}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            <input
+              ref={inputRef}
+              type="text"
+              placeholder={selectedValues.length === 0
+                ? (isLoadingValues ? 'Loading...' : 'Type or select values')
+                : ''}
+              value={multiInputText}
+              disabled={disabled || isLoadingValues}
+              onChange={(e) => {
+                setMultiInputText(e.target.value);
+                if (sampleValues.length > 0) {
+                  updateDropdownPosition();
+                  setIsDropdownOpen(true);
+                  setHighlightedIndex(-1);
+                }
+              }}
+              onFocus={handleInputFocus}
+              onKeyDown={handleMultiInputKeyDown}
+              style={tagInputStyles}
+            />
+          </div>
+          {selectedValues.length === 0 && !multiInputText && (
+            <div style={{
+              fontSize: '11px',
+              color: 'var(--prismiq-color-text-muted)',
+              marginTop: '2px',
+              paddingLeft: '2px',
+            }}>
+              Press <kbd style={{ padding: '0 3px', border: '1px solid var(--prismiq-color-border)', borderRadius: '3px', fontSize: '10px' }}>,</kbd> or <kbd style={{ padding: '0 3px', border: '1px solid var(--prismiq-color-border)', borderRadius: '3px', fontSize: '10px' }}>Enter</kbd> to add values
+            </div>
+          )}
+          {isDropdownOpen && filteredOptions.length > 0 && typeof document !== 'undefined' && createPortal(
+            <div
+              ref={dropdownRef}
+              style={{
+                ...dropdownStyles,
+                top: dropdownPosition.top,
+                left: dropdownPosition.left,
+                width: dropdownPosition.width,
+              }}
+            >
+              {filteredOptions.map((optionValue, index) => {
+                const isSelected = selectedValues.includes(optionValue);
+                return (
+                  <div
+                    key={`${optionValue}-${index}`}
+                    onClick={() => handleMultiOptionSelect(optionValue)}
+                    onMouseEnter={() => setHighlightedIndex(index)}
+                    style={{
+                      ...optionStyles,
+                      ...(index === highlightedIndex ? optionHoverStyles : {}),
+                      ...(isSelected
+                        ? { backgroundColor: 'var(--prismiq-color-surface)', fontWeight: 500 }
+                        : {}),
+                    }}
+                  >
+                    <span style={multiOptionCheckStyles}>
+                      {isSelected ? '✓' : '\u2003'}
+                    </span>
+                    {optionValue}
+                  </div>
+                );
+              })}
+            </div>,
+            document.body
+          )}
+        </div>
       </div>
     );
   }
@@ -375,7 +625,7 @@ export function FilterValueInput({
             }
           }}
           onFocus={handleInputFocus}
-          onKeyDown={handleKeyDown}
+          onKeyDown={handleSingleKeyDown}
           style={{ width: '100%' }}
         />
         {isDropdownOpen && filteredOptions.length > 0 && typeof document !== 'undefined' && createPortal(

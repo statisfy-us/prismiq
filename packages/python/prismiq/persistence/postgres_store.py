@@ -963,7 +963,7 @@ class PostgresDashboardStore:
         """
         t = _pinned_dashboards_table
 
-        # Convert provided IDs to UUIDs
+        # Convert provided IDs to integers
         provided_ids = [int(d_id) for d_id in dashboard_ids]
 
         async with self._pool_write.acquire() as conn, conn.transaction():
@@ -994,20 +994,20 @@ class PostgresDashboardStore:
 
             remaining_sql, remaining_params = self._compile_query(remaining_stmt)
             remaining_rows = await conn.fetch(remaining_sql, *remaining_params)
-            remaining_uuids = [row["dashboard_id"] for row in remaining_rows]
+            remaining_ids = [row["dashboard_id"] for row in remaining_rows]
 
             # Build combined list: provided IDs first, then remaining IDs
-            all_uuids = provided_ids + remaining_uuids
+            all_ids = provided_ids + remaining_ids
 
             # Update positions for all pins
-            for i, d_uuid in enumerate(all_uuids):
+            for i, d_id in enumerate(all_ids):
                 stmt = (
                     update(t)
                     .where(
                         t.c.tenant_id == tenant_id,
                         t.c.user_id == user_id,
                         t.c.context == context,
-                        t.c.dashboard_id == d_uuid,
+                        t.c.dashboard_id == d_id,
                     )
                     .values(position=i)
                 )
