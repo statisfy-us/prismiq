@@ -12,6 +12,7 @@ Complete TypeScript type definitions for `@prismiq/react`.
 - [Filter Types](#filter-types)
 - [Pin Types](#pin-types)
 - [Theme Types](#theme-types)
+- [LLM Types](#llm-types)
 
 ---
 
@@ -569,6 +570,12 @@ interface WidgetConfig {
   // Cross-filter configuration
   crossFilter?: WidgetCrossFilterConfig;
 
+  // SQL mode
+  /** Raw SQL query (used when data_source_mode is 'sql') */
+  raw_sql?: string;
+  /** Data source mode used in the widget editor */
+  data_source_mode?: 'guided' | 'advanced' | 'saved' | 'sql';
+
   // Additional options
   [key: string]: unknown;
 }
@@ -937,4 +944,90 @@ interface ExecuteSQLRequest {
   /** Optional named parameters for the query */
   params?: Record<string, unknown>;
 }
+```
+
+---
+
+## LLM Types
+
+Types for the AI SQL Assistant. These are used by `useLLMChat` and `useLLMStatus` hooks and the `/llm/*` API endpoints.
+
+### LLMStatus
+
+Status of the LLM assistant.
+
+```typescript
+interface LLMStatus {
+  /** Whether the LLM is enabled and available */
+  enabled: boolean;
+  /** Provider name (e.g., 'gemini') */
+  provider?: string;
+  /** Model identifier (e.g., 'gemini-2.0-flash') */
+  model?: string;
+}
+```
+
+### ChatMessage
+
+A message in a chat conversation.
+
+```typescript
+interface ChatMessage {
+  /** Message sender */
+  role: ChatRole;
+  /** Message content (may contain markdown and SQL code blocks) */
+  content: string;
+  /** Tool call ID (for tool result messages) */
+  tool_call_id?: string;
+}
+
+type ChatRole = 'user' | 'assistant' | 'system' | 'tool';
+```
+
+### StreamChunk
+
+A chunk received from the SSE stream during chat.
+
+```typescript
+interface StreamChunk {
+  /** Chunk type */
+  type: StreamChunkType;
+  /** Content payload */
+  content?: string;
+  /** Tool name (for tool_call chunks) */
+  tool_name?: string;
+  /** Tool arguments (for tool_call chunks) */
+  tool_args?: Record<string, unknown>;
+}
+
+type StreamChunkType =
+  | 'text'         // Assistant response text
+  | 'sql'          // Extracted SQL block
+  | 'tool_call'    // Tool invocation
+  | 'tool_result'  // Tool execution result
+  | 'error'        // Error message
+  | 'done';        // Stream complete
+```
+
+### ChatRequest
+
+Request body for `POST /llm/chat`.
+
+```typescript
+interface ChatRequest {
+  /** User's natural language message */
+  message: string;
+  /** Previous conversation messages for context */
+  history?: ChatMessage[];
+  /** Current SQL in the editor (provides context to the LLM) */
+  current_sql?: string | null;
+}
+```
+
+### DataSourceMode
+
+The data source mode used in the widget editor.
+
+```typescript
+type DataSourceMode = 'guided' | 'advanced' | 'saved' | 'sql';
 ```

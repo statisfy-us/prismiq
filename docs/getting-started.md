@@ -246,6 +246,7 @@ All data is isolated by tenant:
 ## Next Steps
 
 - [Integration Guide](./integration-guide.md) - Complete setup and configuration
+- [SQL Mode & AI Assistant](./sql-mode.md) - Custom SQL editing and LLM-powered query generation
 - [Hooks Reference](./hooks-reference.md) - All available React hooks
 - [API Reference](./api-reference.md) - Backend API endpoints
 - [Types Reference](./types-reference.md) - TypeScript type definitions

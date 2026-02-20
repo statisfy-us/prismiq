@@ -54,9 +54,10 @@ Prismiq is an **embeddable analytics SDK** that lets developers add dashboards a
 
 | Feature | Status | Priority |
 |---------|--------|----------|
+| Custom SQL mode with sandboxing | ✅ Complete | P2 |
+| LLM-powered SQL assistant | ✅ Complete | P2 |
 | Scheduled reports (email/Slack) | 🔲 Not started | P2 |
 | PDF export | 🔲 Not started | P2 |
-| Custom SQL mode with sandboxing | 🔲 Not started | P2 |
 | Row-level security (RLS) | 🔲 Not started | P2 |
 | Dashboard templates | 🔲 Not started | P3 |
 
@@ -224,7 +225,7 @@ Layout changes persist automatically with visual feedback.
 
 ### Phase 5: Advanced Features (Partial) ⚠️
 
-**Status: 40% COMPLETE**
+**Status: 60% COMPLETE**
 
 #### Completed:
 - ✅ **Cross-filtering** - Click on chart element → filter other widgets
@@ -236,10 +237,22 @@ Layout changes persist automatically with visual feedback.
   - `packages/react/src/hooks/useSavedQueries.ts`
   - `packages/react/src/components/SavedQueryPicker/SavedQueryPicker.tsx`
 
+- ✅ **Custom SQL Mode** - Write raw SQL in the widget editor with schema browser and validation
+  - `packages/react/src/components/CustomSQLEditor/CustomSQLEditor.tsx`
+  - `packages/react/src/components/SchemaExplorer/SchemaExplorer.tsx`
+  - SQL-mode widgets stored via `raw_sql` + `data_source_mode: 'sql'` in WidgetConfig
+  - SELECT-only enforcement, identifier quoting, SQL validation
+
+- ✅ **LLM-Powered SQL Assistant** - AI chat panel that generates SQL from natural language
+  - `packages/python/prismiq/llm/` - Provider-agnostic LLM subsystem (Gemini support)
+  - `packages/react/src/components/ChatPanel/` - Chat UI with streaming responses
+  - `packages/react/src/hooks/useLLMChat.ts` / `useLLMStatus.ts` - React hooks
+  - Multi-turn tool calling (schema introspection, SQL validation)
+  - "Apply to Editor" button to push generated SQL into the editor
+
 #### Not Started:
 - 🔲 **Scheduled Reports** - Email/Slack delivery (requires job infrastructure)
 - 🔲 **PDF Export** - Export dashboards as PDF
-- 🔲 **Custom SQL Mode** - Raw SQL with sandboxing and parameters
 - 🔲 **Row-Level Security** - Filter query results by user context
 - 🔲 **Dashboard Templates** - Pre-built dashboard templates
 
@@ -324,6 +337,13 @@ CREATE TABLE IF NOT EXISTS prismiq_saved_queries (
 | `persistence/setup.py` | Table creation | ✅ Complete |
 | `auth.py` | AuthContext protocol | ✅ Complete |
 | `permissions.py` | Permission checks | ✅ Complete |
+| `llm/types.py` | LLM Pydantic models | ✅ Complete |
+| `llm/provider.py` | LLM provider ABC | ✅ Complete |
+| `llm/gemini.py` | Google Gemini provider | ✅ Complete |
+| `llm/factory.py` | Provider factory | ✅ Complete |
+| `llm/agent.py` | Agent loop + SQL extraction | ✅ Complete |
+| `llm/tools.py` | Schema inspection tools | ✅ Complete |
+| `llm/prompt.py` | System prompt builder | ✅ Complete |
 
 ### React Components
 
@@ -349,6 +369,10 @@ CREATE TABLE IF NOT EXISTS prismiq_saved_queries (
 | `SavedQueryPicker` | Query selection | ✅ Complete |
 | `AutoSaveIndicator` | Save status | ✅ Complete |
 | `CrossFilterContext` | Cross-filtering | ✅ Complete |
+| `CustomSQLEditor` | SQL editor with validation | ✅ Complete |
+| `SchemaExplorer` | Table/column browser | ✅ Complete |
+| `ChatPanel` | LLM chat UI | ✅ Complete |
+| `ChatBubble` | Chat message with SQL blocks | ✅ Complete |
 
 ### React Hooks
 
@@ -362,6 +386,9 @@ CREATE TABLE IF NOT EXISTS prismiq_saved_queries (
 | `useSavedQueries` | Saved query management | ✅ Complete |
 | `useDebouncedLayoutSave` | Layout persistence | ✅ Complete |
 | `useCrossFilter` | Cross-filter state | ✅ Complete |
+| `useLLMChat` | LLM chat with streaming | ✅ Complete |
+| `useLLMStatus` | LLM availability check | ✅ Complete |
+| `useCustomSQL` | Execute raw SQL queries | ✅ Complete |
 
 ---
 
@@ -461,9 +488,10 @@ function App() {
 ### Phase 5: Advanced Features (Partial)
 - [x] Cross-filtering between widgets
 - [x] Saved queries library
+- [x] Custom SQL mode with schema browser and validation
+- [x] LLM-powered SQL assistant (Gemini)
 - [ ] Scheduled reports
 - [ ] PDF export
-- [ ] Custom SQL mode
 - [ ] Row-level security
 
 ---
@@ -473,8 +501,9 @@ function App() {
 ### P2 - High Value, Medium Effort
 | Feature | Description | Effort |
 |---------|-------------|--------|
+| ~~Custom SQL~~ | ~~Raw SQL with sandboxing~~ | ~~Medium~~ ✅ |
+| ~~LLM SQL Assistant~~ | ~~AI-powered SQL generation~~ | ~~Medium~~ ✅ |
 | PDF Export | Export dashboards as PDF | Medium |
-| Custom SQL | Raw SQL with sandboxing | Medium |
 | RLS | Row-level security by user context | High |
 
 ### P3 - Nice to Have

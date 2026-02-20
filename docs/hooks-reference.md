@@ -8,6 +8,7 @@ Complete reference for all React hooks provided by `@prismiq/react`.
 - [Data Hooks](#data-hooks)
 - [Dashboard Hooks](#dashboard-hooks)
 - [Pin Hooks](#pin-hooks)
+- [LLM Hooks](#llm-hooks)
 - [Utility Hooks](#utility-hooks)
 
 ---
@@ -660,6 +661,106 @@ function PinButton({ dashboardId }: { dashboardId: string }) {
 | `isPinning` | `boolean` | Pin in progress |
 | `isUnpinning` | `boolean` | Unpin in progress |
 | `error` | `Error \| null` | Last error |
+
+---
+
+## LLM Hooks
+
+These hooks power the AI SQL Assistant. They are safe to use even when the LLM is not configured — they gracefully degrade.
+
+### useLLMStatus
+
+Check if the LLM assistant is enabled and available.
+
+```tsx
+import { useLLMStatus } from '@prismiq/react';
+
+function AIIndicator() {
+  const {
+    enabled,    // boolean - is LLM available?
+    provider,   // string | undefined - e.g., 'gemini'
+    model,      // string | undefined - e.g., 'gemini-2.0-flash'
+    isLoading,  // boolean - checking status
+    error,      // Error | null
+  } = useLLMStatus();
+
+  if (!enabled) return null;
+  return <span>AI powered by {model}</span>;
+}
+```
+
+**Returns:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `enabled` | `boolean` | Whether the LLM is available |
+| `provider` | `string \| undefined` | Provider name (e.g., `"gemini"`) |
+| `model` | `string \| undefined` | Model identifier |
+| `isLoading` | `boolean` | Status check in progress |
+| `error` | `Error \| null` | Error if status check failed |
+
+**Behavior:** Calls `GET /llm/status` once on mount. Returns `enabled: false` if the endpoint fails (graceful degradation).
+
+---
+
+### useLLMChat
+
+Manage chat conversation state with the AI SQL assistant. Handles message history, streaming responses, and SQL extraction.
+
+```tsx
+import { useLLMChat } from '@prismiq/react';
+
+function ChatUI() {
+  const {
+    messages,           // ChatMessage[] - full conversation history
+    isStreaming,        // boolean - response in progress
+    streamingContent,   // string - partial response being received
+    suggestedSql,       // string | null - last SQL block extracted
+    sendMessage,        // (message: string, currentSql: string | null) => Promise<void>
+    clearHistory,       // () => void - reset conversation
+    error,              // string | null - error message
+  } = useLLMChat();
+
+  const handleSend = async (text: string) => {
+    await sendMessage(text, currentEditorSql);
+  };
+
+  return (
+    <div>
+      {messages.map((msg, i) => (
+        <div key={i} className={msg.role}>
+          {msg.content}
+        </div>
+      ))}
+      {isStreaming && <div>{streamingContent}</div>}
+      {suggestedSql && (
+        <button onClick={() => applyToEditor(suggestedSql)}>
+          Apply to Editor
+        </button>
+      )}
+    </div>
+  );
+}
+```
+
+**Returns:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `messages` | `ChatMessage[]` | Full message history (user + assistant) |
+| `isStreaming` | `boolean` | Whether a response is currently streaming |
+| `streamingContent` | `string` | Partial text of the response being streamed |
+| `suggestedSql` | `string \| null` | Last SQL block extracted from the response |
+| `sendMessage` | `(message, currentSql?) => Promise<void>` | Send a message to the assistant |
+| `clearHistory` | `() => void` | Clear all messages and reset state |
+| `error` | `string \| null` | Error message if the last request failed |
+
+**How `sendMessage` works:**
+1. Adds the user message to history
+2. Opens an SSE connection to `POST /llm/chat`
+3. Processes stream chunks: appends text, extracts SQL blocks
+4. On `done`, finalizes the assistant message in history
+5. Supports cancellation via AbortController (cleans up on unmount)
 
 ---
 
