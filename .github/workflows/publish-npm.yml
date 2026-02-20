@@ -39,4 +39,4 @@ jobs:
 
       - name: Publish to npm
         working-directory: packages/react
-        run: npm publish --access public
+        run: npm publish --provenance --access public
