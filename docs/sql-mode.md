@@ -23,7 +23,7 @@ SQL mode is ideal when you need full control over the query — complex CTEs, wi
 
 When SQL mode is selected, the widget editor shows three panels:
 
-```
+```text
 ┌──────────────┬────────────────────────┬─────────────────┐
 │ Schema       │                        │                 │
 │ Explorer     │   SQL Editor           │  AI Chat        │
@@ -95,7 +95,7 @@ The AI SQL Assistant is an optional LLM-powered chat panel that helps users writ
 
 ### Architecture
 
-```
+```text
 ┌────────────────┐      SSE stream       ┌──────────────────────┐
 │ React Frontend │◄─────────────────────►│  Prismiq Backend     │
 │                │                        │                      │
@@ -295,7 +295,7 @@ Stream a chat response using Server-Sent Events (SSE).
 
 **Response (SSE stream):**
 
-```
+```text
 data: {"type": "text", "content": "Let me look at your schema..."}
 
 data: {"type": "tool_call", "tool_name": "get_schema_overview", "tool_args": {}}
