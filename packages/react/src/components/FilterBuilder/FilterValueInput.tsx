@@ -516,14 +516,16 @@ export function FilterValueInput({
       <div className={className} style={containerStyles}>
         <div ref={containerRef} style={comboboxContainerStyles}>
           <div
+            data-testid="filter-tag-container"
             style={tagContainerStyles}
             onClick={() => inputRef.current?.focus()}
           >
             {selectedValues.map((val) => (
-              <span key={val} style={tagStyles}>
+              <span key={val} data-testid={`filter-tag-${val}`} style={tagStyles}>
                 {val}
                 <button
                   type="button"
+                  data-testid={`filter-tag-remove-${val}`}
                   style={tagRemoveStyles}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -537,6 +539,7 @@ export function FilterValueInput({
             ))}
             <input
               ref={inputRef}
+              data-testid="filter-multi-input"
               type="text"
               placeholder={selectedValues.length === 0
                 ? (isLoadingValues ? 'Loading...' : 'Type or select values')
@@ -557,7 +560,7 @@ export function FilterValueInput({
             />
           </div>
           {selectedValues.length === 0 && !multiInputText && (
-            <div style={{
+            <div data-testid="filter-multi-hint" style={{
               fontSize: '11px',
               color: 'var(--prismiq-color-text-muted)',
               marginTop: '2px',
@@ -569,6 +572,7 @@ export function FilterValueInput({
           {isDropdownOpen && filteredOptions.length > 0 && typeof document !== 'undefined' && createPortal(
             <div
               ref={dropdownRef}
+              data-testid="filter-dropdown"
               style={{
                 ...dropdownStyles,
                 top: dropdownPosition.top,
@@ -581,6 +585,7 @@ export function FilterValueInput({
                 return (
                   <div
                     key={`${optionValue}-${index}`}
+                    data-testid={`filter-option-${index}`}
                     onClick={() => handleMultiOptionSelect(optionValue)}
                     onMouseEnter={() => setHighlightedIndex(index)}
                     style={{
@@ -612,6 +617,7 @@ export function FilterValueInput({
       <div ref={containerRef} style={comboboxContainerStyles}>
         <Input
           ref={inputRef}
+          data-testid="filter-single-input"
           inputSize="sm"
           type={inputType}
           placeholder={isLoadingValues ? 'Loading...' : 'Type or select value'}
@@ -631,6 +637,7 @@ export function FilterValueInput({
         {isDropdownOpen && filteredOptions.length > 0 && typeof document !== 'undefined' && createPortal(
           <div
             ref={dropdownRef}
+            data-testid="filter-dropdown"
             style={{
               ...dropdownStyles,
               top: dropdownPosition.top,
@@ -641,6 +648,7 @@ export function FilterValueInput({
             {filteredOptions.map((optionValue, index) => (
               <div
                 key={`${optionValue}-${index}`}
+                data-testid={`filter-option-${index}`}
                 onClick={() => handleOptionSelect(optionValue)}
                 onMouseEnter={() => setHighlightedIndex(index)}
                 style={{

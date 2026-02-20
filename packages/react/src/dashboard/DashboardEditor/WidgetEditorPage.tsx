@@ -223,7 +223,8 @@ export function WidgetEditorPage({
   const handleModeSwitch = useCallback((newMode: DataSourceMode) => {
     if (newMode === 'guided' && (dataSourceMode === 'advanced' || dataSourceMode === 'saved') && queryHasAdvancedFeatures(query)) {
       const confirmed = window.confirm(
-        'This query uses advanced features (joins, calculated fields) that Guided mode may not fully represent. ' +
+        'This query uses advanced features (e.g. joins, calculated fields, grouping, sorting, pagination, time series) ' +
+        'that Guided mode may not fully represent. ' +
         'The query will be preserved but some settings may not be editable in Guided mode.\n\n' +
         'Switch to Guided mode?'
       );
@@ -748,6 +749,7 @@ export function WidgetEditorPage({
                 >
                   <button
                     type="button"
+                    data-testid="data-source-mode-guided"
                     style={tabStyle(dataSourceMode === 'guided')}
                     onClick={() => handleModeSwitch('guided')}
                   >
@@ -761,6 +763,7 @@ export function WidgetEditorPage({
                 >
                   <button
                     type="button"
+                    data-testid="data-source-mode-advanced"
                     style={tabStyle(dataSourceMode === 'advanced')}
                     onClick={() => handleModeSwitch('advanced')}
                   >

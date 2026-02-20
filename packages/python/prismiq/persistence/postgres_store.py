@@ -44,6 +44,15 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger(__name__)
 
+
+def _parse_int_id(value: str) -> int:
+    """Parse a string ID to integer, raising ValueError with a clear message."""
+    try:
+        return int(value)
+    except (ValueError, TypeError) as e:
+        raise ValueError(f"Invalid ID format: '{value}'. Expected an integer.") from e
+
+
 # SQLAlchemy Table definition for pinned dashboards (used for query generation)
 # quote=True ensures all identifiers are double-quoted in generated SQL
 # Note: IDs are Integer (autoincrement) to match Alembic migration
@@ -228,7 +237,7 @@ class PostgresDashboardStore:
         """
         async with self._pool.acquire() as conn:
             await self._set_search_path(conn, schema_name)
-            row = await conn.fetchrow(query, int(dashboard_id), tenant_id)
+            row = await conn.fetchrow(query, _parse_int_id(dashboard_id), tenant_id)
             if not row:
                 return None
             return self._row_to_dashboard(row)
@@ -332,7 +341,7 @@ class PostgresDashboardStore:
                 # Delete existing widgets
                 await conn.execute(
                     "DELETE FROM prismiq_widgets WHERE dashboard_id = $1",
-                    int(dashboard_id),
+                    _parse_int_id(dashboard_id),
                 )
                 # Insert new widgets (let autoincrement generate IDs)
                 for widget in update.widgets:
@@ -343,7 +352,7 @@ class PostgresDashboardStore:
                             "created_at", "updated_at"
                         ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
                         """,
-                        int(dashboard_id),
+                        _parse_int_id(dashboard_id),
                         widget.title,
                         widget.type.value,
                         json.dumps(widget.query.model_dump()) if widget.query else None,
@@ -356,7 +365,7 @@ class PostgresDashboardStore:
                 return await self.get_dashboard(dashboard_id, tenant_id, schema_name)
 
             # Add dashboard_id and tenant_id as final params
-            params.extend([int(dashboard_id), tenant_id])
+            params.extend([_parse_int_id(dashboard_id), tenant_id])
 
             # Column names in `updates` are hardcoded above, not user input
             query = f"""
@@ -390,7 +399,7 @@ class PostgresDashboardStore:
         query = "DELETE FROM prismiq_dashboards WHERE id = $1 AND tenant_id = $2"
         async with self._pool_write.acquire() as conn:
             await self._set_search_path(conn, schema_name)
-            result = await conn.execute(query, int(dashboard_id), tenant_id)
+            result = await conn.execute(query, _parse_int_id(dashboard_id), tenant_id)
             return result == "DELETE 1"
 
     # -------------------------------------------------------------------------
@@ -430,7 +439,7 @@ class PostgresDashboardStore:
             await self._set_search_path(conn, schema_name)
             row = await conn.fetchrow(
                 query,
-                int(dashboard_id),
+                _parse_int_id(dashboard_id),
                 widget.type.value,
                 widget.title,
                 json.dumps(widget.query.model_dump()) if widget.query else None,
@@ -606,7 +615,7 @@ class PostgresDashboardStore:
             await self._set_search_path(conn, schema_name)
             row = await conn.fetchrow(
                 insert_query,
-                int(dashboard_id),
+                _parse_int_id(dashboard_id),
                 original.type.value,
                 f"{original.title} (Copy)",
                 json.dumps(original.query.model_dump()) if original.query else None,
@@ -659,7 +668,7 @@ class PostgresDashboardStore:
                         }
                     ),
                     int(widget_id),
-                    int(dashboard_id),
+                    _parse_int_id(dashboard_id),
                 )
         return True
 
@@ -803,7 +812,7 @@ class PostgresDashboardStore:
                 .values(
                     tenant_id=tenant_id,
                     user_id=user_id,
-                    dashboard_id=int(dashboard_id),
+                    dashboard_id=_parse_int_id(dashboard_id),
                     context=context,
                     position=position,
                     pinned_at=now,
@@ -848,7 +857,7 @@ class PostgresDashboardStore:
         stmt = delete(t).where(
             t.c.tenant_id == tenant_id,
             t.c.user_id == user_id,
-            t.c.dashboard_id == int(dashboard_id),
+            t.c.dashboard_id == _parse_int_id(dashboard_id),
             t.c.context == context,
         )
         sql, params = self._compile_query(stmt)
@@ -926,7 +935,7 @@ class PostgresDashboardStore:
             .where(
                 t.c.tenant_id == tenant_id,
                 t.c.user_id == user_id,
-                t.c.dashboard_id == int(dashboard_id),
+                t.c.dashboard_id == _parse_int_id(dashboard_id),
             )
             .order_by(t.c.context)
         )
@@ -964,7 +973,7 @@ class PostgresDashboardStore:
         t = _pinned_dashboards_table
 
         # Convert provided IDs to integers
-        provided_ids = [int(d_id) for d_id in dashboard_ids]
+        provided_ids = [_parse_int_id(d_id) for d_id in dashboard_ids]
 
         async with self._pool_write.acquire() as conn, conn.transaction():
             await self._set_search_path(conn, schema_name)
@@ -1041,7 +1050,7 @@ class PostgresDashboardStore:
             t.c.tenant_id == tenant_id,
             t.c.user_id == user_id,
             t.c.context == context,
-            t.c.dashboard_id == int(dashboard_id),
+            t.c.dashboard_id == _parse_int_id(dashboard_id),
         )
         stmt = select(exists(subquery))
         sql, params = self._compile_query(stmt)
