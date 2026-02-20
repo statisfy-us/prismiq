@@ -55,9 +55,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/prismiq/prismiq"
+Homepage = "https://github.com/statisfy-us/prismiq"
 Documentation = "https://prismiq.dev/docs"
-Repository = "https://github.com/prismiq/prismiq"
+Repository = "https://github.com/statisfy-us/prismiq"
 
 [tool.hatch.build.targets.wheel]
 packages = ["prismiq"]

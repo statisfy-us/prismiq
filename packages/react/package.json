@@ -104,7 +104,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prismiq/prismiq.git",
+    "url": "https://github.com/statisfy-us/prismiq.git",
     "directory": "packages/react"
   }
 }
