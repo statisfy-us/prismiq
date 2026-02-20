@@ -16,8 +16,10 @@ export interface WidgetPreviewProps {
   title: string;
   /** Widget configuration. */
   config: WidgetConfig;
-  /** Query definition (null for text widgets). */
+  /** Query definition (null for text widgets and SQL-mode widgets). */
   query: QueryDefinition | null;
+  /** Raw SQL for SQL-mode widgets. */
+  rawSql?: string;
   /** Query result data. */
   result: QueryResult | null;
   /** Whether data is loading. */
@@ -57,6 +59,7 @@ export function WidgetPreview({
   title,
   config,
   query,
+  rawSql,
   result,
   isLoading = false,
   error,
@@ -121,10 +124,11 @@ export function WidgetPreview({
 
   // Check if we need to show empty state
   const needsQuery = type !== 'text';
-  const showEmptyState = needsQuery && !query && !isLoading;
+  const hasDataSource = !!query || !!rawSql;
+  const showEmptyState = needsQuery && !hasDataSource && !isLoading;
 
   return (
-    <div className={`prismiq-widget-preview ${className}`} style={containerStyle}>
+    <div className={`prismiq-widget-preview ${className}`} style={containerStyle} data-testid="widget-preview">
       <div style={headerStyle}>
         <h3 style={titleStyle}>{title || 'Widget Preview'}</h3>
         <span style={labelStyle}>Preview</span>
@@ -132,7 +136,7 @@ export function WidgetPreview({
 
       <div style={contentStyle}>
         {showEmptyState ? (
-          <div style={emptyStateStyle}>
+          <div style={emptyStateStyle} data-testid="widget-preview-empty">
             <div
               style={{
                 fontSize: '32px',

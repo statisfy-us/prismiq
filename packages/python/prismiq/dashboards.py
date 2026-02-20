@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictStr, model_validator
 
 from prismiq.types import QueryDefinition
 
@@ -156,9 +156,13 @@ class WidgetConfig(BaseModel):
     fontSize: str | None = None
     """Font size for text widgets."""
 
+    # Raw SQL (for SQL mode widgets)
+    raw_sql: StrictStr | None = None
+    """Raw SQL query for SQL-mode widgets. When set, query should be None."""
+
     # Editor metadata
-    data_source_mode: Literal["guided", "advanced", "saved"] | None = None
-    """Editor mode used to build this widget ('guided', 'advanced', or 'saved')."""
+    data_source_mode: Literal["guided", "advanced", "saved", "sql"] | None = None
+    """Editor mode used to build this widget ('guided', 'advanced', 'saved', or 'sql')."""
 
 
 class Widget(BaseModel):
@@ -189,6 +193,15 @@ class Widget(BaseModel):
 
     updated_at: datetime = Field(default_factory=_utc_now)
     """When the widget was last updated."""
+
+    @model_validator(mode="after")
+    def validate_raw_sql_vs_query(self) -> Widget:
+        """Ensure raw_sql and query are mutually exclusive."""
+        if self.config.raw_sql is not None and self.query is not None:
+            raise ValueError(
+                "raw_sql and query are mutually exclusive; set one or the other, not both"
+            )
+        return self
 
 
 # ============================================================================

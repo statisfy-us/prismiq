@@ -289,8 +289,9 @@ export function DashboardProvider({
     if (!lazyLoadingEnabledRef.current) {
       const initialLoadingState: Record<string, boolean> = {};
       data.widgets.forEach((widget) => {
-        // Only mark widgets with queries as loading (text widgets don't need it)
-        if (widget.query) {
+        // Only mark widgets with queries or raw SQL as loading (text widgets don't need it)
+        const isSqlMode = widget.config?.data_source_mode === 'sql' && widget.config?.raw_sql;
+        if (widget.query || isSqlMode) {
           initialLoadingState[widget.id] = true;
         }
       });
@@ -317,7 +318,10 @@ export function DashboardProvider({
       bypassCache: boolean = false,
       signal?: AbortSignal
     ) => {
-      if (!widget.query) {
+      // SQL-mode widgets: use executeSQL with raw_sql
+      const isSqlMode = widget.config?.data_source_mode === 'sql' && widget.config?.raw_sql;
+
+      if (!widget.query && !isSqlMode) {
         // Text widgets don't have queries
         return;
       }
@@ -334,17 +338,24 @@ export function DashboardProvider({
       });
 
       try {
-        // Apply dashboard filters to widget query
-        let query = applyFiltersToQuery(
-          widget.query,
-          currentDashboard,
-          currentFilters
-        );
+        let result;
 
-        // Apply cross-filters from other widgets
-        query = applyCrossFiltersToQuery(query, currentCrossFilters, widget.id);
+        if (isSqlMode) {
+          // Execute raw SQL for SQL-mode widgets
+          result = await client.executeSQL(widget.config.raw_sql!);
+        } else {
+          // Apply dashboard filters to widget query
+          let query = applyFiltersToQuery(
+            widget.query!,
+            currentDashboard,
+            currentFilters
+          );
 
-        const result = await client.executeQuery(query, bypassCache, signal);
+          // Apply cross-filters from other widgets
+          query = applyCrossFiltersToQuery(query, currentCrossFilters, widget.id);
+
+          result = await client.executeQuery(query, bypassCache, signal);
+        }
 
         // Don't update state if request was aborted
         if (signal?.aborted) return;
@@ -395,8 +406,10 @@ export function DashboardProvider({
       currentBatchSize: number = batchSize,
       signal?: AbortSignal
     ) => {
-      // Filter to widgets that have queries
-      const widgetsWithQueries = widgets.filter((w) => w.query !== null);
+      // Filter to widgets that have queries or raw SQL
+      const widgetsWithQueries = widgets.filter(
+        (w) => w.query !== null || (w.config?.data_source_mode === 'sql' && w.config?.raw_sql)
+      );
 
       // Process in batches
       for (let i = 0; i < widgetsWithQueries.length; i += currentBatchSize) {
@@ -679,12 +692,12 @@ export function DashboardProvider({
 
     // Find widgets that:
     // 1. Are currently visible
-    // 2. Have a query (not text widgets)
+    // 2. Have a query or raw SQL (not text widgets)
     // 3. Haven't been loaded yet
     // 4. Aren't currently loading
     const widgetsToLoad = dashboard.widgets.filter((w) =>
       visibleWidgets.has(w.id) &&
-      w.query !== null &&
+      (w.query !== null || (w.config?.data_source_mode === 'sql' && w.config?.raw_sql)) &&
       !widgetResults[w.id] &&
       !widgetLoading[w.id]
     );
@@ -730,7 +743,7 @@ export function DashboardProvider({
     // Re-execute widgets that have been visible (they have data that needs refreshing)
     const widgetsToRefresh = dashboard.widgets.filter((w) =>
       everVisibleWidgets.has(w.id) &&
-      w.query !== null &&
+      (w.query !== null || (w.config?.data_source_mode === 'sql' && w.config?.raw_sql)) &&
       widgetResults[w.id] // Only re-execute if previously loaded
     );
 

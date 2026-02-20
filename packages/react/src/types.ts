@@ -647,6 +647,58 @@ export interface SQLValidationResult {
 }
 
 // ============================================================================
+// LLM Types
+// ============================================================================
+
+/**
+ * Chat message roles.
+ */
+export type ChatRole = 'user' | 'assistant' | 'system' | 'tool';
+
+/**
+ * A chat message in a conversation.
+ */
+export interface ChatMessage {
+  /** Role of the message sender. */
+  role: ChatRole;
+  /** Text content of the message. */
+  content: string;
+  /** Tool call ID (for tool responses). */
+  tool_call_id?: string;
+}
+
+/**
+ * Types of streaming chunks from the LLM agent.
+ */
+export type StreamChunkType = 'text' | 'sql' | 'tool_call' | 'tool_result' | 'error' | 'done';
+
+/**
+ * A single chunk in a streaming LLM response.
+ */
+export interface StreamChunk {
+  /** Type of this chunk. */
+  type: StreamChunkType;
+  /** Text content (for text/sql/error chunks). */
+  content?: string;
+  /** Tool name (for tool_call/tool_result chunks). */
+  tool_name?: string;
+  /** Tool arguments (for tool_call chunks). */
+  tool_args?: Record<string, unknown>;
+}
+
+/**
+ * LLM agent status response.
+ */
+export interface LLMStatus {
+  /** Whether the LLM agent is enabled. */
+  enabled: boolean;
+  /** LLM provider name (e.g., 'gemini'). */
+  provider?: string;
+  /** Model being used (e.g., 'gemini-2.0-flash'). */
+  model?: string;
+}
+
+// ============================================================================
 // Pin Types
 // ============================================================================
 

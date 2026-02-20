@@ -16,6 +16,7 @@ import asyncpg  # type: ignore[import-not-found]
 from prismiq.cache import CacheBackend, CacheConfig, QueryCache
 from prismiq.dashboard_store import DashboardStore, InMemoryDashboardStore
 from prismiq.executor import QueryExecutor
+from prismiq.llm.types import LLMConfig
 from prismiq.metrics import record_cache_hit, record_query_execution, set_active_connections
 from prismiq.persistence import PostgresDashboardStore, SavedQueryStore, ensure_tables
 from prismiq.query import QueryBuilder, ValidationResult
@@ -43,6 +44,8 @@ from prismiq.types import (
 
 if TYPE_CHECKING:
     from asyncpg import Pool
+
+    from prismiq.llm.provider import LLMProvider
 
 _logger = logging.getLogger(__name__)
 
@@ -108,6 +111,7 @@ class PrismiqEngine:
         persist_dashboards: bool = False,
         skip_table_creation: bool = False,
         database_url_write: str | None = None,
+        llm_config: LLMConfig | None = None,
     ) -> None:
         """Initialize the Prismiq engine.
 
@@ -127,6 +131,9 @@ class PrismiqEngine:
                 Use when tables are managed externally (e.g., via Alembic migrations).
             database_url_write: Optional separate URL for write operations (INSERT/UPDATE/DELETE).
                 If not provided, database_url is used for both reads and writes.
+            llm_config: Optional LLM configuration for the chat agent.
+                If provided and enabled, the engine will create an LLM provider for
+                natural language query assistance.
         """
         self._database_url = database_url
         self._database_url_write = database_url_write
@@ -139,6 +146,7 @@ class PrismiqEngine:
         self._enable_metrics = enable_metrics
         self._persist_dashboards = persist_dashboards
         self._skip_table_creation = skip_table_creation
+        self._llm_config = llm_config
 
         # Schema config manager
         self._schema_config_manager = SchemaConfigManager(schema_config)
@@ -167,6 +175,12 @@ class PrismiqEngine:
         self._schema: DatabaseSchema | None = None
         self._dashboard_store: DashboardStore | None = None
         self._saved_query_store: SavedQueryStore | None = None
+        self._llm_provider: LLMProvider | None = None
+
+    @property
+    def schema_name(self) -> str:
+        """Get the default PostgreSQL schema name."""
+        return self._schema_name
 
     @property
     def cache(self) -> CacheBackend | None:
@@ -209,6 +223,21 @@ class PrismiqEngine:
         if self._saved_query_store is None:
             raise RuntimeError("Engine not started. Call 'await engine.startup()' first.")
         return self._saved_query_store
+
+    @property
+    def llm_enabled(self) -> bool:
+        """Whether the LLM agent is enabled and initialized."""
+        return self._llm_provider is not None
+
+    @property
+    def llm_provider(self) -> LLMProvider | None:
+        """Get the LLM provider, or None if not configured."""
+        return self._llm_provider
+
+    @property
+    def llm_config(self) -> LLMConfig | None:
+        """Get the LLM configuration."""
+        return self._llm_config
 
     async def startup(self) -> None:
         """Initialize the engine.
@@ -270,6 +299,17 @@ class PrismiqEngine:
             # SavedQueryStore requires PostgreSQL - no in-memory fallback
             self._saved_query_store = None  # type: ignore[assignment]
 
+        # Initialize LLM provider if configured
+        if self._llm_config and self._llm_config.enabled:
+            from prismiq.llm.factory import create_provider
+
+            self._llm_provider = create_provider(self._llm_config)
+            _logger.info(
+                "LLM agent enabled: provider=%s, model=%s",
+                self._llm_config.provider.value,
+                self._llm_config.model,
+            )
+
         # Update metrics
         if self._enable_metrics:
             set_active_connections(self._pool.get_size())
@@ -284,6 +324,10 @@ class PrismiqEngine:
         if self._pool_write and self._pool_write is not self._pool:
             await self._pool_write.close()
             self._pool_write = None
+
+        if self._llm_provider:
+            await self._llm_provider.shutdown()
+            self._llm_provider = None
 
         if self._pool:
             await self._pool.close()

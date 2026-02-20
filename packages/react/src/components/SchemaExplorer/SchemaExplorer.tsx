@@ -28,6 +28,8 @@ export interface SchemaExplorerProps {
   searchable?: boolean;
   /** Whether tables are collapsible. */
   collapsible?: boolean;
+  /** Optional element rendered at the right end of the header row. */
+  headerAction?: React.ReactNode;
   /** Additional class name. */
   className?: string;
   /** Additional styles. */
@@ -154,6 +156,7 @@ export function SchemaExplorer({
   selectedColumns = [],
   searchable = true,
   collapsible = true,
+  headerAction,
   className,
   style,
 }: SchemaExplorerProps): JSX.Element {
@@ -198,10 +201,12 @@ export function SchemaExplorer({
       style={{ ...containerStyles, ...style }}
       role="tree"
       aria-label="Database schema"
+      data-testid="schema-explorer-root"
     >
       <div style={headerStyles}>
         <Icon name="table" size={16} style={{ color: 'var(--prismiq-color-primary)' }} />
-        <span style={titleStyles}>Schema Explorer</span>
+        <span style={{ ...titleStyles, flex: 1 }}>Schema Explorer</span>
+        {headerAction}
       </div>
 
       {searchable && (
@@ -212,6 +217,7 @@ export function SchemaExplorer({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{ width: '100%' }}
+            data-testid="schema-explorer-search"
           />
         </div>
       )}

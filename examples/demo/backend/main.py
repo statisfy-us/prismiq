@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../../packages/py
 
 from prismiq import PrismiqEngine, create_router
 from prismiq.cache import RedisCache
+from prismiq.llm.types import LLMConfig, LLMProviderType
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -57,6 +58,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         print(f"Redis not available, running without cache: {e}")
         redis_cache = None
 
+    # LLM configuration (optional)
+    llm_config = None
+    if os.getenv("LLM_ENABLED", "").lower() in ("1", "true", "yes"):
+        provider_str = os.getenv("LLM_PROVIDER", "gemini").lower()
+        provider_type = LLMProviderType(provider_str)
+        llm_config = LLMConfig(
+            enabled=True,
+            provider=provider_type,
+            model=os.getenv("LLM_MODEL", "gemini-2.0-flash"),
+            api_key=os.getenv("LLM_API_KEY"),
+            project_id=os.getenv("GOOGLE_PROJECT_ID"),
+            location=os.getenv("GOOGLE_LOCATION", "us-central1"),
+        )
+        print(f"LLM enabled: {provider_type.value} / {llm_config.model}")
+
     print("Connecting to database...")
     engine = PrismiqEngine(
         database_url=database_url,
@@ -64,6 +80,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         max_rows=10000,
         persist_dashboards=True,  # Use PostgreSQL for dashboard persistence
         cache=redis_cache,  # Use Redis for caching (query=24h, schema=1h by default)
+        llm_config=llm_config,
     )
     try:
         await engine.startup()
