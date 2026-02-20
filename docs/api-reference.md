@@ -261,7 +261,7 @@ Execute a query with a row limit for previewing.
 
 ### POST /query/validate-sql
 
-Validate a raw SQL query.
+Validate a raw SQL query. Checks syntax, table/column existence, and SELECT-only restriction.
 
 **Request Body:**
 ```json
@@ -270,7 +270,7 @@ Validate a raw SQL query.
 }
 ```
 
-**Response:**
+**Response (valid):**
 ```json
 {
   "valid": true,
@@ -279,9 +279,18 @@ Validate a raw SQL query.
 }
 ```
 
+**Response (invalid):**
+```json
+{
+  "valid": false,
+  "errors": ["Only SELECT statements are allowed"],
+  "tables": []
+}
+```
+
 ### POST /query/execute-sql
 
-Execute a raw SQL query (SELECT only).
+Execute a raw SQL query (SELECT only). The query is validated before execution.
 
 **Request Body:**
 ```json
@@ -291,7 +300,14 @@ Execute a raw SQL query (SELECT only).
 }
 ```
 
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `sql` | `string` | Yes | Raw SQL query (SELECT only) |
+| `params` | `object` | No | Named parameters for the query |
+
 **Response:** Same as `/query/execute`
+
+**Security:** Only SELECT statements are allowed. INSERT, UPDATE, DELETE, DROP, and DDL statements are rejected with a 400 error.
 
 ### POST /query/execute/timeseries
 
@@ -752,6 +768,88 @@ Calculate metric trends (YoY, period comparison).
   "comparison_period": { "start": "2023-01-01", "end": "2023-01-31" },
   "metrics": ["revenue", "orders"]
 }
+```
+
+---
+
+## LLM Endpoints
+
+These endpoints are only available when the LLM is enabled via `LLMConfig`. See [SQL Mode & AI Assistant](./sql-mode.md) for setup instructions.
+
+### GET /llm/status
+
+Check if the LLM assistant is enabled and which provider/model is configured.
+
+**Response (enabled):**
+```json
+{
+  "enabled": true,
+  "provider": "gemini",
+  "model": "gemini-2.0-flash"
+}
+```
+
+**Response (disabled):**
+```json
+{
+  "enabled": false
+}
+```
+
+### POST /llm/chat
+
+Stream a chat response from the AI SQL assistant using Server-Sent Events (SSE).
+
+The assistant can make tool calls to inspect the database schema before generating SQL.
+
+**Request Body:**
+```json
+{
+  "message": "Show me total revenue by month for 2024",
+  "history": [
+    { "role": "user", "content": "What tables do I have?" },
+    { "role": "assistant", "content": "You have users, orders, and products tables." }
+  ],
+  "current_sql": "SELECT * FROM orders"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `message` | `string` | Yes | User's natural language message |
+| `history` | `ChatMessage[]` | No | Previous conversation messages for context |
+| `current_sql` | `string \| null` | No | Current SQL in the editor (provides context) |
+
+**Response:** Server-Sent Events stream with JSON chunks:
+
+```
+data: {"type": "text", "content": "Let me look at your schema..."}
+
+data: {"type": "tool_call", "tool_name": "get_schema_overview", "tool_args": {}}
+
+data: {"type": "tool_result", "content": "{\"tables\": [...]}"}
+
+data: {"type": "text", "content": "Here's the query:\n```sql\nSELECT ...```"}
+
+data: {"type": "sql", "content": "SELECT DATE_TRUNC('month', \"created_at\") AS month, SUM(\"amount\") AS revenue FROM \"public\".\"orders\" WHERE \"created_at\" >= '2024-01-01' GROUP BY month ORDER BY month"}
+
+data: {"type": "done"}
+```
+
+**Stream chunk types:**
+
+| Type | Description |
+|------|-------------|
+| `text` | Assistant response text (may contain markdown) |
+| `sql` | Extracted SQL query from ```sql code blocks |
+| `tool_call` | Tool invocation (`tool_name` and `tool_args` fields) |
+| `tool_result` | JSON result from tool execution |
+| `error` | Error message (includes correlation ID) |
+| `done` | Stream complete |
+
+**Error handling:** On internal errors, the stream emits an error chunk with a correlation ID rather than leaking exception details:
+```
+data: {"type": "error", "content": "Internal server error (ref: a1b2c3d4)"}
 ```
 
 ---

@@ -20,6 +20,7 @@ For detailed API reference, see:
 - [Hooks Reference](./hooks-reference.md)
 - [API Endpoints](./api-reference.md)
 - [Types Reference](./types-reference.md)
+- [SQL Mode & AI Assistant](./sql-mode.md)
 - [Multi-Tenant Integration](./multi-tenant-integration.md)
 - [Dashboard Pinning](./dashboard-pinning.md)
 
@@ -121,6 +122,7 @@ engine = PrismiqEngine(
 | `query_cache_ttl` | `int` | `86400` | Query result cache TTL (seconds) |
 | `schema_cache_ttl` | `int` | `3600` | Schema cache TTL (seconds) |
 | `enable_metrics` | `bool` | `True` | Enable Prometheus metrics |
+| `llm_config` | `LLMConfig \| None` | `None` | LLM config for AI SQL assistant ([details](./sql-mode.md)) |
 
 ### CORS Configuration
 
@@ -488,6 +490,8 @@ const query = {
 
 ### Custom SQL
 
+Execute raw SQL queries programmatically:
+
 ```tsx
 import { useCustomSQL } from '@prismiq/react';
 
@@ -509,6 +513,27 @@ function CustomReport() {
   return <ResultsTable data={data} />;
 }
 ```
+
+The widget editor also includes a full **SQL Mode** with a built-in schema browser and an optional **AI SQL Assistant** that generates queries from natural language. See the [SQL Mode & AI Assistant](./sql-mode.md) guide for details.
+
+#### Enabling the AI Assistant
+
+```python
+from prismiq import PrismiqEngine
+from prismiq.llm import LLMConfig, LLMProviderType
+
+engine = PrismiqEngine(
+    database_url="postgresql://...",
+    llm_config=LLMConfig(
+        enabled=True,
+        provider=LLMProviderType.GEMINI,
+        model="gemini-2.0-flash",
+        api_key="your-gemini-api-key",
+    ),
+)
+```
+
+When enabled, the chat panel appears in the widget editor's SQL mode. No frontend changes needed — the React SDK auto-detects LLM availability.
 
 ---
 
@@ -1235,6 +1260,7 @@ export function ExplorePage() {
 
 ## Next Steps
 
+- [SQL Mode & AI Assistant](./sql-mode.md) - Custom SQL editing and LLM-powered query generation
 - [Hooks Reference](./hooks-reference.md) - Complete hooks documentation
 - [API Reference](./api-reference.md) - Backend API endpoints
 - [Types Reference](./types-reference.md) - TypeScript type definitions

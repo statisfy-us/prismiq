@@ -21,6 +21,8 @@
 - **🔌 Embedded React Components** — Drop charts and tables into your app, not iframes
 - **🗄️ Direct Database Access** — Query PostgreSQL tables without a semantic layer
 - **🎨 Visual Query Builder** — Joins, filters, aggregations — all from the UI
+- **📝 Custom SQL Mode** — Write raw SQL queries with a built-in editor, schema browser, and validation
+- **🤖 AI SQL Assistant** — Optional LLM-powered chat that helps users write SQL queries from natural language
 - **📊 Apache ECharts** — Beautiful, performant visualizations (100K+ data points)
 - **📌 Dashboard Pinning** — Let users save dashboards to different areas of your app
 - **🔒 Row-Level Security** — Filter data per-user with context injection
@@ -82,10 +84,13 @@ function SalesChart() {
 ## Documentation
 
 - [Getting Started](./docs/getting-started.md)
+- [Integration Guide](./docs/integration-guide.md)
+- [SQL Mode & AI Assistant](./docs/sql-mode.md)
+- [API Reference](./docs/api-reference.md)
+- [Hooks Reference](./docs/hooks-reference.md)
+- [Types Reference](./docs/types-reference.md)
 - [Dashboard Pinning](./docs/dashboard-pinning.md)
 - [Multi-Tenant Integration](./docs/multi-tenant-integration.md)
-- [API Reference](./docs/api-reference.md) *(coming soon)*
-- [Security & Access Control](./docs/security.md) *(coming soon)*
 
 ## Examples
 
