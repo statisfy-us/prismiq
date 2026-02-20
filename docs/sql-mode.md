@@ -73,7 +73,7 @@ All raw SQL queries are validated before execution:
 1. **SELECT only** — INSERT, UPDATE, DELETE, DROP, and DDL statements are rejected
 2. **Table existence** — Referenced tables must exist in the exposed schema
 3. **Column existence** — Referenced columns are validated against the schema
-4. **Identifier quoting** — Always use double quotes: `SELECT "column" FROM "schema"."table"`
+4. **Identifier quoting** — Recommended: use double quotes for safety (`SELECT "column" FROM "schema"."table"`). Unquoted identifiers are accepted but may cause errors with reserved words or mixed-case names
 
 ### Backend Configuration
 
@@ -102,9 +102,9 @@ The AI SQL Assistant is an optional LLM-powered chat panel that helps users writ
 │ ChatPanel      │  POST /llm/chat        │  Agent Loop          │
 │ useLLMChat     │────────────────────►  │  ├── System Prompt    │
 │ useLLMStatus   │                        │  ├── Tool Calls       │
-│                │  GET /llm/status        │  │   ├── get_schema   │
-│                │────────────────────►  │  │   ├── get_table    │
-│                │                        │  │   ├── get_rels     │
+│                │  GET /llm/status        │  │   ├── get_schema_overview
+│                │────────────────────►  │  │   ├── get_table_details
+│                │                        │  │   ├── get_relationships
 │                │                        │  │   └── validate_sql │
 │                │                        │  └── LLM Provider     │
 │                │                        │       └── Gemini      │
