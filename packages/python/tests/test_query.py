@@ -1335,3 +1335,304 @@ class TestCalculatedFields:
         assert "CASE WHEN" in sql  # From is_large_order
         assert "* 2" in sql  # From double_total
         assert params == [1]
+
+
+# ============================================================================
+# LEFT JOIN Filter Placement Tests
+# ============================================================================
+
+
+class TestLeftJoinFilterPlacement:
+    """Tests for correct filter placement with outer joins.
+
+    Filters on the nullable side of an outer join must be placed in the ON
+    clause, not the WHERE clause. Putting them in WHERE effectively converts
+    the outer join into an inner join because NULL rows get filtered out.
+    """
+
+    @staticmethod
+    def _join_query(
+        join_type: JoinType,
+        filters: list[FilterDefinition],
+    ) -> QueryDefinition:
+        """Build orders-LEFT/RIGHT/INNER-users query with given filters."""
+        return QueryDefinition(
+            tables=[
+                QueryTable(id="t1", name="orders"),
+                QueryTable(id="t2", name="users"),
+            ],
+            joins=[
+                JoinDefinition(
+                    from_table_id="t1",
+                    from_column="user_id",
+                    to_table_id="t2",
+                    to_column="id",
+                    join_type=join_type,
+                )
+            ],
+            columns=[
+                ColumnSelection(table_id="t1", column="id"),
+                ColumnSelection(table_id="t2", column="name"),
+            ],
+            filters=filters,
+        )
+
+    def test_left_join_filter_on_right_table_goes_to_on(self, builder: QueryBuilder) -> None:
+        """Filter on the right (joined) table of a LEFT JOIN goes to ON clause."""
+        query = self._join_query(
+            JoinType.LEFT,
+            [
+                FilterDefinition(
+                    table_id="t2", column="name", operator=FilterOperator.EQ, value="Alice"
+                ),
+            ],
+        )
+        sql, params = builder.build(query)
+
+        assert "WHERE" not in sql
+        assert 'LEFT JOIN "users" ON' in sql
+        assert '"users"."name" = $1' in sql
+        assert params == ["Alice"]
+
+    def test_left_join_filter_on_left_table_stays_in_where(self, builder: QueryBuilder) -> None:
+        """Filter on the left table of a LEFT JOIN stays in WHERE."""
+        query = self._join_query(
+            JoinType.LEFT,
+            [
+                FilterDefinition(
+                    table_id="t1", column="status", operator=FilterOperator.EQ, value="pending"
+                ),
+            ],
+        )
+        sql, params = builder.build(query)
+
+        assert 'WHERE "orders"."status" = $1' in sql
+        assert params == ["pending"]
+
+    def test_inner_join_filter_stays_in_where(self, builder: QueryBuilder) -> None:
+        """For INNER JOIN, all filters stay in WHERE (no semantic difference)."""
+        query = self._join_query(
+            JoinType.INNER,
+            [
+                FilterDefinition(
+                    table_id="t2", column="name", operator=FilterOperator.EQ, value="Alice"
+                ),
+            ],
+        )
+        sql, params = builder.build(query)
+
+        assert 'WHERE "users"."name" = $1' in sql
+        assert params == ["Alice"]
+
+    def test_left_join_mixed_filters(self, builder: QueryBuilder) -> None:
+        """Mixed filters: right-table filter in ON, left-table filter in WHERE."""
+        query = self._join_query(
+            JoinType.LEFT,
+            [
+                FilterDefinition(
+                    table_id="t2", column="name", operator=FilterOperator.EQ, value="Alice"
+                ),
+                FilterDefinition(
+                    table_id="t1", column="status", operator=FilterOperator.EQ, value="pending"
+                ),
+            ],
+        )
+        sql, params = builder.build(query)
+
+        assert 'ON "orders"."user_id" = "users"."id" AND "users"."name" = $1' in sql
+        assert 'WHERE "orders"."status" = $2' in sql
+        assert params == ["Alice", "pending"]
+
+    def test_left_join_in_filter_on_right_table_parameterization(
+        self, builder: QueryBuilder
+    ) -> None:
+        """IN filter on right table: params in ON clause, subsequent params offset correctly."""
+        query = self._join_query(
+            JoinType.LEFT,
+            [
+                FilterDefinition(
+                    table_id="t2", column="name", operator=FilterOperator.IN, value=["Alice", "Bob"]
+                ),
+                FilterDefinition(
+                    table_id="t1", column="status", operator=FilterOperator.EQ, value="pending"
+                ),
+            ],
+        )
+        sql, params = builder.build(query)
+
+        assert '"users"."name" IN ($1, $2)' in sql
+        assert "WHERE" in sql
+        assert '"orders"."status" = $3' in sql
+        assert params == ["Alice", "Bob", "pending"]
+
+    def test_right_join_filter_on_left_table_goes_to_on(self, builder: QueryBuilder) -> None:
+        """Filter on the left table of a RIGHT JOIN goes to ON clause."""
+        query = self._join_query(
+            JoinType.RIGHT,
+            [
+                FilterDefinition(
+                    table_id="t1", column="status", operator=FilterOperator.EQ, value="pending"
+                ),
+            ],
+        )
+        sql, params = builder.build(query)
+
+        assert "WHERE" not in sql
+        assert 'RIGHT JOIN "users" ON' in sql
+        assert '"orders"."status" = $1' in sql
+        assert params == ["pending"]
+
+    def test_sql_expression_filter_stays_in_where(self, builder: QueryBuilder) -> None:
+        """Filters with sql_expression always stay in WHERE, even for right table."""
+        query = self._join_query(
+            JoinType.LEFT,
+            [
+                FilterDefinition(
+                    table_id="t2",
+                    column="name",
+                    operator=FilterOperator.EQ,
+                    value="Alice",
+                    sql_expression='"users"."name" || \' \' || "users"."email"',
+                ),
+            ],
+        )
+        sql, params = builder.build(query)
+
+        assert "WHERE" in sql
+        assert params == ["Alice"]
+
+    def test_full_join_filters_on_both_sides_go_to_on(self, builder: QueryBuilder) -> None:
+        """FULL JOIN: filters on both sides should go to ON clause."""
+        query = self._join_query(
+            JoinType.FULL,
+            [
+                FilterDefinition(
+                    table_id="t1", column="status", operator=FilterOperator.EQ, value="pending"
+                ),
+                FilterDefinition(
+                    table_id="t2", column="name", operator=FilterOperator.EQ, value="Alice"
+                ),
+            ],
+        )
+        sql, params = builder.build(query)
+
+        # Both filters in ON clause, no WHERE
+        assert "WHERE" not in sql
+        assert 'FULL JOIN "users" ON' in sql
+        assert '"orders"."status" = $1' in sql
+        assert '"users"."name" = $2' in sql
+        assert params == ["pending", "Alice"]
+
+    def test_multiple_left_joins_filters_distributed(self, builder: QueryBuilder) -> None:
+        """Filters distributed to correct ON clauses across multiple LEFT JOINs."""
+        query = QueryDefinition(
+            tables=[
+                QueryTable(id="t1", name="orders"),
+                QueryTable(id="t2", name="users"),
+                QueryTable(id="t3", name="products"),
+            ],
+            joins=[
+                JoinDefinition(
+                    from_table_id="t1",
+                    from_column="user_id",
+                    to_table_id="t2",
+                    to_column="id",
+                    join_type=JoinType.LEFT,
+                ),
+                JoinDefinition(
+                    from_table_id="t1",
+                    from_column="id",
+                    to_table_id="t3",
+                    to_column="id",
+                    join_type=JoinType.LEFT,
+                ),
+            ],
+            columns=[
+                ColumnSelection(table_id="t1", column="id"),
+                ColumnSelection(table_id="t2", column="name"),
+                ColumnSelection(table_id="t3", column="price"),
+            ],
+            filters=[
+                FilterDefinition(
+                    table_id="t2", column="name", operator=FilterOperator.EQ, value="Alice"
+                ),
+                FilterDefinition(
+                    table_id="t3", column="price", operator=FilterOperator.GTE, value=100
+                ),
+                FilterDefinition(
+                    table_id="t1", column="status", operator=FilterOperator.EQ, value="pending"
+                ),
+            ],
+        )
+        sql, params = builder.build(query)
+
+        # t2 filter on first JOIN's ON clause
+        assert (
+            'LEFT JOIN "users" ON "orders"."user_id" = "users"."id" AND "users"."name" = $1' in sql
+        )
+        # t3 filter on second JOIN's ON clause
+        assert (
+            'LEFT JOIN "products" ON "orders"."id" = "products"."id" AND "products"."price" >= $2'
+            in sql
+        )
+        # t1 filter in WHERE
+        assert 'WHERE "orders"."status" = $3' in sql
+        assert params == ["Alice", 100, "pending"]
+
+    def test_is_null_filter_on_nullable_side_goes_to_on(self, builder: QueryBuilder) -> None:
+        """IS_NULL (parameterless) filter on nullable side goes to ON clause."""
+        query = self._join_query(
+            JoinType.LEFT,
+            [
+                FilterDefinition(table_id="t2", column="name", operator=FilterOperator.IS_NULL),
+            ],
+        )
+        sql, params = builder.build(query)
+
+        assert "WHERE" not in sql
+        assert '"users"."name" IS NULL' in sql
+        assert params == []
+
+    def test_calculated_field_filter_on_nullable_side_stays_in_where(
+        self, builder: QueryBuilder
+    ) -> None:
+        """Calculated field filter on nullable-side table stays in WHERE."""
+        query = QueryDefinition(
+            tables=[
+                QueryTable(id="t1", name="orders"),
+                QueryTable(id="t2", name="users"),
+            ],
+            joins=[
+                JoinDefinition(
+                    from_table_id="t1",
+                    from_column="user_id",
+                    to_table_id="t2",
+                    to_column="id",
+                    join_type=JoinType.LEFT,
+                )
+            ],
+            columns=[
+                ColumnSelection(table_id="t1", column="id"),
+                ColumnSelection(table_id="t2", column="name"),
+            ],
+            filters=[
+                FilterDefinition(
+                    table_id="t2",
+                    column="double_id",
+                    operator=FilterOperator.EQ,
+                    value=1,
+                ),
+            ],
+            calculated_fields=[
+                CalculatedField(
+                    name="double_id",
+                    expression="[id] * 2",
+                    sql_expression='"users"."id" * 2',
+                ),
+            ],
+        )
+        sql, params = builder.build(query)
+
+        # Calculated field filter stays in WHERE even though table_id is nullable side
+        assert "WHERE" in sql
+        assert params == [1]
