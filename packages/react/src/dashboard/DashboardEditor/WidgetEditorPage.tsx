@@ -22,6 +22,7 @@ import { SavedQueryPicker } from '../../components/SavedQueryPicker';
 import { QueryBuilder } from '../../components/QueryBuilder';
 import { CustomSQLEditor } from '../../components/CustomSQLEditor';
 import { ChatPanel } from '../../components/ChatPanel';
+import { SchemaExplorer } from '../../components/SchemaExplorer';
 import { useLLMStatus } from '../../hooks/useLLMStatus';
 import { WidgetTypeSelector } from './WidgetTypeSelector';
 import { WidgetPreview } from './WidgetPreview';
@@ -143,6 +144,7 @@ export function WidgetEditorPage({
 
   // Raw SQL for SQL mode
   const [rawSql, setRawSql] = useState<string>(widget?.config?.raw_sql ?? '');
+  const [schemaOpen, setSchemaOpen] = useState(true);
 
   // Data source mode - restore saved mode for existing widgets, default to 'guided' for new ones
   const [dataSourceMode, setDataSourceMode] = useState<DataSourceMode>(
@@ -873,6 +875,80 @@ export function WidgetEditorPage({
 
                 {dataSourceMode === 'sql' && (
                   <div style={{ display: 'flex', gap: 0, height: '100%', minHeight: '400px' }}>
+                    {/* Schema Reference Panel */}
+                    <div style={{
+                      width: schemaOpen ? '220px' : '36px',
+                      flexShrink: 0,
+                      transition: 'width 0.2s ease',
+                      borderRight: `1px solid ${theme.colors.border}`,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      overflow: 'hidden',
+                    }}>
+                      {schemaOpen ? (
+                        <SchemaExplorer
+                          searchable
+                          collapsible
+                          onColumnSelect={(table, col) => {
+                            const ref = `"${table.name}"."${col.name}"`;
+                            setRawSql(prev => prev ? `${prev} ${ref}` : ref);
+                          }}
+                          headerAction={
+                            <button
+                              type="button"
+                              onClick={() => setSchemaOpen(false)}
+                              title="Collapse schema panel"
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '22px',
+                                height: '22px',
+                                backgroundColor: 'transparent',
+                                border: `1px solid ${theme.colors.border}`,
+                                borderRadius: theme.radius.sm,
+                                cursor: 'pointer',
+                                color: theme.colors.textMuted,
+                                flexShrink: 0,
+                              }}
+                            >
+                              <Icon name="chevron-left" size={12} />
+                            </button>
+                          }
+                          style={{ flex: 1, border: 'none', borderRadius: 0 }}
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setSchemaOpen(true)}
+                          title="Show schema browser"
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: '6px',
+                            paddingTop: theme.spacing.sm,
+                            width: '100%',
+                            height: '100%',
+                            backgroundColor: theme.colors.surface,
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: theme.colors.textMuted,
+                            fontFamily: theme.fonts.sans,
+                          }}
+                        >
+                          <Icon name="table" size={16} />
+                          <span style={{
+                            writingMode: 'vertical-rl',
+                            fontSize: '11px',
+                            fontWeight: 500,
+                            letterSpacing: '0.04em',
+                          }}>
+                            Schema
+                          </span>
+                        </button>
+                      )}
+                    </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <CustomSQLEditor
                         initialSql={rawSql}
