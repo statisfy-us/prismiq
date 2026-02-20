@@ -26,6 +26,7 @@ import type {
   TableSchema,
   ValidationResult,
   Widget,
+  WidgetContext,
   WidgetCreate,
   WidgetPositionUpdate,
   WidgetUpdate,
@@ -763,7 +764,7 @@ export class PrismiqClient {
     history: ChatMessage[],
     currentSql: string | null,
     signal?: AbortSignal,
-    widgetContext?: import('../types').WidgetContext
+    widgetContext?: WidgetContext
   ): AsyncGenerator<StreamChunk, void, undefined> {
     const url = `${this.endpoint}/llm/chat`;
 
