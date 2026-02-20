@@ -12,9 +12,10 @@ type XLSXModule = typeof import('xlsx');
 async function loadXLSX(): Promise<XLSXModule> {
   try {
     return await import('xlsx');
-  } catch {
+  } catch (err) {
+    const detail = err instanceof Error ? `: ${err.message}` : '';
     throw new Error(
-      'xlsx is required for Excel export. Install it with: npm install xlsx'
+      `xlsx is required for Excel export. Install it with: npm install xlsx${detail}`
     );
   }
 }
