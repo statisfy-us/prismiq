@@ -467,6 +467,14 @@ class TestQualifyTableSchemas:
         # Both occurrences should be qualified
         assert result.count('"org_123"') == 2
 
+    def test_cte_shadowing_real_table_known_limitation(self) -> None:
+        """Known limitation: CTE that shadows a real table name gets incorrectly qualified."""
+        sql = "WITH users AS (SELECT 1 AS id) SELECT * FROM users"
+        result = qualify_table_schemas(sql, "org_123", frozenset({"users"}))
+        # The CTE reference "users" is incorrectly qualified because its
+        # name matches a known table. This test documents current behavior.
+        assert '"org_123"' in result
+
 
 # ============================================================================
 # Raw SQL Integration Tests

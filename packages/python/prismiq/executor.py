@@ -65,9 +65,14 @@ def qualify_table_schemas(
     try:
         parsed = sqlglot.parse_one(sql, dialect="postgres")
     except sqlglot.errors.SqlglotError:
-        # Parsing failed. In the execute_raw_sql flow, the SQL has already
-        # been validated by SQLValidator, so this should not happen. The
-        # caller is responsible for deciding whether to raise or fall back.
+        # If parsing fails, return the original SQL unchanged. In the
+        # execute_raw_sql flow, SQLValidator has already parsed the SQL
+        # successfully, so this is a defensive fallback.
+        _logger.warning(
+            "sqlglot failed to parse SQL for schema qualification; "
+            "query will rely on search_path for tenant isolation",
+            exc_info=True,
+        )
         return sql
 
     for table in parsed.find_all(exp.Table):
@@ -396,9 +401,17 @@ class QueryExecutor:
                             self._schema_name,
                             exc_info=True,
                         )
-                        # Terminate the connection so it is not returned to
-                        # the pool with a tenant-specific search_path.
-                        await conn.close()
+                        # Close the connection so asyncpg's pool discards it
+                        # on context-manager exit instead of returning it to
+                        # the pool.
+                        try:
+                            await conn.close()
+                        except Exception:
+                            _logger.error(
+                                "Graceful close failed; terminating forcefully",
+                                exc_info=True,
+                            )
+                            conn.terminate()
 
     def _format_result(
         self, rows: list[Any], execution_time_ms: float, truncated: bool

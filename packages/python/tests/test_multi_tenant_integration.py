@@ -121,7 +121,7 @@ async def engine_b(database_url: str | None, tenant_schemas: dict[str, str]) -> 
 
 @pytest.fixture
 async def shared_engine(database_url: str | None, tenant_schemas: dict[str, str]) -> Any:
-    """Single PrismiqEngine pointed at tenant A, used for cross-schema queries."""
+    """PrismiqEngine pointed at tenant A, reused to verify sequential schema switching."""
     assert database_url is not None
     engine = PrismiqEngine(
         database_url=database_url,
@@ -139,7 +139,7 @@ async def shared_engine(database_url: str | None, tenant_schemas: dict[str, str]
 
 
 def _customers_query() -> QueryDefinition:
-    """Simple SELECT * FROM customers query."""
+    """Select name, region, and revenue from customers."""
     return QueryDefinition(
         tables=[QueryTable(id="t1", name="customers")],
         columns=[
@@ -151,7 +151,7 @@ def _customers_query() -> QueryDefinition:
 
 
 def _count_query() -> QueryDefinition:
-    """SELECT COUNT(*) FROM customers."""
+    """Count rows in customers via COUNT(id)."""
     return QueryDefinition(
         tables=[QueryTable(id="t1", name="customers")],
         columns=[
