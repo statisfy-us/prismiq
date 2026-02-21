@@ -15,6 +15,10 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
+import sqlglot
+import sqlglot.errors
+from sqlglot import exp
+
 from prismiq.query import QueryBuilder
 from prismiq.sql_validator import SQLValidationError, SQLValidator
 from prismiq.types import (
@@ -27,6 +31,83 @@ from prismiq.types import (
 )
 
 _logger = logging.getLogger(__name__)
+
+
+def qualify_table_schemas(
+    sql: str,
+    schema_name: str,
+    known_tables: frozenset[str],
+) -> str:
+    """Add schema qualification to known table references in SQL.
+
+    Rewrites unqualified table names to schema-qualified form. Only qualifies
+    tables whose names appear in the known set (from schema introspection).
+    CTE references and subquery aliases are left unqualified because their
+    names are typically absent from the known_tables set. Note: if a CTE
+    shadows a real table name, the CTE reference will be incorrectly qualified.
+
+    Raises SQLValidationError if the SQL cannot be parsed (fail-closed) or
+    if any table is explicitly qualified with a schema other than
+    ``schema_name`` (prevents cross-tenant escape).
+
+    Args:
+        sql: SQL query string.
+        schema_name: PostgreSQL schema name to qualify tables with.
+        known_tables: Set of lowercase table names from the schema.
+
+    Returns:
+        SQL with schema-qualified table references.
+
+    Raises:
+        SQLValidationError: If the SQL cannot be parsed or references a
+            foreign schema.
+
+    Example:
+        >>> qualify_table_schemas(
+        ...     'SELECT * FROM "users"',
+        ...     "org_123",
+        ...     frozenset({"users"}),
+        ... )
+        'SELECT * FROM "org_123"."users"'
+    """
+    try:
+        parsed = sqlglot.parse_one(sql, dialect="postgres")
+    except sqlglot.errors.SqlglotError as exc:
+        # Fail closed: reject queries we cannot schema-qualify. Returning
+        # unqualified SQL would bypass the foreign-schema check below and
+        # allow cross-tenant access via explicit schema qualifiers.
+        _logger.error(
+            "sqlglot failed to parse SQL for schema qualification; "
+            "rejecting query to prevent potential tenant isolation bypass",
+            exc_info=True,
+        )
+        raise SQLValidationError(
+            "Failed to schema-qualify SQL for tenant isolation",
+            errors=[f"Schema qualification parse error: {exc}"],
+        ) from exc
+
+    for table in parsed.find_all(exp.Table):
+        if not table.name:
+            continue
+        if table.db:
+            # Table already has an explicit schema qualifier — reject if
+            # it points to a different schema (cross-tenant escape attempt).
+            explicit_schema = (
+                table.db.this if isinstance(table.db, exp.Identifier) else str(table.db)
+            )
+            if explicit_schema != schema_name:
+                raise SQLValidationError(
+                    f'Query references schema "{explicit_schema}" but only '
+                    f'"{schema_name}" is allowed',
+                    errors=[
+                        f'Table "{explicit_schema}"."{table.name}" references a foreign schema'
+                    ],
+                )
+        elif table.name.lower() in known_tables:
+            table.set("db", exp.Identifier(this=schema_name, quoted=True))
+
+    return parsed.sql(dialect="postgres")
+
 
 if TYPE_CHECKING:
     from asyncpg import Pool  # type: ignore[import-not-found]
@@ -205,16 +286,12 @@ class QueryExecutor:
         self,
         sql: str,
         params: dict[str, Any] | None = None,
-        tenant_id: str | None = None,
-        tenant_column: str = "tenant_id",
     ) -> QueryResult:
         """Execute a raw SQL query with validation.
 
         Args:
             sql: Raw SQL query (must be SELECT only).
             params: Optional named parameters for the query.
-            tenant_id: Optional tenant ID for row-level filtering.
-            tenant_column: Column name for tenant filtering (default: 'tenant_id').
 
         Returns:
             QueryResult with columns, rows, and execution metadata.
@@ -235,6 +312,21 @@ class QueryExecutor:
         # Use the sanitized SQL from validation
         safe_sql = validation.sanitized_sql
         assert safe_sql is not None  # Guaranteed by valid=True
+
+        # Schema-qualify table references for multi-tenant isolation.
+        # Adds schema prefix to unqualified table names so that queries are
+        # fully qualified and independent of search_path. Only tables present
+        # in schema introspection are qualified; CTE names and subquery aliases
+        # are skipped as long as they don't share a name with a real table.
+        if self._schema_name:
+            qualified_sql = qualify_table_schemas(
+                safe_sql,
+                self._schema_name,
+                self._sql_validator.allowed_tables,
+            )
+            if qualified_sql == safe_sql:
+                _logger.debug("No tables were schema-qualified in raw SQL")
+            safe_sql = qualified_sql
 
         # Apply row limit using a CTE wrapper
         limited_sql = f"WITH _cte AS ({safe_sql}) SELECT * FROM _cte LIMIT {self._max_rows + 1}"
@@ -294,8 +386,10 @@ class QueryExecutor:
     async def _execute_with_timeout(self, sql: str, params: list[Any]) -> list[Any]:
         """Execute SQL with timeout."""
         async with self._pool.acquire() as conn:
-            # Set search_path for schema isolation (allows unqualified table names).
-            # Uses parameterized set_config to avoid SQL injection.
+            # Set search_path as a safety net for schema isolation. Both
+            # QueryBuilder and qualify_table_schemas produce fully-qualified SQL,
+            # but this ensures correct resolution if any unqualified reference
+            # slips through. Uses parameterized set_config to avoid SQL injection.
             if self._schema_name:
                 await conn.fetchval(
                     "SELECT set_config('search_path', $1, false)",
@@ -325,11 +419,22 @@ class QueryExecutor:
                         await conn.execute("RESET search_path")
                     except Exception:
                         _logger.error(
-                            "Failed to reset search_path; connection may leak "
-                            "tenant schema '%s' to the pool",
+                            "Failed to reset search_path; closing connection "
+                            "to prevent tenant schema '%s' from leaking to the pool",
                             self._schema_name,
                             exc_info=True,
                         )
+                        # Close the connection so asyncpg's pool discards it
+                        # on context-manager exit instead of returning it to
+                        # the pool.
+                        try:
+                            await conn.close()
+                        except Exception:
+                            _logger.error(
+                                "Graceful close failed; terminating forcefully",
+                                exc_info=True,
+                            )
+                            conn.terminate()
 
     def _format_result(
         self, rows: list[Any], execution_time_ms: float, truncated: bool

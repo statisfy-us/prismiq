@@ -7,7 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from prismiq.executor import QueryExecutor
+from prismiq.executor import QueryExecutor, qualify_table_schemas
+from prismiq.sql_validator import SQLValidationError
 from prismiq.types import (
     ColumnSchema,
     ColumnSelection,
@@ -379,3 +380,200 @@ class TestResultFormatting:
         result = await executor.execute(query)
 
         assert result.execution_time_ms >= 0
+
+
+# ============================================================================
+# Schema Qualification Tests
+# ============================================================================
+
+
+class TestQualifyTableSchemas:
+    """Tests for qualify_table_schemas function."""
+
+    @pytest.mark.parametrize(
+        ("sql", "expected"),
+        [
+            ('SELECT * FROM "users"', '"org_123"."users"'),
+            ('SELECT "id" FROM "users"', '"org_123"."users"'),
+            ('SELECT * FROM (SELECT id FROM "users") sub', '"org_123"."users"'),
+            ('SELECT * FROM "Users"', '"org_123"."Users"'),
+        ],
+        ids=["simple_select", "quoted_columns", "subquery", "case_insensitive"],
+    )
+    def test_qualifies_known_table(self, sql: str, expected: str) -> None:
+        """Test schema qualification on various SQL patterns."""
+        result = qualify_table_schemas(sql, "org_123", frozenset({"users"}))
+        assert expected in result
+
+    def test_qualifies_multiple_tables_in_join(self) -> None:
+        """Test schema qualification with JOINs."""
+        sql = 'SELECT u."id", o."name" FROM "users" u JOIN "orders" o ON u."id" = o."user_id"'
+        known = frozenset({"users", "orders"})
+        result = qualify_table_schemas(sql, "org_123", known)
+        assert '"org_123"."users"' in result
+        assert '"org_123"."orders"' in result
+
+    def test_skips_unknown_tables(self) -> None:
+        """Test that tables not in known set are not qualified."""
+        sql = 'SELECT * FROM "users" JOIN "unknown_table" ON 1=1'
+        result = qualify_table_schemas(sql, "org_123", frozenset({"users"}))
+        assert '"org_123"."users"' in result
+        assert '"org_123"."unknown_table"' not in result
+
+    def test_skips_already_qualified_with_correct_schema(self) -> None:
+        """Test that tables already qualified with the correct schema are not double-qualified."""
+        sql = 'SELECT * FROM "org_123"."users"'
+        result = qualify_table_schemas(sql, "org_123", frozenset({"users"}))
+        assert result.count('"org_123"') == 1
+
+    def test_rejects_foreign_schema_qualifier(self) -> None:
+        """Test that tables qualified with a different schema are rejected."""
+        sql = 'SELECT * FROM "other_schema"."users"'
+        with pytest.raises(SQLValidationError, match=r"only.*org_123.*is allowed"):
+            qualify_table_schemas(sql, "org_123", frozenset({"users"}))
+
+    def test_skips_cte_references(self) -> None:
+        """Test that CTE names are not schema-qualified."""
+        sql = (
+            'WITH recent_users AS (SELECT * FROM "users" WHERE active = true) '
+            "SELECT * FROM recent_users"
+        )
+        known = frozenset({"users"})
+        result = qualify_table_schemas(sql, "org_123", known)
+        assert '"org_123"."users"' in result
+        # CTE reference "recent_users" should not be qualified
+        assert '"org_123"."recent_users"' not in result
+
+    def test_raises_on_parse_error(self) -> None:
+        """Test that unparseable SQL raises SQLValidationError (fail closed)."""
+        bad_sql = "NOT VALID SQL @@@ %%% &&&"
+        with pytest.raises(SQLValidationError, match="schema-qualify SQL"):
+            qualify_table_schemas(bad_sql, "org_123", frozenset({"users"}))
+
+    def test_empty_known_tables(self) -> None:
+        """Test with empty known tables set — nothing gets qualified."""
+        sql = 'SELECT * FROM "users"'
+        result = qualify_table_schemas(sql, "org_123", frozenset())
+        assert '"org_123"' not in result
+
+    def test_union_tables_qualified(self) -> None:
+        """Test that tables in UNION branches are qualified."""
+        sql = 'SELECT id FROM "users" UNION ALL SELECT id FROM "users"'
+        result = qualify_table_schemas(sql, "org_123", frozenset({"users"}))
+        # Both occurrences should be qualified
+        assert result.count('"org_123"') == 2
+
+    def test_cte_shadowing_real_table_known_limitation(self) -> None:
+        """Known limitation: CTE that shadows a real table name gets incorrectly qualified."""
+        sql = "WITH users AS (SELECT 1 AS id) SELECT * FROM users"
+        result = qualify_table_schemas(sql, "org_123", frozenset({"users"}))
+        # The CTE reference "users" is incorrectly qualified because its
+        # name matches a known table. This test documents current behavior.
+        assert '"org_123"' in result
+
+
+# ============================================================================
+# Raw SQL Integration Tests
+# ============================================================================
+
+
+class TestConnectionCleanup:
+    """Tests for connection cleanup when RESET search_path fails."""
+
+    async def test_connection_closed_when_search_path_reset_fails(
+        self, mock_pool: MagicMock, sample_schema: DatabaseSchema
+    ) -> None:
+        """Verify conn.close() is called when RESET search_path fails."""
+        executor = QueryExecutor(mock_pool, sample_schema, schema_name="org_123")
+        mock_conn = mock_pool.acquire.return_value.__aenter__.return_value
+        mock_conn.fetch.return_value = [make_record({"email": "test@example.com"})]
+        mock_conn.fetchval.return_value = None
+        mock_conn.close = AsyncMock()
+
+        async def execute_side_effect(sql: str, *args: Any) -> None:
+            if "search_path" in sql:
+                raise Exception("connection lost")
+
+        mock_conn.execute = AsyncMock(side_effect=execute_side_effect)
+
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="users")],
+            columns=[ColumnSelection(table_id="t1", column="email")],
+        )
+        result = await executor.execute(query)
+
+        assert result.row_count == 1
+        mock_conn.close.assert_awaited_once()
+
+    async def test_connection_terminated_when_close_also_fails(
+        self, mock_pool: MagicMock, sample_schema: DatabaseSchema
+    ) -> None:
+        """Verify conn.terminate() is called when both RESET and close() fail."""
+        executor = QueryExecutor(mock_pool, sample_schema, schema_name="org_123")
+        mock_conn = mock_pool.acquire.return_value.__aenter__.return_value
+        mock_conn.fetch.return_value = [make_record({"email": "test@example.com"})]
+        mock_conn.fetchval.return_value = None
+        mock_conn.close = AsyncMock(side_effect=Exception("close failed"))
+        mock_conn.terminate = MagicMock()
+
+        async def execute_side_effect(sql: str, *args: Any) -> None:
+            if "search_path" in sql:
+                raise Exception("connection lost")
+
+        mock_conn.execute = AsyncMock(side_effect=execute_side_effect)
+
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="users")],
+            columns=[ColumnSelection(table_id="t1", column="email")],
+        )
+        result = await executor.execute(query)
+
+        assert result.row_count == 1
+        mock_conn.close.assert_awaited_once()
+        mock_conn.terminate.assert_called_once()
+
+
+class TestExecuteRawSql:
+    """Tests for execute_raw_sql with schema qualification."""
+
+    async def test_qualifies_tables_when_schema_set(
+        self, mock_pool: MagicMock, sample_schema: DatabaseSchema
+    ) -> None:
+        """Verify raw SQL gets schema-qualified before execution."""
+        executor = QueryExecutor(mock_pool, sample_schema, schema_name="org_123")
+        mock_conn = mock_pool.acquire.return_value.__aenter__.return_value
+        mock_conn.fetch.return_value = []
+        mock_conn.fetchval.return_value = None
+
+        await executor.execute_raw_sql('SELECT "email" FROM "users"')
+
+        # Inspect the SQL passed to conn.fetch
+        call_args = mock_conn.fetch.call_args
+        executed_sql = call_args[0][0]
+        assert '"org_123"."users"' in executed_sql
+
+    async def test_rejects_foreign_schema_in_raw_sql(
+        self, mock_pool: MagicMock, sample_schema: DatabaseSchema
+    ) -> None:
+        """Verify execute_raw_sql rejects SQL referencing a foreign schema."""
+        executor = QueryExecutor(mock_pool, sample_schema, schema_name="org_123")
+        mock_conn = mock_pool.acquire.return_value.__aenter__.return_value
+        mock_conn.fetchval.return_value = None
+
+        with pytest.raises(SQLValidationError, match=r"only.*org_123.*is allowed"):
+            await executor.execute_raw_sql('SELECT * FROM "evil_schema"."users"')
+
+    async def test_no_qualification_without_schema(
+        self, mock_pool: MagicMock, sample_schema: DatabaseSchema
+    ) -> None:
+        """Verify raw SQL is not modified when schema_name is not set."""
+        executor = QueryExecutor(mock_pool, sample_schema)  # No schema_name
+        mock_conn = mock_pool.acquire.return_value.__aenter__.return_value
+        mock_conn.fetch.return_value = []
+        mock_conn.fetchval.return_value = None
+
+        await executor.execute_raw_sql('SELECT "email" FROM "users"')
+
+        call_args = mock_conn.fetch.call_args
+        executed_sql = call_args[0][0]
+        assert '"org_123"' not in executed_sql

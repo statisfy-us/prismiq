@@ -55,6 +55,11 @@ class SQLValidator:
         self._schema = schema
         self._allowed_tables = frozenset(t.name.lower() for t in schema.tables)
 
+    @property
+    def allowed_tables(self) -> frozenset[str]:
+        """Set of lowercase table names allowed in queries."""
+        return self._allowed_tables
+
     def validate(self, sql: str) -> SQLValidationResult:
         """Validate a raw SQL query.
 
@@ -70,10 +75,11 @@ class SQLValidator:
         # Parse the SQL
         try:
             statements = sqlglot.parse(sql, dialect="postgres")
-        except sqlglot.errors.ParseError as e:
+        except (sqlglot.errors.ParseError, sqlglot.errors.TokenError) as e:
+            error_type = type(e).__name__
             return SQLValidationResult(
                 valid=False,
-                errors=[f"SQL parse error: {e}"],
+                errors=[f"SQL parse error ({error_type}): {e}"],
                 tables=[],
                 sanitized_sql=None,
             )
