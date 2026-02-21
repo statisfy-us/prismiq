@@ -75,11 +75,11 @@ class SQLValidator:
         # Parse the SQL
         try:
             statements = sqlglot.parse(sql, dialect="postgres")
-        except sqlglot.errors.SqlglotError as e:
+        except (sqlglot.errors.ParseError, sqlglot.errors.TokenError) as e:
             error_type = type(e).__name__
             return SQLValidationResult(
                 valid=False,
-                errors=[f"SQL analysis error ({error_type}): {e}"],
+                errors=[f"SQL parse error ({error_type}): {e}"],
                 tables=[],
                 sanitized_sql=None,
             )

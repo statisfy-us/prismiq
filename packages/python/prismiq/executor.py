@@ -46,8 +46,9 @@ def qualify_table_schemas(
     names are typically absent from the known_tables set. Note: if a CTE
     shadows a real table name, the CTE reference will be incorrectly qualified.
 
-    Raises SQLValidationError if any table is explicitly qualified with a
-    schema other than ``schema_name`` (prevents cross-tenant escape).
+    Raises SQLValidationError if the SQL cannot be parsed (fail-closed) or
+    if any table is explicitly qualified with a schema other than
+    ``schema_name`` (prevents cross-tenant escape).
 
     Args:
         sql: SQL query string.
@@ -58,7 +59,8 @@ def qualify_table_schemas(
         SQL with schema-qualified table references.
 
     Raises:
-        SQLValidationError: If a table references a foreign schema.
+        SQLValidationError: If the SQL cannot be parsed or references a
+            foreign schema.
 
     Example:
         >>> qualify_table_schemas(
@@ -70,16 +72,19 @@ def qualify_table_schemas(
     """
     try:
         parsed = sqlglot.parse_one(sql, dialect="postgres")
-    except sqlglot.errors.SqlglotError:
-        # If parsing fails, return the original SQL unchanged. In the
-        # execute_raw_sql flow, SQLValidator has already parsed the SQL
-        # successfully, so this is a defensive fallback.
-        _logger.warning(
+    except sqlglot.errors.SqlglotError as exc:
+        # Fail closed: reject queries we cannot schema-qualify. Returning
+        # unqualified SQL would bypass the foreign-schema check below and
+        # allow cross-tenant access via explicit schema qualifiers.
+        _logger.error(
             "sqlglot failed to parse SQL for schema qualification; "
-            "query will rely on search_path for tenant isolation",
+            "rejecting query to prevent potential tenant isolation bypass",
             exc_info=True,
         )
-        return sql
+        raise SQLValidationError(
+            "Failed to schema-qualify SQL for tenant isolation",
+            errors=[f"Schema qualification parse error: {exc}"],
+        ) from exc
 
     for table in parsed.find_all(exp.Table):
         if not table.name:
@@ -281,16 +286,12 @@ class QueryExecutor:
         self,
         sql: str,
         params: dict[str, Any] | None = None,
-        tenant_id: str | None = None,
-        tenant_column: str = "tenant_id",
     ) -> QueryResult:
         """Execute a raw SQL query with validation.
 
         Args:
             sql: Raw SQL query (must be SELECT only).
             params: Optional named parameters for the query.
-            tenant_id: Optional tenant ID for row-level filtering.
-            tenant_column: Column name for tenant filtering (default: 'tenant_id').
 
         Returns:
             QueryResult with columns, rows, and execution metadata.

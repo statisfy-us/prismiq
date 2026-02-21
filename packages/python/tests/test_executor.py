@@ -444,11 +444,11 @@ class TestQualifyTableSchemas:
         # CTE reference "recent_users" should not be qualified
         assert '"org_123"."recent_users"' not in result
 
-    def test_returns_original_on_parse_error(self) -> None:
-        """Test that unparseable SQL is returned unchanged."""
+    def test_raises_on_parse_error(self) -> None:
+        """Test that unparseable SQL raises SQLValidationError (fail closed)."""
         bad_sql = "NOT VALID SQL @@@ %%% &&&"
-        result = qualify_table_schemas(bad_sql, "org_123", frozenset({"users"}))
-        assert result == bad_sql
+        with pytest.raises(SQLValidationError, match="schema-qualify SQL"):
+            qualify_table_schemas(bad_sql, "org_123", frozenset({"users"}))
 
     def test_empty_known_tables(self) -> None:
         """Test with empty known tables set — nothing gets qualified."""
@@ -477,6 +477,62 @@ class TestQualifyTableSchemas:
 # ============================================================================
 
 
+class TestConnectionCleanup:
+    """Tests for connection cleanup when RESET search_path fails."""
+
+    async def test_connection_closed_when_search_path_reset_fails(
+        self, mock_pool: MagicMock, sample_schema: DatabaseSchema
+    ) -> None:
+        """Verify conn.close() is called when RESET search_path fails."""
+        executor = QueryExecutor(mock_pool, sample_schema, schema_name="org_123")
+        mock_conn = mock_pool.acquire.return_value.__aenter__.return_value
+        mock_conn.fetch.return_value = [make_record({"email": "test@example.com"})]
+        mock_conn.fetchval.return_value = None
+        mock_conn.close = AsyncMock()
+
+        async def execute_side_effect(sql: str, *args: Any) -> None:
+            if "search_path" in sql:
+                raise Exception("connection lost")
+
+        mock_conn.execute = AsyncMock(side_effect=execute_side_effect)
+
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="users")],
+            columns=[ColumnSelection(table_id="t1", column="email")],
+        )
+        result = await executor.execute(query)
+
+        assert result.row_count == 1
+        mock_conn.close.assert_awaited_once()
+
+    async def test_connection_terminated_when_close_also_fails(
+        self, mock_pool: MagicMock, sample_schema: DatabaseSchema
+    ) -> None:
+        """Verify conn.terminate() is called when both RESET and close() fail."""
+        executor = QueryExecutor(mock_pool, sample_schema, schema_name="org_123")
+        mock_conn = mock_pool.acquire.return_value.__aenter__.return_value
+        mock_conn.fetch.return_value = [make_record({"email": "test@example.com"})]
+        mock_conn.fetchval.return_value = None
+        mock_conn.close = AsyncMock(side_effect=Exception("close failed"))
+        mock_conn.terminate = MagicMock()
+
+        async def execute_side_effect(sql: str, *args: Any) -> None:
+            if "search_path" in sql:
+                raise Exception("connection lost")
+
+        mock_conn.execute = AsyncMock(side_effect=execute_side_effect)
+
+        query = QueryDefinition(
+            tables=[QueryTable(id="t1", name="users")],
+            columns=[ColumnSelection(table_id="t1", column="email")],
+        )
+        result = await executor.execute(query)
+
+        assert result.row_count == 1
+        mock_conn.close.assert_awaited_once()
+        mock_conn.terminate.assert_called_once()
+
+
 class TestExecuteRawSql:
     """Tests for execute_raw_sql with schema qualification."""
 
@@ -495,6 +551,17 @@ class TestExecuteRawSql:
         call_args = mock_conn.fetch.call_args
         executed_sql = call_args[0][0]
         assert '"org_123"."users"' in executed_sql
+
+    async def test_rejects_foreign_schema_in_raw_sql(
+        self, mock_pool: MagicMock, sample_schema: DatabaseSchema
+    ) -> None:
+        """Verify execute_raw_sql rejects SQL referencing a foreign schema."""
+        executor = QueryExecutor(mock_pool, sample_schema, schema_name="org_123")
+        mock_conn = mock_pool.acquire.return_value.__aenter__.return_value
+        mock_conn.fetchval.return_value = None
+
+        with pytest.raises(SQLValidationError, match=r"only.*org_123.*is allowed"):
+            await executor.execute_raw_sql('SELECT * FROM "evil_schema"."users"')
 
     async def test_no_qualification_without_schema(
         self, mock_pool: MagicMock, sample_schema: DatabaseSchema
