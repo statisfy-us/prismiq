@@ -303,8 +303,11 @@ class QueryExecutor:
                 )
 
             # Set statement timeout on the connection
-            timeout_ms = int(self._query_timeout * 1000)
-            await conn.execute(f"SET statement_timeout = {timeout_ms}")
+            timeout_ms = str(int(self._query_timeout * 1000))
+            await conn.fetchval(
+                "SELECT set_config('statement_timeout', $1, false)",
+                timeout_ms,
+            )
 
             try:
                 return await asyncio.wait_for(
@@ -314,7 +317,7 @@ class QueryExecutor:
             finally:
                 # Reset each independently so a failure in one doesn't skip the other
                 try:
-                    await conn.execute("SET statement_timeout = 0")
+                    await conn.execute("RESET statement_timeout")
                 except Exception:
                     _logger.warning("Failed to reset statement_timeout", exc_info=True)
                 if self._schema_name:
