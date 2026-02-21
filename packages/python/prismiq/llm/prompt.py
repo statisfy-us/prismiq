@@ -74,14 +74,12 @@ def _build_widget_section(widget_context: WidgetContext) -> str:
 
 def build_system_prompt(
     schema: DatabaseSchema,
-    schema_name: str = "public",
     widget_context: WidgetContext | None = None,
 ) -> str:
     """Build the system prompt with schema context.
 
     Args:
         schema: Database schema to embed in the prompt.
-        schema_name: PostgreSQL schema name.
         widget_context: Optional widget context for targeted SQL generation.
 
     Returns:
@@ -110,7 +108,7 @@ def build_system_prompt(
 
     return f"""You are a SQL assistant for an analytics dashboard. Your job is to help users write PostgreSQL SELECT queries against the available database tables.
 
-## Available Tables (schema: "{schema_name}")
+## Available Tables
 
 {tables_text}
 
@@ -121,13 +119,14 @@ def build_system_prompt(
 ## Rules
 
 1. **SELECT only** — Never write INSERT, UPDATE, DELETE, DROP, or any DDL statements.
-2. **Quote identifiers** — Always use double quotes for table and column names: SELECT "column" FROM "{schema_name}"."table".
-3. **Use tools** — Call get_schema_overview or get_table_details to inspect the schema. Call get_column_values to look up actual values for WHERE clauses. Call validate_sql to check syntax, then execute_sql to run the query — it will automatically check if the result columns are compatible with the target widget and warn you if not. If execute_sql reports widget compatibility warnings, fix the query before presenting to the user.
-4. **Be concise** — Provide the SQL query and a brief explanation. Don't over-explain SQL basics.
-5. **SQL code blocks** — Always wrap SQL in ```sql code blocks so the UI can detect and offer an "Apply to Editor" button.
-6. **Handle ambiguity** — If the user's request is ambiguous, ask a clarifying question rather than guessing.
-7. **Aggregate wisely** — When the user asks for totals, averages, etc., include appropriate GROUP BY clauses.
-8. **Limit results** — Add LIMIT 1000 to queries that might return many rows, unless the user specifically wants all rows.
+2. **Quote identifiers** — Always use double quotes for table and column names: SELECT "column" FROM "table".
+3. **No schema prefix** — Never include the schema name in queries. Write FROM "table", not FROM "schema"."table". The schema is set automatically at execution time.
+4. **Use tools** — Call get_schema_overview or get_table_details to inspect the schema. Call get_column_values to look up actual values for WHERE clauses. Call validate_sql to check syntax, then execute_sql to run the query — it will automatically check if the result columns are compatible with the target widget and warn you if not. If execute_sql reports widget compatibility warnings, fix the query before presenting to the user.
+5. **Be concise** — Provide the SQL query and a brief explanation. Don't over-explain SQL basics.
+6. **SQL code blocks** — Always wrap SQL in ```sql code blocks so the UI can detect and offer an "Apply to Editor" button.
+7. **Handle ambiguity** — If the user's request is ambiguous, ask a clarifying question rather than guessing.
+8. **Aggregate wisely** — When the user asks for totals, averages, etc., include appropriate GROUP BY clauses.
+9. **Limit results** — Add LIMIT 1000 to queries that might return many rows, unless the user specifically wants all rows.
 {widget_section}
 
 ## Current Context

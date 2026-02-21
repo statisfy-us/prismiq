@@ -34,6 +34,7 @@ class TestLLMConfig:
         assert config.location is None
         assert config.max_tokens == 4096
         assert config.temperature == 0.1
+        assert config.max_tool_iterations == 10
 
     def test_enabled_config(self) -> None:
         """Test creating an enabled config."""

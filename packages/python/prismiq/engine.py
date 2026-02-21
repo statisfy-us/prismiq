@@ -283,6 +283,7 @@ class PrismiqEngine:
             self._schema,
             query_timeout=self._query_timeout,
             max_rows=self._max_rows,
+            schema_name=self._schema_name,
         )
 
         # Initialize dashboard store
@@ -968,22 +969,25 @@ class PrismiqEngine:
         assert self._executor is not None
         assert self._pool is not None
 
-        # For non-default schemas, validate with tenant's schema
+        # For non-default schemas, create an executor with the tenant's schema
+        # to avoid double-validation (the executor validates internally).
         effective_schema = schema_name or self._schema_name
         if effective_schema != self._schema_name:
-            validation = await self.validate_sql(sql, schema_name=effective_schema)
-            if not validation.valid:
-                from .sql_validator import SQLValidationError
-
-                raise SQLValidationError(
-                    "SQL validation failed: " + "; ".join(validation.errors),
-                    errors=validation.errors,
-                )
+            db_schema = await self.get_schema(schema_name=effective_schema)
+            executor = QueryExecutor(
+                self._pool,
+                db_schema,
+                query_timeout=self._query_timeout,
+                max_rows=self._max_rows,
+                schema_name=effective_schema,
+            )
+        else:
+            executor = self._executor
 
         start = time.perf_counter()
 
         try:
-            result = await self._executor.execute_raw_sql(sql, params)
+            result = await executor.execute_raw_sql(sql, params)
 
             # Record metrics
             if self._enable_metrics:

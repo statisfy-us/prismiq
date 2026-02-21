@@ -229,7 +229,6 @@ async def _get_table_details(
     return json.dumps(
         {
             "table": table.name,
-            "schema": table.schema_name,
             "row_count": table.row_count,
             "columns": columns,
         },

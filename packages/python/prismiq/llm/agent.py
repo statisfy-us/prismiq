@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger(__name__)
 
-MAX_TOOL_ITERATIONS = 5
+DEFAULT_MAX_TOOL_ITERATIONS = 10
 
 # Human-readable status messages for each tool
 _TOOL_STATUS_MESSAGES: dict[str, str] = {
@@ -48,6 +48,7 @@ async def run_agent_stream(
     current_sql: str | None = None,
     schema_name: str | None = None,
     widget_context: WidgetContext | None = None,
+    max_tool_iterations: int | None = None,
 ) -> AsyncIterator[StreamChunk]:
     """Run the agent loop and stream response chunks.
 
@@ -63,6 +64,8 @@ async def run_agent_stream(
         current_sql: Current SQL in the editor (for context).
         schema_name: PostgreSQL schema for multi-tenant queries.
         widget_context: Optional context about the target widget type.
+        max_tool_iterations: Maximum tool-call rounds per turn.
+            Defaults to DEFAULT_MAX_TOOL_ITERATIONS (10) if None.
 
     Yields:
         StreamChunk objects for the frontend to consume.
@@ -72,8 +75,7 @@ async def run_agent_stream(
 
     # Build system prompt with schema context
     schema = await engine.get_schema(schema_name=schema_name)
-    effective_schema = schema_name or engine.schema_name
-    system_prompt = build_system_prompt(schema, effective_schema, widget_context)
+    system_prompt = build_system_prompt(schema, widget_context)
 
     # Build message list
     messages: list[ChatMessage] = [
@@ -103,7 +105,9 @@ async def run_agent_stream(
         messages=messages,
         tools=ALL_TOOLS,
         execute_tool_fn=tool_executor,
-        max_iterations=MAX_TOOL_ITERATIONS,
+        max_iterations=max_tool_iterations
+        if max_tool_iterations is not None
+        else DEFAULT_MAX_TOOL_ITERATIONS,
     ):
         # Emit status messages before tool calls
         if chunk.type == StreamChunkType.TOOL_CALL and chunk.tool_name:
