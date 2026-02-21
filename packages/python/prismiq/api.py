@@ -735,9 +735,10 @@ def create_router(
             sql = await engine.generate_sql_async(query, schema_name=schema_name)
             return {"sql": sql}
         except QueryValidationError as e:
-            raise HTTPException(
-                status_code=400, detail={"message": e.message, "errors": e.errors}
-            ) from e
+            detail = e.message
+            if e.errors:
+                detail = f"{e.message}: {'; '.join(e.errors)}"
+            raise HTTPException(status_code=400, detail=detail) from e
 
     @router.post("/query/execute", response_model=QueryResultWithCache)
     async def execute_query(
@@ -822,9 +823,10 @@ def create_router(
                 is_from_cache=is_from_cache,
             )
         except QueryValidationError as e:
-            raise HTTPException(
-                status_code=400, detail={"message": e.message, "errors": e.errors}
-            ) from e
+            detail = e.message
+            if e.errors:
+                detail = f"{e.message}: {'; '.join(e.errors)}"
+            raise HTTPException(status_code=400, detail=detail) from e
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -853,9 +855,10 @@ def create_router(
                 request.query, limit=request.limit, schema_name=schema_name
             )
         except QueryValidationError as e:
-            raise HTTPException(
-                status_code=400, detail={"message": e.message, "errors": e.errors}
-            ) from e
+            detail = e.message
+            if e.errors:
+                detail = f"{e.message}: {'; '.join(e.errors)}"
+            raise HTTPException(status_code=400, detail=detail) from e
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -917,9 +920,10 @@ def create_router(
                 schema_name=schema_name,
             )
         except SQLValidationError as e:
-            raise HTTPException(
-                status_code=400, detail={"message": e.message, "errors": e.errors}
-            ) from e
+            detail = e.message
+            if e.errors:
+                detail = f"{e.message}: {'; '.join(e.errors)}"
+            raise HTTPException(status_code=400, detail=detail) from e
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -958,9 +962,10 @@ def create_router(
                 schema_name=schema_name,
             )
         except QueryValidationError as e:
-            raise HTTPException(
-                status_code=400, detail={"message": e.message, "errors": e.errors}
-            ) from e
+            detail = e.message
+            if e.errors:
+                detail = f"{e.message}: {'; '.join(e.errors)}"
+            raise HTTPException(status_code=400, detail=detail) from e
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         except Exception as e:
@@ -1064,9 +1069,10 @@ def create_router(
                 date_column=request.date_column,
             )
         except QueryValidationError as e:
-            raise HTTPException(
-                status_code=400, detail={"message": e.message, "errors": e.errors}
-            ) from e
+            detail = e.message
+            if e.errors:
+                detail = f"{e.message}: {'; '.join(e.errors)}"
+            raise HTTPException(status_code=400, detail=detail) from e
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         except Exception as e:
@@ -1474,9 +1480,10 @@ def create_router(
         try:
             return await engine.execute_query(query, schema_name=schema_name)
         except QueryValidationError as e:
-            raise HTTPException(
-                status_code=400, detail={"message": e.message, "errors": e.errors}
-            ) from e
+            detail = e.message
+            if e.errors:
+                detail = f"{e.message}: {'; '.join(e.errors)}"
+            raise HTTPException(status_code=400, detail=detail) from e
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -1944,6 +1951,9 @@ def create_router(
                     current_sql=request.current_sql,
                     schema_name=auth.schema_name,
                     widget_context=request.widget_context,
+                    max_tool_iterations=engine.llm_config.max_tool_iterations
+                    if engine.llm_config
+                    else None,
                 ):
                     # Format as SSE
                     data = chunk.model_dump_json()

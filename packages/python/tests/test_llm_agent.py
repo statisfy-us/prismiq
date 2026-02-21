@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from prismiq.llm.agent import MAX_TOOL_ITERATIONS, _extract_sql_blocks, run_agent_stream
+from prismiq.llm.agent import DEFAULT_MAX_TOOL_ITERATIONS, _extract_sql_blocks, run_agent_stream
 from prismiq.llm.types import (
     ChatMessage,
     ChatRole,
@@ -243,7 +243,7 @@ class TestRunAgentStream:
             chunks.append(chunk)
 
         tool_calls = [c for c in chunks if c.type == StreamChunkType.TOOL_CALL]
-        assert len(tool_calls) == MAX_TOOL_ITERATIONS
+        assert len(tool_calls) == DEFAULT_MAX_TOOL_ITERATIONS
 
         text_chunks = [c for c in chunks if c.type == StreamChunkType.TEXT]
         assert any("maximum tool iterations" in c.content.lower() for c in text_chunks)

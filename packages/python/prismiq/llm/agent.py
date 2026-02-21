@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger(__name__)
 
-MAX_TOOL_ITERATIONS = 5
+DEFAULT_MAX_TOOL_ITERATIONS = 10
 
 # Human-readable status messages for each tool
 _TOOL_STATUS_MESSAGES: dict[str, str] = {
@@ -48,6 +48,7 @@ async def run_agent_stream(
     current_sql: str | None = None,
     schema_name: str | None = None,
     widget_context: WidgetContext | None = None,
+    max_tool_iterations: int | None = None,
 ) -> AsyncIterator[StreamChunk]:
     """Run the agent loop and stream response chunks.
 
@@ -103,7 +104,7 @@ async def run_agent_stream(
         messages=messages,
         tools=ALL_TOOLS,
         execute_tool_fn=tool_executor,
-        max_iterations=MAX_TOOL_ITERATIONS,
+        max_iterations=max_tool_iterations or DEFAULT_MAX_TOOL_ITERATIONS,
     ):
         # Emit status messages before tool calls
         if chunk.type == StreamChunkType.TOOL_CALL and chunk.tool_name:

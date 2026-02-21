@@ -55,6 +55,9 @@ class LLMConfig(BaseModel):
     temperature: float = 0.1
     """Temperature for response generation."""
 
+    max_tool_iterations: int = 10
+    """Maximum number of tool-call rounds per agent turn."""
+
 
 # ============================================================================
 # Chat Messages

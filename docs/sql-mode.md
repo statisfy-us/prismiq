@@ -150,6 +150,7 @@ engine = PrismiqEngine(
 | `location` | `str \| None` | `None` | GCP region (Vertex AI) |
 | `max_tokens` | `int` | `4096` | Max response tokens |
 | `temperature` | `float` | `0.1` | Low temperature for deterministic SQL |
+| `max_tool_iterations` | `int` | `10` | Max tool-call rounds per agent turn |
 
 #### Environment Variables (Demo App)
 
