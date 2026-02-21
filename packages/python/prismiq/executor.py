@@ -15,6 +15,10 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
+import sqlglot
+import sqlglot.errors
+from sqlglot import exp
+
 from prismiq.query import QueryBuilder
 from prismiq.sql_validator import SQLValidationError, SQLValidator
 from prismiq.types import (
@@ -27,6 +31,51 @@ from prismiq.types import (
 )
 
 _logger = logging.getLogger(__name__)
+
+
+def qualify_table_schemas(
+    sql: str,
+    schema_name: str,
+    known_tables: frozenset[str],
+) -> str:
+    """Add schema qualification to known table references in SQL.
+
+    Rewrites unqualified table names to schema-qualified form. Only qualifies
+    tables whose names appear in the known set (from schema introspection).
+    This indirectly avoids qualifying most CTE references and subquery aliases,
+    since those names typically don't match real table names. Note: if a CTE
+    shadows a real table name, the CTE reference will be incorrectly qualified.
+
+    Args:
+        sql: SQL query string.
+        schema_name: PostgreSQL schema name to qualify tables with.
+        known_tables: Set of lowercase table names from the schema.
+
+    Returns:
+        SQL with schema-qualified table references.
+
+    Example:
+        >>> qualify_table_schemas(
+        ...     'SELECT * FROM "users"',
+        ...     "org_123",
+        ...     frozenset({"users"}),
+        ... )
+        'SELECT * FROM "org_123"."users"'
+    """
+    try:
+        parsed = sqlglot.parse_one(sql, dialect="postgres")
+    except sqlglot.errors.SqlglotError:
+        # Parsing failed. In the execute_raw_sql flow, the SQL has already
+        # been validated by SQLValidator, so this should not happen. The
+        # caller is responsible for deciding whether to raise or fall back.
+        return sql
+
+    for table in parsed.find_all(exp.Table):
+        if table.name and not table.db and table.name.lower() in known_tables:
+            table.set("db", exp.Identifier(this=schema_name, quoted=True))
+
+    return parsed.sql(dialect="postgres")
+
 
 if TYPE_CHECKING:
     from asyncpg import Pool  # type: ignore[import-not-found]
@@ -236,6 +285,21 @@ class QueryExecutor:
         safe_sql = validation.sanitized_sql
         assert safe_sql is not None  # Guaranteed by valid=True
 
+        # Schema-qualify table references for multi-tenant isolation.
+        # Adds schema prefix to unqualified table names so that queries are
+        # fully qualified and independent of search_path. Only tables present
+        # in schema introspection are qualified; CTE names and subquery aliases
+        # are skipped as long as they don't share a name with a real table.
+        if self._schema_name:
+            qualified_sql = qualify_table_schemas(
+                safe_sql,
+                self._schema_name,
+                self._sql_validator.allowed_tables,
+            )
+            if qualified_sql == safe_sql:
+                _logger.debug("No tables were schema-qualified in raw SQL")
+            safe_sql = qualified_sql
+
         # Apply row limit using a CTE wrapper
         limited_sql = f"WITH _cte AS ({safe_sql}) SELECT * FROM _cte LIMIT {self._max_rows + 1}"
 
@@ -294,8 +358,10 @@ class QueryExecutor:
     async def _execute_with_timeout(self, sql: str, params: list[Any]) -> list[Any]:
         """Execute SQL with timeout."""
         async with self._pool.acquire() as conn:
-            # Set search_path for schema isolation (allows unqualified table names).
-            # Uses parameterized set_config to avoid SQL injection.
+            # Set search_path as a safety net for schema isolation. Both
+            # QueryBuilder and qualify_table_schemas produce fully-qualified SQL,
+            # but this ensures correct resolution if any unqualified reference
+            # slips through. Uses parameterized set_config to avoid SQL injection.
             if self._schema_name:
                 await conn.fetchval(
                     "SELECT set_config('search_path', $1, false)",
@@ -325,11 +391,14 @@ class QueryExecutor:
                         await conn.execute("RESET search_path")
                     except Exception:
                         _logger.error(
-                            "Failed to reset search_path; connection may leak "
-                            "tenant schema '%s' to the pool",
+                            "Failed to reset search_path; closing connection "
+                            "to prevent tenant schema '%s' from leaking to the pool",
                             self._schema_name,
                             exc_info=True,
                         )
+                        # Terminate the connection so it is not returned to
+                        # the pool with a tenant-specific search_path.
+                        await conn.close()
 
     def _format_result(
         self, rows: list[Any], execution_time_ms: float, truncated: bool

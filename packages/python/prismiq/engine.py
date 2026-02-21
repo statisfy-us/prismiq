@@ -245,11 +245,19 @@ class PrismiqEngine:
         Creates the database connection pool and introspects the schema.
         Must be called before using other methods.
         """
-        # Create connection pool for reads
+        # Create connection pool for reads.
+        # statement_cache_size=0 disables asyncpg's prepared-statement cache.
+        # Defensive safeguard for multi-tenant schema isolation: although
+        # qualify_table_schemas() and QueryBuilder already produce fully-qualified
+        # SQL (making search_path irrelevant for table resolution), disabling the
+        # cache eliminates any risk from unqualified SQL reaching the executor.
+        # Also future-proofs for RLS-based tenancy where session variables
+        # affect query planning.
         self._pool = await asyncpg.create_pool(
             self._database_url,
             min_size=1,
             max_size=10,
+            statement_cache_size=0,
         )
 
         # Create separate write pool if write URL provided, otherwise reuse read pool
@@ -258,6 +266,7 @@ class PrismiqEngine:
                 self._database_url_write,
                 min_size=1,
                 max_size=5,
+                statement_cache_size=0,
             )
         else:
             self._pool_write = self._pool
