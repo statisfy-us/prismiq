@@ -737,7 +737,7 @@ def create_router(
         except QueryValidationError as e:
             detail = e.message
             if e.errors:
-                detail = f"{e.message}: {'; '.join(e.errors)}"
+                detail = f"{e.message}: {'; '.join(str(err) for err in e.errors)}"
             raise HTTPException(status_code=400, detail=detail) from e
 
     @router.post("/query/execute", response_model=QueryResultWithCache)
@@ -825,7 +825,7 @@ def create_router(
         except QueryValidationError as e:
             detail = e.message
             if e.errors:
-                detail = f"{e.message}: {'; '.join(e.errors)}"
+                detail = f"{e.message}: {'; '.join(str(err) for err in e.errors)}"
             raise HTTPException(status_code=400, detail=detail) from e
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
@@ -857,7 +857,7 @@ def create_router(
         except QueryValidationError as e:
             detail = e.message
             if e.errors:
-                detail = f"{e.message}: {'; '.join(e.errors)}"
+                detail = f"{e.message}: {'; '.join(str(err) for err in e.errors)}"
             raise HTTPException(status_code=400, detail=detail) from e
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
@@ -922,7 +922,7 @@ def create_router(
         except SQLValidationError as e:
             detail = e.message
             if e.errors:
-                detail = f"{e.message}: {'; '.join(e.errors)}"
+                detail = f"{e.message}: {'; '.join(str(err) for err in e.errors)}"
             raise HTTPException(status_code=400, detail=detail) from e
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e
@@ -964,7 +964,7 @@ def create_router(
         except QueryValidationError as e:
             detail = e.message
             if e.errors:
-                detail = f"{e.message}: {'; '.join(e.errors)}"
+                detail = f"{e.message}: {'; '.join(str(err) for err in e.errors)}"
             raise HTTPException(status_code=400, detail=detail) from e
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
@@ -1071,7 +1071,7 @@ def create_router(
         except QueryValidationError as e:
             detail = e.message
             if e.errors:
-                detail = f"{e.message}: {'; '.join(e.errors)}"
+                detail = f"{e.message}: {'; '.join(str(err) for err in e.errors)}"
             raise HTTPException(status_code=400, detail=detail) from e
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
@@ -1482,7 +1482,7 @@ def create_router(
         except QueryValidationError as e:
             detail = e.message
             if e.errors:
-                detail = f"{e.message}: {'; '.join(e.errors)}"
+                detail = f"{e.message}: {'; '.join(str(err) for err in e.errors)}"
             raise HTTPException(status_code=400, detail=detail) from e
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e)) from e

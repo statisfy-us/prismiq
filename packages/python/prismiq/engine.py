@@ -283,6 +283,7 @@ class PrismiqEngine:
             self._schema,
             query_timeout=self._query_timeout,
             max_rows=self._max_rows,
+            schema_name=self._schema_name,
         )
 
         # Initialize dashboard store

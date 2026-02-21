@@ -7,6 +7,7 @@ timeout handling, row limits, and proper result formatting.
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from datetime import date, datetime, timedelta
 from datetime import time as time_type
@@ -24,6 +25,8 @@ from prismiq.types import (
     QueryTimeoutError,
     QueryValidationError,
 )
+
+_logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from asyncpg import Pool  # type: ignore[import-not-found]
@@ -291,10 +294,13 @@ class QueryExecutor:
     async def _execute_with_timeout(self, sql: str, params: list[Any]) -> list[Any]:
         """Execute SQL with timeout."""
         async with self._pool.acquire() as conn:
-            # Set search_path for schema isolation (allows unqualified table names)
+            # Set search_path for schema isolation (allows unqualified table names).
+            # Uses parameterized set_config to avoid SQL injection.
             if self._schema_name:
-                escaped = self._schema_name.replace('"', '""')
-                await conn.execute(f'SET search_path TO "{escaped}"')
+                await conn.fetchval(
+                    "SELECT set_config('search_path', $1, false)",
+                    self._schema_name,
+                )
 
             # Set statement timeout on the connection
             timeout_ms = int(self._query_timeout * 1000)
@@ -306,9 +312,21 @@ class QueryExecutor:
                     timeout=self._query_timeout,
                 )
             finally:
-                # Reset statement timeout and search_path
-                await conn.execute("SET statement_timeout = 0")
-                await conn.execute('SET search_path TO "$user", "public"')
+                # Reset each independently so a failure in one doesn't skip the other
+                try:
+                    await conn.execute("SET statement_timeout = 0")
+                except Exception:
+                    _logger.warning("Failed to reset statement_timeout", exc_info=True)
+                if self._schema_name:
+                    try:
+                        await conn.execute("RESET search_path")
+                    except Exception:
+                        _logger.error(
+                            "Failed to reset search_path; connection may leak "
+                            "tenant schema '%s' to the pool",
+                            self._schema_name,
+                            exc_info=True,
+                        )
 
     def _format_result(
         self, rows: list[Any], execution_time_ms: float, truncated: bool

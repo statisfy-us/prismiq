@@ -73,8 +73,7 @@ async def run_agent_stream(
 
     # Build system prompt with schema context
     schema = await engine.get_schema(schema_name=schema_name)
-    effective_schema = schema_name or engine.schema_name
-    system_prompt = build_system_prompt(schema, effective_schema, widget_context)
+    system_prompt = build_system_prompt(schema, widget_context)
 
     # Build message list
     messages: list[ChatMessage] = [
@@ -104,7 +103,9 @@ async def run_agent_stream(
         messages=messages,
         tools=ALL_TOOLS,
         execute_tool_fn=tool_executor,
-        max_iterations=max_tool_iterations or DEFAULT_MAX_TOOL_ITERATIONS,
+        max_iterations=max_tool_iterations
+        if max_tool_iterations is not None
+        else DEFAULT_MAX_TOOL_ITERATIONS,
     ):
         # Emit status messages before tool calls
         if chunk.type == StreamChunkType.TOOL_CALL and chunk.tool_name:

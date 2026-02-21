@@ -74,14 +74,12 @@ def _build_widget_section(widget_context: WidgetContext) -> str:
 
 def build_system_prompt(
     schema: DatabaseSchema,
-    schema_name: str = "public",
     widget_context: WidgetContext | None = None,
 ) -> str:
     """Build the system prompt with schema context.
 
     Args:
         schema: Database schema to embed in the prompt.
-        schema_name: PostgreSQL schema name.
         widget_context: Optional widget context for targeted SQL generation.
 
     Returns:
