@@ -64,6 +64,8 @@ async def run_agent_stream(
         current_sql: Current SQL in the editor (for context).
         schema_name: PostgreSQL schema for multi-tenant queries.
         widget_context: Optional context about the target widget type.
+        max_tool_iterations: Maximum tool-call rounds per turn.
+            Defaults to DEFAULT_MAX_TOOL_ITERATIONS (10) if None.
 
     Yields:
         StreamChunk objects for the frontend to consume.
