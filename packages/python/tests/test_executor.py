@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from prismiq.executor import QueryExecutor, qualify_table_schemas
+from prismiq.sql_validator import SQLValidationError
 from prismiq.types import (
     ColumnSchema,
     ColumnSelection,
@@ -389,18 +390,20 @@ class TestResultFormatting:
 class TestQualifyTableSchemas:
     """Tests for qualify_table_schemas function."""
 
-    def test_qualifies_simple_select(self) -> None:
-        """Test schema qualification on a simple SELECT."""
-        sql = 'SELECT * FROM "users"'
+    @pytest.mark.parametrize(
+        ("sql", "expected"),
+        [
+            ('SELECT * FROM "users"', '"org_123"."users"'),
+            ('SELECT "id" FROM "users"', '"org_123"."users"'),
+            ('SELECT * FROM (SELECT id FROM "users") sub', '"org_123"."users"'),
+            ('SELECT * FROM "Users"', '"org_123"."Users"'),
+        ],
+        ids=["simple_select", "quoted_columns", "subquery", "case_insensitive"],
+    )
+    def test_qualifies_known_table(self, sql: str, expected: str) -> None:
+        """Test schema qualification on various SQL patterns."""
         result = qualify_table_schemas(sql, "org_123", frozenset({"users"}))
-        assert '"org_123"."users"' in result
-
-    def test_qualifies_unquoted_table(self) -> None:
-        """Test schema qualification on unquoted table names."""
-        sql = "SELECT id FROM users"
-        result = qualify_table_schemas(sql, "org_123", frozenset({"users"}))
-        assert '"org_123"' in result
-        assert "users" in result.lower()
+        assert expected in result
 
     def test_qualifies_multiple_tables_in_join(self) -> None:
         """Test schema qualification with JOINs."""
@@ -417,12 +420,17 @@ class TestQualifyTableSchemas:
         assert '"org_123"."users"' in result
         assert '"org_123"."unknown_table"' not in result
 
-    def test_skips_already_qualified_tables(self) -> None:
-        """Test that already schema-qualified tables are not double-qualified."""
-        sql = 'SELECT * FROM "public"."users"'
+    def test_skips_already_qualified_with_correct_schema(self) -> None:
+        """Test that tables already qualified with the correct schema are not double-qualified."""
+        sql = 'SELECT * FROM "org_123"."users"'
         result = qualify_table_schemas(sql, "org_123", frozenset({"users"}))
-        # Should not add org_123 since table already has a schema
-        assert '"org_123"' not in result
+        assert result.count('"org_123"') == 1
+
+    def test_rejects_foreign_schema_qualifier(self) -> None:
+        """Test that tables qualified with a different schema are rejected."""
+        sql = 'SELECT * FROM "other_schema"."users"'
+        with pytest.raises(SQLValidationError, match=r"only.*org_123.*is allowed"):
+            qualify_table_schemas(sql, "org_123", frozenset({"users"}))
 
     def test_skips_cte_references(self) -> None:
         """Test that CTE names are not schema-qualified."""
@@ -436,12 +444,6 @@ class TestQualifyTableSchemas:
         # CTE reference "recent_users" should not be qualified
         assert '"org_123"."recent_users"' not in result
 
-    def test_case_insensitive_matching(self) -> None:
-        """Test that table matching is case-insensitive."""
-        sql = 'SELECT * FROM "Users"'
-        result = qualify_table_schemas(sql, "org_123", frozenset({"users"}))
-        assert '"org_123"."Users"' in result
-
     def test_returns_original_on_parse_error(self) -> None:
         """Test that unparseable SQL is returned unchanged."""
         bad_sql = "NOT VALID SQL @@@ %%% &&&"
@@ -453,12 +455,6 @@ class TestQualifyTableSchemas:
         sql = 'SELECT * FROM "users"'
         result = qualify_table_schemas(sql, "org_123", frozenset())
         assert '"org_123"' not in result
-
-    def test_subquery_tables_qualified(self) -> None:
-        """Test that tables inside subqueries are qualified."""
-        sql = 'SELECT * FROM (SELECT id FROM "users") sub'
-        result = qualify_table_schemas(sql, "org_123", frozenset({"users"}))
-        assert '"org_123"."users"' in result
 
     def test_union_tables_qualified(self) -> None:
         """Test that tables in UNION branches are qualified."""

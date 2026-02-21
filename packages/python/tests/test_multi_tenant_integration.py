@@ -12,6 +12,7 @@ Requires a running PostgreSQL instance. Set DATABASE_URL to run:
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import pytest
@@ -23,6 +24,9 @@ from prismiq.types import (
     QueryDefinition,
     QueryTable,
 )
+
+# Only allow simple alphanumeric + underscore schema names (no SQL injection risk).
+_SAFE_SCHEMA_RE = re.compile(r"^[a-zA-Z0-9_]+$")
 
 # ---------------------------------------------------------------------------
 # DDL & seed data
@@ -66,18 +70,24 @@ async def tenant_schemas(real_pool: Any) -> Any:
     Yields a dict mapping logical names to schema names.
     Drops both schemas on teardown.
     """
+    schemas = [SCHEMA_A, SCHEMA_B]
+    for s in schemas:
+        assert _SAFE_SCHEMA_RE.match(s), f"Unsafe schema name: {s}"
+
     async with real_pool.acquire() as conn:
-        for schema in [SCHEMA_A, SCHEMA_B]:
+        for schema in schemas:
+            # Schema names are validated above; quoting via quoted identifier
+            # is safe for DDL where parameterization is not possible.
             await conn.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
             await conn.execute(f'CREATE SCHEMA "{schema}"')
 
         # Tenant A — 3 US customers
-        await conn.execute(f'SET search_path = "{SCHEMA_A}"')
+        await conn.fetchval("SELECT set_config('search_path', $1, false)", SCHEMA_A)
         await conn.execute(CUSTOMERS_DDL)
         await conn.execute(TENANT_A_SEED)
 
         # Tenant B — 2 EU customers
-        await conn.execute(f'SET search_path = "{SCHEMA_B}"')
+        await conn.fetchval("SELECT set_config('search_path', $1, false)", SCHEMA_B)
         await conn.execute(CUSTOMERS_DDL)
         await conn.execute(TENANT_B_SEED)
 
@@ -87,7 +97,7 @@ async def tenant_schemas(real_pool: Any) -> Any:
 
     # Teardown
     async with real_pool.acquire() as conn:
-        for schema in [SCHEMA_A, SCHEMA_B]:
+        for schema in schemas:
             await conn.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
 
 

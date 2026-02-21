@@ -42,9 +42,12 @@ def qualify_table_schemas(
 
     Rewrites unqualified table names to schema-qualified form. Only qualifies
     tables whose names appear in the known set (from schema introspection).
-    This indirectly avoids qualifying most CTE references and subquery aliases,
-    since those names typically don't match real table names. Note: if a CTE
+    CTE references and subquery aliases are left unqualified because their
+    names are typically absent from the known_tables set. Note: if a CTE
     shadows a real table name, the CTE reference will be incorrectly qualified.
+
+    Raises SQLValidationError if any table is explicitly qualified with a
+    schema other than ``schema_name`` (prevents cross-tenant escape).
 
     Args:
         sql: SQL query string.
@@ -53,6 +56,9 @@ def qualify_table_schemas(
 
     Returns:
         SQL with schema-qualified table references.
+
+    Raises:
+        SQLValidationError: If a table references a foreign schema.
 
     Example:
         >>> qualify_table_schemas(
@@ -76,7 +82,23 @@ def qualify_table_schemas(
         return sql
 
     for table in parsed.find_all(exp.Table):
-        if table.name and not table.db and table.name.lower() in known_tables:
+        if not table.name:
+            continue
+        if table.db:
+            # Table already has an explicit schema qualifier — reject if
+            # it points to a different schema (cross-tenant escape attempt).
+            explicit_schema = (
+                table.db.this if isinstance(table.db, exp.Identifier) else str(table.db)
+            )
+            if explicit_schema != schema_name:
+                raise SQLValidationError(
+                    f'Query references schema "{explicit_schema}" but only '
+                    f'"{schema_name}" is allowed',
+                    errors=[
+                        f'Table "{explicit_schema}"."{table.name}" references a foreign schema'
+                    ],
+                )
+        elif table.name.lower() in known_tables:
             table.set("db", exp.Identifier(this=schema_name, quoted=True))
 
     return parsed.sql(dialect="postgres")
