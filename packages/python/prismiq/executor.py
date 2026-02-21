@@ -291,6 +291,11 @@ class QueryExecutor:
     async def _execute_with_timeout(self, sql: str, params: list[Any]) -> list[Any]:
         """Execute SQL with timeout."""
         async with self._pool.acquire() as conn:
+            # Set search_path for schema isolation (allows unqualified table names)
+            if self._schema_name:
+                escaped = self._schema_name.replace('"', '""')
+                await conn.execute(f'SET search_path TO "{escaped}"')
+
             # Set statement timeout on the connection
             timeout_ms = int(self._query_timeout * 1000)
             await conn.execute(f"SET statement_timeout = {timeout_ms}")
@@ -301,8 +306,9 @@ class QueryExecutor:
                     timeout=self._query_timeout,
                 )
             finally:
-                # Reset statement timeout
+                # Reset statement timeout and search_path
                 await conn.execute("SET statement_timeout = 0")
+                await conn.execute('SET search_path TO "$user", "public"')
 
     def _format_result(
         self, rows: list[Any], execution_time_ms: float, truncated: bool

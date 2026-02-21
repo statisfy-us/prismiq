@@ -54,17 +54,18 @@ class TestBuildSystemPrompt:
         assert "id (integer)" in prompt
         assert "name (text)" in prompt
 
-    def test_includes_schema_name(self) -> None:
-        """Test that schema name appears in the prompt."""
+    def test_no_schema_prefix_rule(self) -> None:
+        """Test that prompt instructs LLM not to use schema prefixes."""
         schema = self._make_schema()
-        prompt = build_system_prompt(schema, schema_name="analytics")
-        assert '"analytics"' in prompt
+        prompt = build_system_prompt(schema, schema_name="org_tenant123")
+        assert "No schema prefix" in prompt
+        assert "org_tenant123" not in prompt
 
-    def test_default_schema_name(self) -> None:
-        """Test default schema name is 'public'."""
+    def test_schema_name_not_exposed(self) -> None:
+        """Test that schema name is not leaked in the prompt."""
         schema = self._make_schema()
         prompt = build_system_prompt(schema)
-        assert '"public"' in prompt
+        assert "public" not in prompt.split("## Available Tables")[0]
 
     def test_includes_relationships(self) -> None:
         """Test that relationships are included."""
