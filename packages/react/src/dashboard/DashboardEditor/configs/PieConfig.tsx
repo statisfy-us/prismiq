@@ -164,6 +164,15 @@ export function PieConfig({
     }));
   }, [currentTable]);
 
+  // All columns for count_distinct
+  const allValueColumnOptions = useMemo(() => {
+    if (!currentTable) return [];
+    return currentTable.columns.map((c) => ({
+      value: c.name,
+      label: `${c.name} (${c.data_type})`,
+    }));
+  }, [currentTable]);
+
   // Check if current aggregation is valid for PieConfig
   const isValidAggregation = useMemo(() => {
     return AGGREGATIONS.some((a) => a.value === aggregation);
@@ -318,21 +327,26 @@ export function PieConfig({
               options={AGGREGATIONS}
               style={{ width: '120px' }}
             />
-            {aggregation !== 'count' && (
-              <>
-                <span style={{ color: theme.colors.textMuted }}>of</span>
-                {valueColumnOptions.length > 0 ? (
-                  <Select
-                    value={valueColumn}
-                    onChange={setValueColumn}
-                    options={[{ value: '', label: 'Select column...' }, ...valueColumnOptions]}
-                    style={{ flex: 1 }}
-                  />
-                ) : (
-                  <span style={{ ...helpTextStyle, flex: 1 }}>No numeric columns</span>
-                )}
-              </>
-            )}
+            {aggregation !== 'count' && (() => {
+              const colOptions = aggregation === 'count_distinct'
+                ? allValueColumnOptions
+                : valueColumnOptions;
+              return (
+                <>
+                  <span style={{ color: theme.colors.textMuted }}>of</span>
+                  {colOptions.length > 0 ? (
+                    <Select
+                      value={valueColumn}
+                      onChange={setValueColumn}
+                      options={[{ value: '', label: 'Select column...' }, ...colOptions]}
+                      style={{ flex: 1 }}
+                    />
+                  ) : (
+                    <span style={{ ...helpTextStyle, flex: 1 }}>No columns available</span>
+                  )}
+                </>
+              );
+            })()}
           </div>
           <span style={helpTextStyle}>Determines the size of each slice</span>
         </div>

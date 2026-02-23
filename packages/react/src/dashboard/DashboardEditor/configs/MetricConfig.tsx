@@ -117,6 +117,15 @@ export function MetricConfig({
     }));
   }, [currentTable]);
 
+  // All column options (for count_distinct which works on any type)
+  const allColumnOptions = useMemo(() => {
+    if (!currentTable) return [];
+    return currentTable.columns.map((c) => ({
+      value: c.name,
+      label: `${c.name} (${c.data_type})`,
+    }));
+  }, [currentTable]);
+
   // Check if current aggregation needs a column
   const needsColumn = useMemo(() => {
     return AGGREGATIONS.find((a) => a.value === aggregation)?.needsColumn ?? false;
@@ -221,20 +230,25 @@ export function MetricConfig({
       </div>
 
       {/* Column Selection (only for aggregations that need it) */}
-      {needsColumn && selectedTable && (
-        <div style={fieldStyle}>
-          <label style={labelStyle}>Column</label>
-          {columnOptions.length > 0 ? (
-            <Select
-              value={selectedColumn}
-              onChange={setSelectedColumn}
-              options={[{ value: '', label: 'Select a column...' }, ...columnOptions]}
-            />
-          ) : (
-            <span style={helpTextStyle}>No numeric columns available in this table</span>
-          )}
-        </div>
-      )}
+      {needsColumn && selectedTable && (() => {
+        const colOptions = aggregation === 'count_distinct'
+          ? allColumnOptions
+          : columnOptions;
+        return (
+          <div style={fieldStyle}>
+            <label style={labelStyle}>Column</label>
+            {colOptions.length > 0 ? (
+              <Select
+                value={selectedColumn}
+                onChange={setSelectedColumn}
+                options={[{ value: '', label: 'Select a column...' }, ...colOptions]}
+              />
+            ) : (
+              <span style={helpTextStyle}>No columns available in this table</span>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Optional Filters */}
       {selectedTable && currentTable && (
