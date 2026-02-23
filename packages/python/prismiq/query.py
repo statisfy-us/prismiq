@@ -587,7 +587,7 @@ class QueryBuilder:
 
         # WHERE clause (params continue: $N+1, ...)
         where_clause, params = self._build_where(
-            where_filters, table_refs, table_map, calc_sql_map, params
+            where_filters, table_refs, table_map, calc_sql_map, params, query
         )
 
         # GROUP BY clause - with time series support
@@ -936,6 +936,7 @@ class QueryBuilder:
         table_map: dict[str, str],
         calc_sql_map: dict[str, str],
         params: list[Any],
+        query: QueryDefinition | None = None,
     ) -> tuple[str, list[Any]]:
         """Build the WHERE clause."""
         if not filters:
@@ -943,6 +944,17 @@ class QueryBuilder:
 
         conditions: list[str] = []
         for f in filters:
+            # For negation filters on joined tables, use NOT IN subquery
+            # to get correct semantics with one-to-many relationships.
+            if query and f.operator in (FilterOperator.NEQ, FilterOperator.NOT_IN):
+                result = self._build_negation_subquery(
+                    f, query, table_refs, table_map, params
+                )
+                if result is not None:
+                    condition, params = result
+                    conditions.append(condition)
+                    continue
+
             col_ref, data_type = self._resolve_filter_col_ref(
                 f, table_refs, table_map, calc_sql_map
             )
@@ -950,6 +962,109 @@ class QueryBuilder:
             conditions.append(condition)
 
         return " AND ".join(conditions), params
+
+    def _build_negation_subquery(
+        self,
+        f: FilterDefinition,
+        query: QueryDefinition,
+        table_refs: dict[str, str],
+        table_map: dict[str, str],
+        params: list[Any],
+    ) -> tuple[str, list[Any]] | None:
+        """Build a NOT IN subquery for NEQ/NOT_IN filters on joined tables.
+
+        When a negation filter is on a column from a joined table (not the base
+        table), row-level filtering produces wrong results for one-to-many
+        relationships. Instead, we generate:
+
+            base.join_col NOT IN (
+                SELECT join_col FROM joined_table WHERE filter_col = value
+            )
+
+        Returns:
+            (condition_sql, params) if the filter is on a joined table,
+            None if it's on the base table (use normal row-level filter).
+        """
+        if not query.tables:
+            return None
+
+        base_table_id = query.tables[0].id
+        if f.table_id == base_table_id:
+            return None
+
+        # Find the join that brings this table into the query
+        join = None
+        for j in query.joins:
+            if j.to_table_id == f.table_id:
+                join = j
+                break
+
+        if join is None:
+            return None
+
+        # Resolve the joined table name for the subquery
+        joined_table = query.get_table_by_id(f.table_id)
+        if joined_table is None:
+            return None
+
+        # Get column data type for value coercion
+        data_type: str | None = None
+        table_name = table_map.get(f.table_id)
+        if table_name:
+            table = self._schema.get_table(table_name)
+            if table:
+                column = table.get_column(f.column)
+                if column:
+                    data_type = column.data_type
+
+        coerced_value = self._coerce_value(f.value, data_type)
+
+        # Build references
+        from_ref = table_refs[join.from_table_id]
+        from_col = self._quote_identifier(join.from_column)
+        subquery_table = self._quote_table(joined_table.name)
+        subquery_join_col = self._quote_identifier(join.to_column)
+        subquery_filter_col = self._quote_identifier(f.column)
+
+        if f.operator == FilterOperator.NEQ:
+            if coerced_value is None:
+                return (
+                    f"{from_ref}.{from_col} NOT IN ("
+                    f"SELECT {subquery_join_col} FROM {subquery_table} "
+                    f"WHERE {subquery_filter_col} IS NOT NULL)",
+                    params,
+                )
+            params.append(coerced_value)
+            return (
+                f"{from_ref}.{from_col} NOT IN ("
+                f"SELECT {subquery_join_col} FROM {subquery_table} "
+                f"WHERE {subquery_filter_col} = ${len(params)})",
+                params,
+            )
+
+        if f.operator == FilterOperator.NOT_IN:
+            if isinstance(coerced_value, list):
+                if not coerced_value:
+                    return "TRUE", params
+                placeholders: list[str] = []
+                for v in coerced_value:
+                    params.append(v)
+                    placeholders.append(f"${len(params)}")
+                return (
+                    f"{from_ref}.{from_col} NOT IN ("
+                    f"SELECT {subquery_join_col} FROM {subquery_table} "
+                    f"WHERE {subquery_filter_col} IN ({', '.join(placeholders)}))",
+                    params,
+                )
+            params.append(coerced_value)
+            return (
+                f"{from_ref}.{from_col} NOT IN ("
+                f"SELECT {subquery_join_col} FROM {subquery_table} "
+                f"WHERE {subquery_filter_col} IN (${len(params)}))",
+                params,
+            )
+
+        return None
 
     def _build_condition(
         self,
