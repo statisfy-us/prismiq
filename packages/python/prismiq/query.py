@@ -946,10 +946,13 @@ class QueryBuilder:
         for f in filters:
             # For negation filters on joined tables, use NOT IN subquery
             # to get correct semantics with one-to-many relationships.
-            if query and f.operator in (FilterOperator.NEQ, FilterOperator.NOT_IN):
-                result = self._build_negation_subquery(
-                    f, query, table_refs, table_map, params
-                )
+            if (
+                query
+                and f.operator in (FilterOperator.NEQ, FilterOperator.NOT_IN)
+                and not f.sql_expression
+                and f.column not in calc_sql_map
+            ):
+                result = self._build_negation_subquery(f, query, table_refs, table_map, params)
                 if result is not None:
                     condition, params = result
                     conditions.append(condition)
@@ -1031,7 +1034,7 @@ class QueryBuilder:
                 return (
                     f"{from_ref}.{from_col} NOT IN ("
                     f"SELECT {subquery_join_col} FROM {subquery_table} "
-                    f"WHERE {subquery_filter_col} IS NOT NULL)",
+                    f"WHERE {subquery_filter_col} IS NULL)",
                     params,
                 )
             params.append(coerced_value)
