@@ -86,12 +86,14 @@ export {
   WidgetEditorPage,
   WidgetTypeSelector,
   WidgetPreview,
+  FilterEditor,
 } from './DashboardEditor';
 export type {
   EditorToolbarProps,
   WidgetEditorPageProps,
   WidgetTypeSelectorProps,
   WidgetPreviewProps,
+  FilterEditorProps,
 } from './DashboardEditor';
 
 // Dashboard List components

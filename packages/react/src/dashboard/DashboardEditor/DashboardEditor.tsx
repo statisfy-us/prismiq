@@ -10,13 +10,17 @@ import { DashboardLayout } from '../DashboardLayout';
 import { Widget, WidgetContainer } from '../Widget';
 import { EditorToolbar } from './EditorToolbar';
 import { WidgetEditorPage } from './WidgetEditorPage';
+import { FilterEditor } from './FilterEditor';
 import {
   dashboardCache,
   CACHE_TTL_MS,
   inflightFetches,
 } from '../dashboardCache';
+import { applyFiltersToQuery } from '../applyFiltersToQuery';
 import type {
   Dashboard,
+  DashboardFilter,
+  FilterValue,
   Widget as WidgetType,
   WidgetType as WidgetTypeEnum,
   WidgetPosition,
@@ -131,8 +135,12 @@ export function DashboardEditor({
   const [widgetRefreshTimes, setWidgetRefreshTimes] = useState<Record<string, number>>({});
   const [refreshingWidgets, setRefreshingWidgets] = useState<Set<string>>(new Set());
 
+  // Filter values - initialized from dashboard filter defaults, used to apply filters to widget queries
+  const [filterValues, setFilterValues] = useState<FilterValue[]>([]);
+
   // UI state - editingWidget can be 'new' for new widget, a Widget for editing, or null
   const [editingWidget, setEditingWidget] = useState<WidgetType | 'new' | null>(null);
+  const [editingFilters, setEditingFilters] = useState(false);
 
   // Track changes explicitly with a dirty flag (more reliable than JSON comparison)
   const [isDirty, setIsDirty] = useState(false);
@@ -155,7 +163,9 @@ export function DashboardEditor({
   // and StrictMode would otherwise prevent results from ever being shown
   const executeWidgetQueries = useCallback(async (
     widgets: WidgetType[],
-    currentClient: typeof client
+    currentClient: typeof client,
+    currentDashboard: Dashboard,
+    currentFilterValues: FilterValue[]
   ) => {
     const widgetsWithQueries = widgets.filter(
       (w) => w.query || (w.config?.data_source_mode === 'sql' && w.config?.raw_sql)
@@ -175,9 +185,14 @@ export function DashboardEditor({
         batch.map(async (widget) => {
           try {
             const isSqlMode = widget.config?.data_source_mode === 'sql' && widget.config?.raw_sql;
-            const result = isSqlMode
-              ? await currentClient.executeSQL(widget.config.raw_sql!)
-              : await currentClient.executeQuery(widget.query!);
+            let result;
+            if (isSqlMode) {
+              result = await currentClient.executeSQL(widget.config.raw_sql!);
+            } else {
+              // Apply dashboard filters to the widget query
+              const query = applyFiltersToQuery(widget.query!, currentDashboard, currentFilterValues);
+              result = await currentClient.executeQuery(query);
+            }
             setWidgetResults((prev) => ({ ...prev, [widget.id]: result }));
             setWidgetRefreshTimes((prev) => ({ ...prev, [widget.id]: Math.floor(Date.now() / 1000) }));
           } catch (err) {
@@ -193,6 +208,13 @@ export function DashboardEditor({
       );
     }
   }, [batchSize]);
+
+  // Compute default filter values from dashboard filter definitions
+  const getDefaultFilterValues = useCallback((data: Dashboard): FilterValue[] => {
+    return data.filters
+      .filter((f) => f.default_value !== undefined)
+      .map((f) => ({ filter_id: f.id, value: f.default_value }));
+  }, []);
 
   // Load existing dashboard - only re-run when dashboardId changes
   useEffect(() => {
@@ -214,11 +236,13 @@ export function DashboardEditor({
     if (cached && now - cached.timestamp < CACHE_TTL_MS) {
       loadedDashboardRef.current = dashboardId;
       setDashboard(cached.data);
+      const defaults = getDefaultFilterValues(cached.data);
+      setFilterValues(defaults);
       setIsDirty(false);
       initialLayoutCountRef.current = 0;
       setIsLoading(false);
-      // Execute widget queries with cached data (no cancellation - results should always be set)
-      executeWidgetQueries(cached.data.widgets, currentClient);
+      // Execute widget queries with cached data and filter defaults applied
+      executeWidgetQueries(cached.data.widgets, currentClient, cached.data, defaults);
       return;
     }
 
@@ -230,10 +254,12 @@ export function DashboardEditor({
       inflightFetch
         .then((data) => {
           setDashboard(data);
+          const defaults = getDefaultFilterValues(data);
+          setFilterValues(defaults);
           setIsDirty(false);
           initialLayoutCountRef.current = 0;
           setIsLoading(false);
-          executeWidgetQueries(data.widgets, currentClient);
+          executeWidgetQueries(data.widgets, currentClient, data, defaults);
         })
         .catch((err) => {
           console.error(`[DashboardEditor] In-flight fetch error:`, err);
@@ -265,17 +291,19 @@ export function DashboardEditor({
       .then((data) => {
         inflightFetches.delete(dashboardId);
         setDashboard(data);
+        const defaults = getDefaultFilterValues(data);
+        setFilterValues(defaults);
         setIsDirty(false);
         initialLayoutCountRef.current = 0;
         setIsLoading(false);
-        executeWidgetQueries(data.widgets, currentClient);
+        executeWidgetQueries(data.widgets, currentClient, data, defaults);
       })
       .catch((err) => {
         inflightFetches.delete(dashboardId);
         setError(err instanceof Error ? err : new Error('Failed to load dashboard'));
         setIsLoading(false);
       });
-  }, [dashboardId, batchSize, executeWidgetQueries]); // Removed client - using ref instead
+  }, [dashboardId, batchSize, executeWidgetQueries, getDefaultFilterValues]); // Removed client - using ref instead
 
   // Execute widget queries for preview
   // Accepts optional widget parameter to avoid stale closure issues when widget was just added
@@ -289,10 +317,15 @@ export function DashboardEditor({
       setRefreshingWidgets((prev) => new Set(prev).add(widgetId));
 
       try {
-        // Pass bypassCache=true to force fresh data on manual refresh
-        const result = isSqlMode
-          ? await client.executeSQL(widget!.config.raw_sql!)
-          : await client.executeQuery(widget!.query!, true);
+        let result;
+        if (isSqlMode) {
+          result = await client.executeSQL(widget!.config.raw_sql!);
+        } else {
+          // Apply dashboard filters to the widget query
+          const query = applyFiltersToQuery(widget!.query!, dashboard, filterValues);
+          // Pass bypassCache=true to force fresh data on manual refresh
+          result = await client.executeQuery(query, true);
+        }
         setWidgetResults((prev) => ({ ...prev, [widgetId]: result }));
         setWidgetRefreshTimes((prev) => ({ ...prev, [widgetId]: Math.floor(Date.now() / 1000) }));
         setWidgetErrors((prev) => {
@@ -314,7 +347,7 @@ export function DashboardEditor({
         });
       }
     },
-    [dashboard.widgets, client]
+    [dashboard, filterValues, client]
   );
 
   // Add new widget - opens the full-page editor
@@ -624,6 +657,29 @@ export function DashboardEditor({
     );
   }
 
+  // If editing filters, show the filter editor
+  if (editingFilters) {
+    return (
+      <FilterEditor
+        filters={dashboard.filters}
+        onSave={(filters: DashboardFilter[]) => {
+          const updatedDashboard = { ...dashboard, filters };
+          setDashboard(updatedDashboard);
+          setIsDirty(true);
+          setEditingFilters(false);
+
+          // Compute new filter values from updated defaults and re-execute all widget queries
+          const newFilterValues = getDefaultFilterValues(updatedDashboard);
+          setFilterValues(newFilterValues);
+          if (client && updatedDashboard.widgets.length > 0) {
+            executeWidgetQueries(updatedDashboard.widgets, client, updatedDashboard, newFilterValues);
+          }
+        }}
+        onCancel={() => setEditingFilters(false)}
+      />
+    );
+  }
+
   // If editing a widget, show the full-page editor instead
   if (editingWidget !== null) {
     return (
@@ -647,6 +703,7 @@ export function DashboardEditor({
         hasChanges={isDirty}
         isSaving={isSaving}
         onAddWidget={handleAddWidget}
+        onEditFilters={() => setEditingFilters(true)}
         onSave={handleSave}
         onCancel={handleCancel}
       />
