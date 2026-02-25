@@ -1034,14 +1034,14 @@ class QueryBuilder:
                 return (
                     f"{from_ref}.{from_col} NOT IN ("
                     f"SELECT {subquery_join_col} FROM {subquery_table} "
-                    f"WHERE {subquery_filter_col} IS NULL)",
+                    f"WHERE {subquery_filter_col} IS NULL AND {subquery_join_col} IS NOT NULL)",
                     params,
                 )
             params.append(coerced_value)
             return (
                 f"{from_ref}.{from_col} NOT IN ("
                 f"SELECT {subquery_join_col} FROM {subquery_table} "
-                f"WHERE {subquery_filter_col} = ${len(params)})",
+                f"WHERE {subquery_filter_col} = ${len(params)} AND {subquery_join_col} IS NOT NULL)",
                 params,
             )
 
@@ -1056,14 +1056,14 @@ class QueryBuilder:
                 return (
                     f"{from_ref}.{from_col} NOT IN ("
                     f"SELECT {subquery_join_col} FROM {subquery_table} "
-                    f"WHERE {subquery_filter_col} IN ({', '.join(placeholders)}))",
+                    f"WHERE {subquery_filter_col} IN ({', '.join(placeholders)}) AND {subquery_join_col} IS NOT NULL)",
                     params,
                 )
             params.append(coerced_value)
             return (
                 f"{from_ref}.{from_col} NOT IN ("
                 f"SELECT {subquery_join_col} FROM {subquery_table} "
-                f"WHERE {subquery_filter_col} IN (${len(params)}))",
+                f"WHERE {subquery_filter_col} IN (${len(params)}) AND {subquery_join_col} IS NOT NULL)",
                 params,
             )
 
