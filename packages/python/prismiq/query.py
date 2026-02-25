@@ -1005,6 +1005,15 @@ class QueryBuilder:
         if join is None:
             return None
 
+        # Current NOT IN strategy is only safe for direct base -> joined table
+        # filters.  For multi-hop joins (base → B → C with filter on C), the
+        # subquery excludes at the intermediate level, not the base level, so a
+        # base row can still leak through via another intermediate row.  Fall
+        # back to normal condition handling until a chain-aware exclusion
+        # strategy is implemented.
+        if join.from_table_id != base_table_id:
+            return None
+
         # Resolve the joined table name for the subquery
         joined_table = query.get_table_by_id(f.table_id)
         if joined_table is None:
