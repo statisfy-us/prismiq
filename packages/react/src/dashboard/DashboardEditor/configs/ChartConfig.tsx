@@ -215,28 +215,39 @@ export function ChartConfig({
     return options;
   }, [tables, schema.tables]);
 
-  // Get numeric columns for measures (from all selected tables)
-  const measureColumnOptions = useMemo(() => {
-    const options: { value: string; label: string }[] = [];
+  // Build column options for measures, optionally filtered to numeric only
+  const buildMeasureColumnOptions = useCallback(
+    (numericOnly: boolean) => {
+      const options: { value: string; label: string }[] = [];
 
-    for (const table of tables) {
-      const tableSchema = schema.tables.find((t) => t.name === table.name);
-      if (!tableSchema) continue;
+      for (const table of tables) {
+        const tableSchema = schema.tables.find((t) => t.name === table.name);
+        if (!tableSchema) continue;
 
-      const numericCols = tableSchema.columns.filter(isNumericColumn);
+        const cols = numericOnly
+          ? tableSchema.columns.filter(isNumericColumn)
+          : tableSchema.columns;
 
-      for (const col of numericCols) {
-        options.push({
-          value: `${table.id}.${col.name}`,
-          label: tables.length > 1
-            ? `${table.alias ?? table.name}.${col.name} (${col.data_type})`
-            : `${col.name} (${col.data_type})`,
-        });
+        for (const col of cols) {
+          options.push({
+            value: `${table.id}.${col.name}`,
+            label: tables.length > 1
+              ? `${table.alias ?? table.name}.${col.name} (${col.data_type})`
+              : `${col.name} (${col.data_type})`,
+          });
+        }
       }
-    }
 
-    return options;
-  }, [tables, schema.tables]);
+      return options;
+    },
+    [tables, schema.tables],
+  );
+
+  // Numeric columns for sum/avg/min/max
+  const measureColumnOptions = useMemo(() => buildMeasureColumnOptions(true), [buildMeasureColumnOptions]);
+
+  // All columns for count_distinct
+  const allMeasureColumnOptions = useMemo(() => buildMeasureColumnOptions(false), [buildMeasureColumnOptions]);
 
   // Check if selected group by column is a date type
   const groupByColumnSchema = useMemo(() => {
@@ -567,21 +578,26 @@ export function ChartConfig({
                 options={AGGREGATIONS}
                 style={{ width: '120px' }}
               />
-              {measure.aggregation !== 'count' && (
-                <>
-                  <span style={{ color: theme.colors.textMuted }}>of</span>
-                  {measureColumnOptions.length > 0 ? (
-                    <Select
-                      value={measure.column}
-                      onChange={(value) => updateMeasure(index, { column: value })}
-                      options={[{ value: '', label: 'Select column...' }, ...measureColumnOptions]}
-                      style={{ flex: 1 }}
-                    />
-                  ) : (
-                    <span style={{ ...helpTextStyle, flex: 1 }}>No numeric columns</span>
-                  )}
-                </>
-              )}
+              {measure.aggregation !== 'count' && (() => {
+                const colOptions = measure.aggregation === 'count_distinct'
+                  ? allMeasureColumnOptions
+                  : measureColumnOptions;
+                return (
+                  <>
+                    <span style={{ color: theme.colors.textMuted }}>of</span>
+                    {colOptions.length > 0 ? (
+                      <Select
+                        value={measure.column}
+                        onChange={(value) => updateMeasure(index, { column: value })}
+                        options={[{ value: '', label: 'Select column...' }, ...colOptions]}
+                        style={{ flex: 1 }}
+                      />
+                    ) : (
+                      <span style={{ ...helpTextStyle, flex: 1 }}>No columns available</span>
+                    )}
+                  </>
+                );
+              })()}
               {measures.length > 1 && (
                 <Button variant="ghost" size="sm" onClick={() => removeMeasure(index)}>
                   <Icon name="x" size={14} />
