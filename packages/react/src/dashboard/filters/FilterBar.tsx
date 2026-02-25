@@ -9,7 +9,8 @@ import { DateRangeFilter } from './DateRangeFilter';
 import { SelectFilter } from './SelectFilter';
 import { MultiSelectFilter } from './MultiSelectFilter';
 import { TextFilter } from './TextFilter';
-import type { FilterBarProps, DashboardFilter, FilterValue, DateRangeValue } from '../types';
+import { NumberRangeFilter } from './NumberRangeFilter';
+import type { FilterBarProps, DashboardFilter, FilterValue, DateRangeValue, NumberRangeValue } from '../types';
 
 /**
  * Get filter value from values array.
@@ -137,11 +138,10 @@ function renderFilter(
       );
 
     case 'number_range':
-      // Fallback to text filter for now
       return (
-        <TextFilter
+        <NumberRangeFilter
           filter={filter}
-          value={(value as string) ?? ''}
+          value={(value as NumberRangeValue | null) ?? null}
           onChange={(v) => onChange(filter.id, v)}
         />
       );
