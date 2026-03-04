@@ -164,6 +164,10 @@ class WidgetConfig(BaseModel):
     data_source_mode: Literal["guided", "advanced", "saved", "sql"] | None = None
     """Editor mode used to build this widget ('guided', 'advanced', 'saved', or 'sql')."""
 
+    # Hyperlink
+    hyperlink: dict[str, Any] | None = None
+    """Optional hyperlink config (url, title, target) for the widget header."""
+
 
 class Widget(BaseModel):
     """A dashboard widget."""
@@ -347,6 +351,9 @@ class DashboardCreate(BaseModel):
     layout: DashboardLayout | None = None
     """Optional layout configuration."""
 
+    widgets: list[Widget] | None = None
+    """Optional initial widgets to create with the dashboard."""
+
 
 class DashboardUpdate(BaseModel):
     """DTO for updating a dashboard."""
@@ -412,6 +419,7 @@ class WidgetUpdate(BaseModel):
 
     config: WidgetConfig | None = None
     """New widget configuration."""
+    """New hyperlink configuration."""
 
 
 # ============================================================================

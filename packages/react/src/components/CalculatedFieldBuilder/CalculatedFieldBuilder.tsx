@@ -63,21 +63,18 @@ export function CalculatedFieldBuilder({
 
   // Counter for generating unique IDs when no stable property exists
   const idCounter = useRef(0);
-  // Map from stable key (derived from field data) to generated ID
-  const stableIdsRef = useRef<Map<string, string>>(new Map());
+  // Map from index to generated ID — stable across re-renders
+  const stableIdsRef = useRef<Map<number, string>>(new Map());
 
   /**
-   * Get or create a stable ID for a field.
-   * Uses field name + index to create a stable key, falling back to counter for duplicates.
+   * Get or create a stable ID for a field by index.
+   * Uses index only so that editing field properties (like name) doesn't change the key.
    */
-  const getFieldId = useCallback((field: CalculatedField, index: number): string => {
-    // Create a stable key from field data
-    const stableKey = field.name ? `${field.name}-${index}` : `unnamed-${index}`;
-
-    let id = stableIdsRef.current.get(stableKey);
+  const getFieldId = useCallback((_field: CalculatedField, index: number): string => {
+    let id = stableIdsRef.current.get(index);
     if (!id) {
       id = `field-${++idCounter.current}`;
-      stableIdsRef.current.set(stableKey, id);
+      stableIdsRef.current.set(index, id);
     }
     return id;
   }, []);

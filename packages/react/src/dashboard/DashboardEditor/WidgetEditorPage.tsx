@@ -138,7 +138,7 @@ export function WidgetEditorPage({
     widget?.config ?? getDefaultConfig(widget?.type ?? 'bar_chart')
   );
   const [query, setQuery] = useState<QueryDefinition | null>(widget?.query ?? null);
-  const [hyperlink, setHyperlink] = useState<WidgetHyperlink | undefined>(widget?.hyperlink);
+  const [hyperlink, setHyperlink] = useState<WidgetHyperlink | undefined>(widget?.config?.hyperlink ?? widget?.hyperlink);
   const [position, setPosition] = useState<WidgetPosition>(
     widget?.position ?? { x: 0, y: 0, w: 6, h: 4, minW: 2, minH: 2 }
   );
@@ -292,7 +292,7 @@ export function WidgetEditorPage({
 
   // Handle save
   const handleSave = useCallback(() => {
-    const savedConfig = { ...config, data_source_mode: dataSourceMode };
+    const savedConfig = { ...config, data_source_mode: dataSourceMode, hyperlink };
 
     // SQL mode: store raw_sql in config, clear query
     if (dataSourceMode === 'sql') {
@@ -306,7 +306,6 @@ export function WidgetEditorPage({
       config: savedConfig,
       query: dataSourceMode === 'sql' ? null : query,
       position,
-      hyperlink,
     };
     onSave(savedWidget);
   }, [widget, type, title, config, query, rawSql, position, hyperlink, dataSourceMode, onSave]);

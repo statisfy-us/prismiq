@@ -282,6 +282,27 @@ class PostgresDashboardStore:
                 now,
                 now,
             )
+            dashboard_id = str(row["id"])
+
+            # Insert initial widgets if provided
+            if dashboard.widgets:
+                for widget in dashboard.widgets:
+                    await conn.execute(
+                        """
+                        INSERT INTO "prismiq_widgets" (
+                            "dashboard_id", "title", "type", "query", "config", "position",
+                            "created_at", "updated_at"
+                        ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+                        """,
+                        _parse_int_id(dashboard_id),
+                        widget.title,
+                        widget.type.value,
+                        json.dumps(widget.query.model_dump()) if widget.query else None,
+                        json.dumps(widget.config.model_dump()) if widget.config else None,
+                        json.dumps(widget.position.model_dump()) if widget.position else None,
+                    )
+                return await self.get_dashboard(dashboard_id, tenant_id, schema_name)
+
             return self._row_to_dashboard(row, widgets=[])
 
     async def update_dashboard(

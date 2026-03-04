@@ -518,7 +518,7 @@ class InMemoryDashboardStore:
                 name=dashboard.name,
                 description=dashboard.description,
                 layout=dashboard.layout if dashboard.layout else DashboardLayout(),
-                widgets=[],
+                widgets=list(dashboard.widgets) if dashboard.widgets else [],
                 filters=[],
                 owner_id=owner_id,
                 created_at=now,

@@ -153,6 +153,10 @@ export interface WidgetConfig {
   // Editor metadata
   /** Editor mode used to build this widget ('guided', 'advanced', 'saved', or 'sql'). */
   data_source_mode?: 'guided' | 'advanced' | 'saved' | 'sql';
+
+  // Hyperlink (persisted inside config so it flows through the existing JSONB column)
+  /** Optional hyperlink displayed as a link icon in the widget header. */
+  hyperlink?: WidgetHyperlink;
 }
 
 /**
