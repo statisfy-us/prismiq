@@ -17,6 +17,7 @@ import { Input } from '../../components/ui/Input';
 import { Select } from '../../components/ui/Select';
 import { Checkbox } from '../../components/ui/Checkbox';
 import { Icon } from '../../components/ui/Icon';
+import { Dialog, DialogFooter } from '../../components/ui/Dialog';
 import { Tooltip } from '../../components/ui/Tooltip';
 import { SavedQueryPicker } from '../../components/SavedQueryPicker';
 import { QueryBuilder } from '../../components/QueryBuilder';
@@ -101,6 +102,9 @@ function generateId(): string {
   return crypto.randomUUID();
 }
 
+/** Widget types that support multi-table queries (joins). */
+const MULTI_TABLE_TYPES = new Set<WidgetType>(['bar_chart', 'line_chart', 'area_chart', 'scatter_chart']);
+
 // ============================================================================
 // Component
 // ============================================================================
@@ -157,11 +161,24 @@ export function WidgetEditorPage({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<Error | null>(null);
 
-  // Update config when type changes (preserve shared settings)
-  const handleTypeChange = useCallback(
+  // Pending type change (for confirmation modal)
+  const [pendingType, setPendingType] = useState<WidgetType | null>(null);
+
+  // Check if current query has complex data that would be lost on type switch
+  const queryHasComplexData = useMemo(() => {
+    if (!query) return false;
+    const hasMultipleTables = (query.tables?.length ?? 0) > 1;
+    const hasJoins = (query.joins?.length ?? 0) > 0;
+    const hasFilters = (query.filters?.length ?? 0) > 0;
+    const hasCalculatedFields = (query.calculated_fields?.length ?? 0) > 0;
+    const hasTimeSeries = query.time_series !== undefined;
+    return hasMultipleTables || hasJoins || hasFilters || hasCalculatedFields || hasTimeSeries;
+  }, [query]);
+
+  // Apply a type change (shared logic)
+  const applyTypeChange = useCallback(
     (newType: WidgetType) => {
       setType(newType);
-      // Merge new default config with existing (preserve x_axis, y_axis, etc.)
       setConfig((prev) => ({
         ...getDefaultConfig(newType),
         x_axis: prev.x_axis,
@@ -170,6 +187,35 @@ export function WidgetEditorPage({
     },
     []
   );
+
+  // Update config when type changes (with confirmation if needed)
+  const handleTypeChange = useCallback(
+    (newType: WidgetType) => {
+      if (newType === type) return;
+
+      // Show confirmation if switching away from a multi-table type to a single-table type
+      // and the query has joins, filters, calculated fields, or time series
+      const losingMultiTable = MULTI_TABLE_TYPES.has(type) && !MULTI_TABLE_TYPES.has(newType);
+      if (queryHasComplexData && losingMultiTable && dataSourceMode === 'guided') {
+        setPendingType(newType);
+        return;
+      }
+
+      applyTypeChange(newType);
+    },
+    [type, queryHasComplexData, dataSourceMode, applyTypeChange]
+  );
+
+  const handleConfirmTypeChange = useCallback(() => {
+    if (pendingType) {
+      applyTypeChange(pendingType);
+      setPendingType(null);
+    }
+  }, [pendingType, applyTypeChange]);
+
+  const handleCancelTypeChange = useCallback(() => {
+    setPendingType(null);
+  }, []);
 
   // Update config field
   const updateConfig = useCallback(
@@ -985,6 +1031,36 @@ export function WidgetEditorPage({
           )}
         </div>
       </div>
+
+      {/* Confirmation modal for widget type change */}
+      <Dialog
+        open={pendingType !== null}
+        onClose={handleCancelTypeChange}
+        title="Change widget type?"
+        width="sm"
+      >
+        <p style={{ fontSize: theme.fontSizes.sm, color: theme.colors.text, margin: 0 }}>
+          Switching to a <strong>{pendingType}</strong> widget will remove your{' '}
+          {[
+            (query?.tables?.length ?? 0) > 1 && 'additional tables',
+            (query?.joins?.length ?? 0) > 0 && 'joins',
+            (query?.filters?.length ?? 0) > 0 && 'filters',
+            (query?.calculated_fields?.length ?? 0) > 0 && 'calculated fields',
+            query?.time_series !== undefined && 'time series config',
+          ]
+            .filter(Boolean)
+            .join(', ')}
+          {' '}since this widget type does not support multi-table queries.
+        </p>
+        <DialogFooter>
+          <Button variant="secondary" size="sm" onClick={handleCancelTypeChange}>
+            Cancel
+          </Button>
+          <Button variant="danger" size="sm" onClick={handleConfirmTypeChange}>
+            Change Type
+          </Button>
+        </DialogFooter>
+      </Dialog>
     </div>
   );
 }
