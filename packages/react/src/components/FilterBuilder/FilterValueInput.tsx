@@ -9,6 +9,7 @@ import { createPortal } from 'react-dom';
 import { useAnalytics } from '../../context';
 import type { FilterOperator } from '../../types';
 import { Input } from '../ui';
+import { DATE_RELATIVE_INFINITY_DAYS } from './datePresets';
 
 // ============================================================================
 // Types
@@ -133,7 +134,7 @@ function getInputType(dataType?: string): 'text' | 'number' | 'date' {
     return 'number';
   }
 
-  if (type.includes('date') && !type.includes('time')) {
+  if (type.includes('date') || type.includes('time') || type.includes('timestamp')) {
     return 'date';
   }
 
@@ -256,9 +257,9 @@ export function FilterValueInput({
     setMultiInputText('');
   }, [operator]);
 
-  // Fetch sample values when table and column are available
+  // Fetch sample values when table and column are available (skip for date fields)
   useEffect(() => {
-    if (!tableName || !columnName || !client) {
+    if (!tableName || !columnName || !client || inputType === 'date') {
       setSampleValues([]);
       setIsLoadingValues(false);
       fetchedRef.current = null;
@@ -475,6 +476,46 @@ export function FilterValueInput({
     return <></>;
   }
 
+  // Date window presets need no value input (period/offset determined by preset)
+  if (operator === 'date_window') {
+    return <></>;
+  }
+
+  // Date relative operators
+  if (operator === 'date_relative' || operator === 'not_date_relative') {
+    const numValue = typeof value === 'number' ? value : 0;
+    const absValue = Math.abs(numValue);
+
+    // Sentinel values (before/after today) need no input
+    if (absValue >= DATE_RELATIVE_INFINITY_DAYS) {
+      return <></>;
+    }
+
+    // Show days input for variable presets
+    return (
+      <div className={className} style={containerStyles}>
+        <Input
+          inputSize="sm"
+          type="number"
+          placeholder="30"
+          min={1}
+          value={absValue || ''}
+          disabled={disabled}
+          onChange={(e) => {
+            const days = parseInt(e.target.value, 10) || 0;
+            // Preserve sign from the original value
+            const sign = numValue < 0 ? -1 : 1;
+            onChange(sign * days);
+          }}
+          style={{ width: '80px', flexShrink: 0 }}
+        />
+        <span style={{ color: 'var(--prismiq-color-text-muted)', fontSize: 'var(--prismiq-font-size-sm)', whiteSpace: 'nowrap' }}>
+          days
+        </span>
+      </div>
+    );
+  }
+
   // Between operator needs two inputs
   if (operator === 'between') {
     const [min, max] = Array.isArray(value) ? value : [undefined, undefined];
@@ -505,6 +546,25 @@ export function FilterValueInput({
             onChange([min, newMax]);
           }}
           style={{ flex: 1 }}
+        />
+      </div>
+    );
+  }
+
+  // Date fields: simple date input without sample values dropdown
+  if (inputType === 'date' && !isMulti) {
+    return (
+      <div className={className} style={containerStyles}>
+        <Input
+          inputSize="sm"
+          type="date"
+          placeholder="Select date"
+          value={formatValue(value)}
+          disabled={disabled}
+          onChange={(e) => {
+            onChange(e.target.value || undefined);
+          }}
+          style={{ width: '100%' }}
         />
       </div>
     );

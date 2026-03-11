@@ -37,6 +37,7 @@ import { TextFormattingSection } from './configs/TextFormattingSection';
 import { PivotConfigSection } from './configs/PivotConfigSection';
 import { LayoutConstraintsSection } from './configs/LayoutConstraintsSection';
 import { CrossFilterSection } from './configs/CrossFilterSection';
+import { FiscalYearSection } from './configs/FiscalYearSection';
 import type { Widget, WidgetConfig, WidgetType, WidgetHyperlink, WidgetPosition } from '../types';
 import type {
   DatabaseSchema,
@@ -391,7 +392,7 @@ export function WidgetEditorPage({
   const leftPanelStyle: React.CSSProperties = {
     borderRight: `1px solid ${theme.colors.border}`,
     padding: theme.spacing.md,
-    paddingBottom: theme.spacing.xl,
+    paddingBottom: '120px',
     display: 'flex',
     flexDirection: 'column',
     gap: theme.spacing.lg,
@@ -761,6 +762,13 @@ export function WidgetEditorPage({
             {renderConfigFields()}
           </div>
 
+          {/* Fiscal Year */}
+          <FiscalYearSection
+            config={config}
+            onChange={updateConfig}
+            defaultOpen={false}
+          />
+
           {/* Hyperlink */}
           <HyperlinkSection
             hyperlink={hyperlink}
@@ -861,6 +869,7 @@ export function WidgetEditorPage({
                     schema={schema}
                     query={query}
                     onChange={handleQueryChange}
+                    fiscalYearStartMonth={config.fiscalYearStartMonth}
                   />
                 )}
 

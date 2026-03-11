@@ -18,6 +18,8 @@ export interface GuidedDataConfigProps {
   query: QueryDefinition | null;
   /** Callback when query changes. */
   onChange: (query: QueryDefinition) => void;
+  /** Month (1-12) when the fiscal year starts. Used for date filter presets. */
+  fiscalYearStartMonth?: number;
 }
 
 /**
@@ -28,25 +30,26 @@ export function GuidedDataConfig({
   schema,
   query,
   onChange,
+  fiscalYearStartMonth,
 }: GuidedDataConfigProps): JSX.Element {
   const { theme } = useTheme();
 
   // Render the appropriate config based on widget type
   switch (widgetType) {
     case 'metric':
-      return <MetricConfig schema={schema} query={query} onChange={onChange} />;
+      return <MetricConfig schema={schema} query={query} onChange={onChange} fiscalYearStartMonth={fiscalYearStartMonth} />;
 
     case 'bar_chart':
     case 'line_chart':
     case 'area_chart':
     case 'scatter_chart':
-      return <ChartConfig schema={schema} query={query} onChange={onChange} />;
+      return <ChartConfig schema={schema} query={query} onChange={onChange} fiscalYearStartMonth={fiscalYearStartMonth} />;
 
     case 'pie_chart':
-      return <PieConfig schema={schema} query={query} onChange={onChange} />;
+      return <PieConfig schema={schema} query={query} onChange={onChange} fiscalYearStartMonth={fiscalYearStartMonth} />;
 
     case 'table':
-      return <TableConfig schema={schema} query={query} onChange={onChange} />;
+      return <TableConfig schema={schema} query={query} onChange={onChange} fiscalYearStartMonth={fiscalYearStartMonth} />;
 
     case 'text':
       // Text widgets don't need data configuration

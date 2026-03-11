@@ -173,7 +173,10 @@ export type FilterOperator =
   | 'not_ilike'
   | 'between'
   | 'is_null'
-  | 'is_not_null';
+  | 'is_not_null'
+  | 'date_relative'
+  | 'not_date_relative'
+  | 'date_window';
 
 /**
  * A filter condition in a query.
@@ -183,6 +186,8 @@ export type FilterOperator =
  * - Array for in_, not_in, in_or_null
  * - [min, max] tuple for between
  * - null/undefined for is_null, is_not_null
+ * - Integer (days) for date_relative, not_date_relative
+ * - { period: string, value: number } for date_window
  */
 export interface FilterDefinition {
   /** ID of the table containing the column to filter. */

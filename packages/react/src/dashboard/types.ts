@@ -150,6 +150,10 @@ export interface WidgetConfig {
   /** Raw SQL query for SQL-mode widgets. When set, widget.query should be null. */
   raw_sql?: string;
 
+  // Fiscal year
+  /** Month (1-12) when the fiscal year starts. Defaults to 1 (January). Used for date filter presets. */
+  fiscalYearStartMonth?: number;
+
   // Editor metadata
   /** Editor mode used to build this widget ('guided', 'advanced', 'saved', or 'sql'). */
   data_source_mode?: 'guided' | 'advanced' | 'saved' | 'sql';

@@ -44,6 +44,8 @@ export interface AnalyticsContextValue {
   userId?: string;
   /** PostgreSQL schema name for per-tenant schema isolation. */
   schemaName?: string;
+  /** Month (1-12) when the fiscal year starts. Defaults to 1 (January). */
+  fiscalYearStartMonth: number;
 }
 
 /**
@@ -78,6 +80,8 @@ export interface AnalyticsProviderProps {
   onSchemaLoad?: (schema: DatabaseSchema) => void;
   /** Callback when schema loading fails. */
   onSchemaError?: (error: Error) => void;
+  /** Month (1-12) when the fiscal year starts. Defaults to 1 (January). */
+  fiscalYearStartMonth?: number;
   /** Child components that will have access to the analytics context. */
   children: ReactNode;
 }
@@ -143,6 +147,7 @@ export function AnalyticsProvider({
   onQueryError,
   onSchemaLoad,
   onSchemaError,
+  fiscalYearStartMonth = 1,
   children,
 }: AnalyticsProviderProps): JSX.Element {
   // Debug: Track this provider instance
@@ -237,8 +242,9 @@ export function AnalyticsProvider({
       tenantId,
       userId,
       schemaName,
+      fiscalYearStartMonth,
     }),
-    [client, schema, dataSources, isLoading, error, refetchSchema, tenantId, userId, schemaName]
+    [client, schema, dataSources, isLoading, error, refetchSchema, tenantId, userId, schemaName, fiscalYearStartMonth]
   );
 
   // Memoize callbacks

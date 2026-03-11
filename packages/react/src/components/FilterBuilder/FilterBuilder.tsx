@@ -21,6 +21,8 @@ export interface FilterBuilderProps {
   onChange: (filters: FilterDefinition[]) => void;
   /** Database schema. */
   schema: DatabaseSchema;
+  /** Month (1-12) when the fiscal year starts. Defaults to 1 (January). */
+  fiscalYearStartMonth?: number;
   /** Additional class name. */
   className?: string;
   /** Additional styles. */
@@ -98,6 +100,7 @@ export function FilterBuilder({
   filters,
   onChange,
   schema,
+  fiscalYearStartMonth,
   className,
   style,
 }: FilterBuilderProps): JSX.Element {
@@ -190,6 +193,7 @@ export function FilterBuilder({
               schema={schema}
               onChange={(updated) => handleUpdateFilter(index, updated)}
               onRemove={() => handleRemoveFilter(index)}
+              fiscalYearStartMonth={fiscalYearStartMonth}
             />
           ))}
         </div>

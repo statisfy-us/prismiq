@@ -28,6 +28,8 @@ export interface TableConfigProps {
   query: QueryDefinition | null;
   /** Callback when query changes. */
   onChange: (query: QueryDefinition) => void;
+  /** Month (1-12) when the fiscal year starts. Used for date filter presets. */
+  fiscalYearStartMonth?: number;
 }
 
 /**
@@ -37,6 +39,7 @@ export function TableConfig({
   schema,
   query,
   onChange,
+  fiscalYearStartMonth,
 }: TableConfigProps): JSX.Element {
   const { theme } = useTheme();
   const { getDisplayName } = useSchema();
@@ -252,6 +255,7 @@ export function TableConfig({
             filters={filters}
             onChange={setFilters}
             schema={schema}
+            fiscalYearStartMonth={fiscalYearStartMonth}
           />
         </div>
       )}

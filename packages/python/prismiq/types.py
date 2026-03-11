@@ -253,6 +253,9 @@ class FilterOperator(str, Enum):
     IS_NULL = "is_null"
     IS_NOT_NULL = "is_not_null"
     IN_SUBQUERY = "in_subquery"
+    DATE_RELATIVE = "date_relative"
+    NOT_DATE_RELATIVE = "not_date_relative"
+    DATE_WINDOW = "date_window"
 
 
 class FilterDefinition(BaseModel):

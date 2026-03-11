@@ -11,6 +11,7 @@ import type {
   QueryTable,
 } from '../../types';
 import { Icon, Select, type SelectOption } from '../ui';
+import { findPresetKey, getDatePresets, type DatePreset } from './datePresets';
 import { FilterValueInput } from './FilterValueInput';
 
 // ============================================================================
@@ -28,6 +29,8 @@ export interface FilterRowProps {
   onChange: (filter: FilterDefinition) => void;
   /** Callback when the filter should be removed. */
   onRemove: () => void;
+  /** Month (1-12) when the fiscal year starts. Defaults to 1 (January). */
+  fiscalYearStartMonth?: number;
   /** Additional class name. */
   className?: string;
 }
@@ -52,7 +55,7 @@ const columnSelectStyles: React.CSSProperties = {
 };
 
 const operatorSelectStyles: React.CSSProperties = {
-  width: '140px',
+  width: '220px',
   flexShrink: 0,
 };
 
@@ -95,10 +98,21 @@ const allOperators: { value: FilterOperator; label: string }[] = [
   { value: 'is_not_null', label: 'IS NOT NULL' },
 ];
 
+/** Check if a data type is a date/time type. */
+function isDateType(dataType?: string): boolean {
+  if (!dataType) return false;
+  const type = dataType.toLowerCase();
+  return type.includes('date') || type.includes('time') || type.includes('timestamp');
+}
+
 /**
  * Get available operators based on column data type.
+ * For date types, includes date preset options prefixed with 'preset:'.
  */
-function getOperatorsForType(dataType?: string): SelectOption<FilterOperator>[] {
+function getOperatorsForType(
+  dataType?: string,
+  datePresets?: DatePreset[],
+): SelectOption<string>[] {
   if (!dataType) return allOperators;
 
   const type = dataType.toLowerCase();
@@ -118,10 +132,25 @@ function getOperatorsForType(dataType?: string): SelectOption<FilterOperator>[] 
   }
 
   // Date/time types
-  if (type.includes('date') || type.includes('time') || type.includes('timestamp')) {
-    return allOperators.filter((op) =>
-      ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'in_', 'not_in', 'in_or_null', 'between', 'is_null', 'is_not_null'].includes(op.value)
+  if (isDateType(dataType)) {
+    const standardOps = allOperators.filter((op) =>
+      ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'between', 'is_null', 'is_not_null'].includes(op.value)
     );
+
+    if (!datePresets || datePresets.length === 0) return standardOps;
+
+    // Add separator and date presets
+    const separator: SelectOption<string> = {
+      value: '---',
+      label: '── Date Presets ──',
+      disabled: true,
+    };
+    const presetOptions: SelectOption<string>[] = datePresets.map((p) => ({
+      value: `preset:${p.key}`,
+      label: p.label,
+    }));
+
+    return [...standardOps, separator, ...presetOptions];
   }
 
   // Boolean
@@ -148,6 +177,7 @@ export function FilterRow({
   schema,
   onChange,
   onRemove,
+  fiscalYearStartMonth = 1,
   className,
 }: FilterRowProps): JSX.Element {
   // Build column options grouped by table
@@ -185,10 +215,25 @@ export function FilterRow({
     return tableSchema.columns.find((c) => c.name === filter.column);
   }, [currentTable, schema, filter.column]);
 
-  const operatorOptions = useMemo(
-    () => getOperatorsForType(currentColumnSchema?.data_type),
-    [currentColumnSchema]
+  // Get date presets when the column is a date type
+  const datePresets = useMemo(
+    () => isDateType(currentColumnSchema?.data_type) ? getDatePresets(fiscalYearStartMonth) : [],
+    [currentColumnSchema?.data_type, fiscalYearStartMonth]
   );
+
+  const operatorOptions = useMemo(
+    () => getOperatorsForType(currentColumnSchema?.data_type, datePresets),
+    [currentColumnSchema, datePresets]
+  );
+
+  // Compute the current operator select value (may be a preset key)
+  const currentOperatorSelectValue = useMemo(() => {
+    if (datePresets.length > 0) {
+      const presetKey = findPresetKey(filter.operator, filter.value, fiscalYearStartMonth);
+      if (presetKey) return `preset:${presetKey}`;
+    }
+    return filter.operator;
+  }, [filter.operator, filter.value, datePresets, fiscalYearStartMonth]);
 
   const handleColumnChange = useCallback(
     (columnId: string) => {
@@ -198,6 +243,7 @@ export function FilterRow({
           ...filter,
           table_id: tableId,
           column: columnName,
+          operator: 'eq',
           // Reset value when column changes
           value: undefined,
         });
@@ -207,12 +253,23 @@ export function FilterRow({
   );
 
   const handleOperatorChange = useCallback(
-    (operator: FilterOperator) => {
+    (selected: string) => {
+      // Handle date preset selection
+      if (selected.startsWith('preset:')) {
+        const presetKey = selected.slice(7);
+        const preset = datePresets.find((p) => p.key === presetKey);
+        if (preset) {
+          onChange({ ...filter, operator: preset.operator as FilterOperator, value: preset.defaultValue });
+          return;
+        }
+      }
+
+      const operator = selected as FilterOperator;
       // Reset value for null operators
       const value = operator === 'is_null' || operator === 'is_not_null' ? undefined : filter.value;
       onChange({ ...filter, operator, value });
     },
-    [filter, onChange]
+    [filter, onChange, datePresets]
   );
 
   const handleValueChange = useCallback(
@@ -238,8 +295,8 @@ export function FilterRow({
       </div>
 
       <div style={operatorSelectStyles}>
-        <Select
-          value={filter.operator}
+        <Select<string>
+          value={currentOperatorSelectValue}
           onChange={handleOperatorChange}
           options={operatorOptions}
           size="sm"
