@@ -13,6 +13,8 @@ export { WidgetTypeSelector } from './WidgetTypeSelector';
 export type { WidgetTypeSelectorProps } from './WidgetTypeSelector';
 export { WidgetPreview } from './WidgetPreview';
 export type { WidgetPreviewProps } from './WidgetPreview';
+export { FilterEditor } from './FilterEditor';
+export type { FilterEditorProps } from './FilterEditor';
 export { GuidedDataConfig } from './GuidedDataConfig';
 export type { GuidedDataConfigProps } from './GuidedDataConfig';
 

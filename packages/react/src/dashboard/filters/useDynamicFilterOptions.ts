@@ -48,15 +48,23 @@ export interface DynamicFilterOptionsState {
  */
 export function useDynamicFilterOptions(
   filter: DashboardFilter,
-  limit: number = 100
+  limit: number = 10000
 ): DynamicFilterOptionsState {
   const { client } = useAnalytics();
   const [isLoading, setIsLoading] = useState(false);
   const [options, setOptions] = useState<FilterOption[]>([]);
   const [error, setError] = useState<Error | null>(null);
   const fetchedRef = useRef(false);
+  const prevKeyRef = useRef('');
 
   useEffect(() => {
+    // Reset fetchedRef when filter config changes so we re-fetch
+    const key = `${filter.table}:${filter.field}`;
+    if (key !== prevKeyRef.current) {
+      fetchedRef.current = false;
+      prevKeyRef.current = key;
+    }
+
     // Skip if not dynamic or already has static options
     if (!filter.dynamic || (filter.options && filter.options.length > 0)) {
       if (filter.options) {

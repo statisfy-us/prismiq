@@ -42,6 +42,10 @@ export function TextFilter({
   );
 
   const handleClear = useCallback(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = undefined;
+    }
     setLocalValue('');
     onChange('');
   }, [onChange]);
