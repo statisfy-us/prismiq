@@ -1177,7 +1177,9 @@ class QueryBuilder:
 
             return start, end
 
-        raise ValueError(f"Unknown date_window period: {period!r}. Expected 'quarterly' or 'yearly'.")
+        raise ValueError(
+            f"Unknown date_window period: {period!r}. Expected 'quarterly' or 'yearly'."
+        )
 
     def _build_condition(
         self,
