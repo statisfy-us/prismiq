@@ -65,13 +65,14 @@ const containerStyles: React.CSSProperties = {
 const contentStyles: React.CSSProperties = {
   position: 'fixed',
   minWidth: '160px',
+  maxHeight: '320px',
   backgroundColor: 'var(--prismiq-color-background)',
   border: '1px solid var(--prismiq-color-border)',
   borderRadius: 'var(--prismiq-radius-md)',
   boxShadow: 'var(--prismiq-shadow-md)',
   zIndex: 10000,
   padding: 'var(--prismiq-spacing-xs) 0',
-  overflow: 'hidden',
+  overflowY: 'auto',
 };
 
 const itemStyles: React.CSSProperties = {
@@ -266,11 +267,14 @@ export const Dropdown = forwardRef<HTMLDivElement, DropdownProps>(function Dropd
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
-  // Close on scroll
+  // Close on scroll (but not when scrolling inside the menu itself)
   useEffect(() => {
     if (!isOpen) return;
 
-    const handleScroll = () => {
+    const handleScroll = (e: Event) => {
+      if (menuRef.current && menuRef.current.contains(e.target as Node)) {
+        return;
+      }
       setIsOpen(false);
     };
 

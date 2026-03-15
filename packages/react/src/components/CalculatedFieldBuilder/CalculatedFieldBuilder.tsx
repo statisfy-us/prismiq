@@ -32,6 +32,8 @@ export interface CalculatedFieldBuilderProps {
   schema: DatabaseSchema;
   /** Maximum number of calculated fields allowed. */
   maxFields?: number;
+  /** Callback to add a calculated field as a selected column. */
+  onAddAsColumn?: (field: CalculatedField) => void;
 }
 
 // ============================================================================
@@ -58,6 +60,7 @@ export function CalculatedFieldBuilder({
   tables,
   schema,
   maxFields = 10,
+  onAddAsColumn,
 }: CalculatedFieldBuilderProps): JSX.Element {
   const { theme } = useTheme();
 
@@ -174,9 +177,21 @@ export function CalculatedFieldBuilder({
           <div key={getFieldId(field, index)} style={fieldCardStyle}>
             <div style={fieldHeaderStyle}>
               <span style={fieldIndexStyle}>Calculated Field #{index + 1}</span>
-              <Button variant="ghost" size="sm" onClick={() => removeField(index)}>
-                <Icon name="trash" size={14} />
-              </Button>
+              <div style={{ display: 'flex', gap: theme.spacing.xs }}>
+                {onAddAsColumn && field.expression.trim() !== '' && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => onAddAsColumn(field)}
+                  >
+                    <Icon name="plus" size={14} />
+                    <span style={{ marginLeft: theme.spacing.xs }}>Add as Column</span>
+                  </Button>
+                )}
+                <Button variant="ghost" size="sm" onClick={() => removeField(index)}>
+                  <Icon name="trash" size={14} />
+                </Button>
+              </div>
             </div>
 
             <div style={fieldRowStyle}>

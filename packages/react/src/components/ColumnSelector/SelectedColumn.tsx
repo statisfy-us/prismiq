@@ -4,7 +4,7 @@
 
 import { useCallback, useState, type DragEvent } from 'react';
 
-import type { AggregationType, ColumnSelection, DateTruncInterval, QueryTable, TableSchema } from '../../types';
+import type { AggregationType, CalculatedField, ColumnSelection, DateTruncInterval, QueryTable, TableSchema } from '../../types';
 import { Badge, Icon, Input, Select, type SelectOption } from '../ui';
 
 // ============================================================================
@@ -26,6 +26,8 @@ export interface SelectedColumnProps {
   onUpdate: (column: ColumnSelection) => void;
   /** Callback when drag ends with reorder. */
   onDragEnd: (fromIndex: number, toIndex: number) => void;
+  /** Calculated field definition if this column references one. */
+  calculatedField?: CalculatedField;
   /** Additional class name. */
   className?: string;
 }
@@ -153,6 +155,7 @@ function getAggregationOptions(dataType: string | undefined): SelectOption<Aggre
 
   // Numeric types - all aggregations available
   if (
+    type === 'number' ||
     type.includes('int') ||
     type.includes('numeric') ||
     type.includes('decimal') ||
@@ -198,14 +201,18 @@ export function SelectedColumn({
   onRemove,
   onUpdate,
   onDragEnd,
+  calculatedField,
   className,
 }: SelectedColumnProps): JSX.Element {
   const [isDragging, setIsDragging] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
 
+  const isCalcField = !!calculatedField;
+
   // Get column schema for type information
-  const columnSchema = tableSchema?.columns.find((c) => c.name === column.column);
-  const availableAggregations = getAggregationOptions(columnSchema?.data_type);
+  const columnSchema = isCalcField ? undefined : tableSchema?.columns.find((c) => c.name === column.column);
+  const effectiveDataType = isCalcField ? calculatedField.data_type : columnSchema?.data_type;
+  const availableAggregations = getAggregationOptions(effectiveDataType);
 
   const handleDragStart = useCallback(
     (e: DragEvent) => {
@@ -266,7 +273,7 @@ export function SelectedColumn({
   );
 
   // Check if this column is a date type
-  const isDate = isDateColumn(columnSchema?.data_type);
+  const isDate = isDateColumn(effectiveDataType);
 
   return (
     <div
@@ -289,14 +296,14 @@ export function SelectedColumn({
 
       <div style={columnInfoStyles}>
         <span style={columnNameStyles}>{column.column}</span>
-        <span style={tableNameStyles}>{table.alias ?? table.name}</span>
+        <span style={tableNameStyles}>
+          {isCalcField ? 'fx · calculated' : (table.alias ?? table.name)}
+        </span>
       </div>
 
-      {columnSchema && (
-        <Badge size="sm" variant="default">
-          {columnSchema.data_type}
-        </Badge>
-      )}
+      <Badge size="sm" variant={isCalcField ? 'primary' : 'default'}>
+        {isCalcField ? (calculatedField.data_type ?? 'number') : (columnSchema?.data_type ?? '?')}
+      </Badge>
 
       <div style={aggregationStyles}>
         <Select

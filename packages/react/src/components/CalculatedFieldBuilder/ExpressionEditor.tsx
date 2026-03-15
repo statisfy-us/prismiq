@@ -7,11 +7,11 @@
  * - Field reference insertion
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import { useTheme } from '../../theme';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
-import { Dropdown, DropdownItem, DropdownSeparator } from '../ui/Dropdown';
+import { Dropdown, DropdownItem } from '../ui/Dropdown';
 import { Icon } from '../ui/Icon';
 import type { QueryTable, DatabaseSchema } from '../../types';
 
@@ -84,6 +84,7 @@ export function ExpressionEditor({
   const { theme } = useTheme();
   const inputRef = useRef<HTMLInputElement>(null);
   const [showHelp, setShowHelp] = useState(false);
+  const [fieldSearch, setFieldSearch] = useState('');
 
   // Insert text at cursor position
   const insertText = useCallback(
@@ -120,6 +121,32 @@ export function ExpressionEditor({
     },
     [tables, insertText]
   );
+
+  // Build flat list of all columns across tables, filtered by search
+  const filteredColumns = useMemo(() => {
+    const result: { tableId: string; tableName: string; colName: string; dataType: string }[] = [];
+    for (const table of tables) {
+      const tableSchema = schema.tables.find((t) => t.name === table.name);
+      if (!tableSchema) continue;
+      const displayName = table.alias ?? table.name;
+      for (const col of tableSchema.columns) {
+        if (
+          fieldSearch &&
+          !col.name.toLowerCase().includes(fieldSearch.toLowerCase()) &&
+          !displayName.toLowerCase().includes(fieldSearch.toLowerCase())
+        ) {
+          continue;
+        }
+        result.push({
+          tableId: table.id,
+          tableName: displayName,
+          colName: col.name,
+          dataType: col.data_type,
+        });
+      }
+    }
+    return result;
+  }, [tables, schema, fieldSearch]);
 
   // Insert function
   const insertFunction = useCallback(
@@ -198,28 +225,50 @@ export function ExpressionEditor({
             </Button>
           }
         >
-          {tables.flatMap((table) => {
-            const tableSchema = schema.tables.find((t) => t.name === table.name);
-            if (!tableSchema) return [];
-
-            return [
-              <DropdownItem key={`header-${table.id}`} disabled>
-                {table.alias ?? table.name}
-              </DropdownItem>,
-              ...tableSchema.columns.map((col) => (
-                <DropdownItem
-                  key={`${table.id}-${col.name}`}
-                  onClick={() => insertFieldRef(table.id, col.name)}
-                >
-                  {col.name}
-                  <span style={{ color: theme.colors.textMuted, marginLeft: theme.spacing.sm }}>
-                    ({col.data_type})
-                  </span>
-                </DropdownItem>
-              )),
-              <DropdownSeparator key={`sep-${table.id}`} />,
-            ];
-          })}
+          {/* Search input - stop click propagation so dropdown stays open */}
+          <div
+            style={{ padding: `${theme.spacing.xs} ${theme.spacing.sm}`, borderBottom: `1px solid ${theme.colors.border}` }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <input
+              type="text"
+              placeholder="Search fields..."
+              value={fieldSearch}
+              onChange={(e) => setFieldSearch(e.target.value)}
+              autoFocus
+              style={{
+                width: '100%',
+                padding: `${theme.spacing.xs} ${theme.spacing.sm}`,
+                border: `1px solid ${theme.colors.border}`,
+                borderRadius: theme.radius.sm,
+                backgroundColor: theme.colors.surface,
+                color: theme.colors.text,
+                fontSize: theme.fontSizes.sm,
+                fontFamily: theme.fonts.sans,
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+              onKeyDown={(e) => e.stopPropagation()}
+            />
+          </div>
+          {filteredColumns.length === 0 ? (
+            <DropdownItem disabled>No matching fields</DropdownItem>
+          ) : (
+            filteredColumns.map((col) => (
+              <DropdownItem
+                key={`${col.tableId}-${col.colName}`}
+                onClick={() => {
+                  insertFieldRef(col.tableId, col.colName);
+                  setFieldSearch('');
+                }}
+              >
+                {col.colName}
+                <span style={{ color: theme.colors.textMuted, marginLeft: theme.spacing.sm, fontSize: theme.fontSizes.xs }}>
+                  {tables.length > 1 ? `${col.tableName} · ` : ''}{col.dataType}
+                </span>
+              </DropdownItem>
+            ))
+          )}
         </Dropdown>
 
         {/* Insert Function Dropdown */}
