@@ -56,6 +56,21 @@ class WidgetPosition(BaseModel):
     """Height in grid units."""
 
 
+class WidgetHyperlink(BaseModel):
+    """Hyperlink configuration for linking a widget header to an external URL."""
+
+    model_config = ConfigDict()
+
+    url: StrictStr
+    """URL to navigate to."""
+
+    title: StrictStr | None = None
+    """Link title / tooltip text."""
+
+    target: Literal["_blank", "_self"] | None = None
+    """Target window (_blank for new tab, _self for same tab)."""
+
+
 class WidgetConfig(BaseModel):
     """Widget-specific configuration."""
 
@@ -163,6 +178,10 @@ class WidgetConfig(BaseModel):
     # Editor metadata
     data_source_mode: Literal["guided", "advanced", "saved", "sql"] | None = None
     """Editor mode used to build this widget ('guided', 'advanced', 'saved', or 'sql')."""
+
+    # Hyperlink
+    hyperlink: WidgetHyperlink | None = None
+    """Optional hyperlink config (url, title, target) for the widget header."""
 
 
 class Widget(BaseModel):
@@ -346,6 +365,9 @@ class DashboardCreate(BaseModel):
 
     layout: DashboardLayout | None = None
     """Optional layout configuration."""
+
+    widgets: list[WidgetCreate] | None = None
+    """Optional initial widgets to create with the dashboard."""
 
 
 class DashboardUpdate(BaseModel):

@@ -4,6 +4,7 @@
 
 import { useCallback } from 'react';
 import { useTheme } from '../../theme';
+import { Icon } from '../../components/ui';
 import type { DateRangeFilterProps, DateRangeValue } from '../types';
 
 /**
@@ -43,6 +44,12 @@ export function DateRangeFilter({
     [dateValue.start, onChange]
   );
 
+  const handleClear = useCallback(() => {
+    onChange({ start: '', end: '' });
+  }, [onChange]);
+
+  const hasValue = dateValue.start !== '' || dateValue.end !== '';
+
   const containerStyle: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
@@ -64,6 +71,17 @@ export function DateRangeFilter({
     color: theme.colors.textMuted,
   };
 
+  const clearButtonStyle: React.CSSProperties = {
+    padding: theme.spacing.xs,
+    border: 'none',
+    backgroundColor: 'transparent',
+    color: theme.colors.textMuted,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  };
+
   return (
     <div style={containerStyle}>
       <input
@@ -81,6 +99,16 @@ export function DateRangeFilter({
         style={inputStyle}
         aria-label={`${filter.label} end date`}
       />
+      {hasValue && (
+        <button
+          type="button"
+          onClick={handleClear}
+          style={clearButtonStyle}
+          aria-label="Clear filter"
+        >
+          <Icon name="x" size={14} />
+        </button>
+      )}
     </div>
   );
 }

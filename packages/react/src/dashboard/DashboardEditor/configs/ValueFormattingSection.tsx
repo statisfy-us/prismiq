@@ -99,6 +99,10 @@ export function ValueFormattingSection({
             // (MetricCard reads from config.format, other components may use valueFormat)
             onChange('valueFormat', formatValue);
             onChange('format', formatValue);
+            // Set default currency symbol when switching to currency format
+            if (formatValue === 'currency' && config.currencySymbol == null) {
+              onChange('currencySymbol', '$');
+            }
           }}
           options={FORMAT_OPTIONS}
         />

@@ -274,7 +274,7 @@ export function FilterValueInput({
     const fetchSamples = async () => {
       setIsLoadingValues(true);
       try {
-        const values = await client.getColumnSample(tableName, columnName, 100);
+        const values = await client.getColumnSample(tableName, columnName, 10000);
         const stringValues = values
           .filter((v) => v !== null && v !== undefined)
           .map((v) => String(v));
