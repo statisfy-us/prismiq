@@ -24,22 +24,28 @@ export function NumberRangeFilter({
     value?.max != null ? String(value.max) : ''
   );
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const localMinRef = useRef(localMin);
+  const localMaxRef = useRef(localMax);
 
   // Sync local values when prop changes
   useEffect(() => {
-    setLocalMin(value?.min != null ? String(value.min) : '');
-    setLocalMax(value?.max != null ? String(value.max) : '');
+    const newMin = value?.min != null ? String(value.min) : '';
+    const newMax = value?.max != null ? String(value.max) : '';
+    setLocalMin(newMin);
+    setLocalMax(newMax);
+    localMinRef.current = newMin;
+    localMaxRef.current = newMax;
   }, [value?.min, value?.max]);
 
   const emitChange = useCallback(
-    (min: string, max: string) => {
+    () => {
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
       }
       debounceRef.current = setTimeout(() => {
         onChange({
-          min: min !== '' ? Number(min) : null,
-          max: max !== '' ? Number(max) : null,
+          min: localMinRef.current !== '' ? Number(localMinRef.current) : null,
+          max: localMaxRef.current !== '' ? Number(localMaxRef.current) : null,
         });
       }, debounceMs);
     },
@@ -50,18 +56,20 @@ export function NumberRangeFilter({
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const val = e.target.value;
       setLocalMin(val);
-      emitChange(val, localMax);
+      localMinRef.current = val;
+      emitChange();
     },
-    [emitChange, localMax]
+    [emitChange]
   );
 
   const handleMaxChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const val = e.target.value;
       setLocalMax(val);
-      emitChange(localMin, val);
+      localMaxRef.current = val;
+      emitChange();
     },
-    [emitChange, localMin]
+    [emitChange]
   );
 
   const handleClear = useCallback(() => {

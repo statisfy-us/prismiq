@@ -53,6 +53,7 @@ export function applyFiltersToQuery(
         break;
       }
       case 'select':
+        if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') break;
         additionalFilters.push({
           table_id: tableId,
           column: filter.field,

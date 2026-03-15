@@ -66,14 +66,15 @@ export function MultiSelectFilter({
     return options.map((o) => o.value);
   }, [options]);
 
-  // Close when clicking outside (without applying)
+  // Close when clicking outside (without applying) — only listen when open
   useEffect(() => {
+    if (!isOpen) return;
+
     const handleClickOutside = (event: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
         // Reset pending to current value (discard changes)
         if (value.length === 0) {
-          // External "all" → reset to all options selected
           setPendingValue(getAllSelectedValue());
         } else {
           setPendingValue(value);
@@ -83,7 +84,7 @@ export function MultiSelectFilter({
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [value, getAllSelectedValue]);
+  }, [isOpen, value, getAllSelectedValue]);
 
   // Filter options based on search query
   const filteredOptions = useMemo(() => {
@@ -99,20 +100,34 @@ export function MultiSelectFilter({
   // Check if "All" is selected (all options are in pendingValue)
   const isAllSelected = options.length > 0 && pendingValue.length === options.length;
 
+  // When searching, check if all *filtered* options are selected
+  const isAllFilteredSelected = filteredOptions.length > 0 &&
+    filteredOptions.every((o) => pendingValue.includes(o.value));
+
   const handleToggle = useCallback(() => {
     setIsOpen((prev) => !prev);
   }, []);
 
-  // Toggle all selection
+  // Toggle all selection — respects search filter
   const handleAllClick = useCallback(() => {
-    if (isAllSelected) {
-      // Deselect all
-      setPendingValue([]);
+    if (searchQuery.trim()) {
+      // When searching: toggle only visible options
+      if (isAllFilteredSelected) {
+        const filteredValues = new Set(filteredOptions.map((o) => o.value));
+        setPendingValue((prev) => prev.filter((v) => !filteredValues.has(v)));
+      } else {
+        const filteredValues = filteredOptions.map((o) => o.value);
+        setPendingValue((prev) => [...new Set([...prev, ...filteredValues])]);
+      }
     } else {
-      // Select all
-      setPendingValue(options.map((o) => o.value));
+      // No search: toggle all options
+      if (isAllSelected) {
+        setPendingValue([]);
+      } else {
+        setPendingValue(options.map((o) => o.value));
+      }
     }
-  }, [isAllSelected, options]);
+  }, [searchQuery, isAllSelected, isAllFilteredSelected, options, filteredOptions]);
 
   const handleOptionClick = useCallback((optionValue: string) => {
     setPendingValue((prev) => {
@@ -259,6 +274,9 @@ export function MultiSelectFilter({
     color: theme.colors.textMuted,
   };
 
+  // Whether the "All" checkbox should appear checked
+  const allChecked = searchQuery.trim() ? isAllFilteredSelected : isAllSelected;
+
   // Display text for button
   // External value [] means "All", otherwise show count or single value
   const displayText = isLoading
@@ -315,26 +333,26 @@ export function MultiSelectFilter({
 
           {/* Options list */}
           <div style={optionsContainerStyle}>
-            {/* "All" option */}
+            {/* "All" option — reflects filtered state when searching */}
             <div
               onClick={handleAllClick}
               style={{
                 ...optionStyle,
-                backgroundColor: isAllSelected ? theme.colors.surfaceHover : 'transparent',
+                backgroundColor: allChecked ? theme.colors.surfaceHover : 'transparent',
               }}
             >
               <div
                 style={{
                   ...checkboxStyle,
-                  backgroundColor: isAllSelected ? theme.colors.primary : theme.colors.background,
-                  borderColor: isAllSelected ? theme.colors.primary : theme.colors.border,
+                  backgroundColor: allChecked ? theme.colors.primary : theme.colors.background,
+                  borderColor: allChecked ? theme.colors.primary : theme.colors.border,
                 }}
               >
-                {isAllSelected && (
+                {allChecked && (
                   <Icon name="check" size={12} style={{ color: '#fff' }} />
                 )}
               </div>
-              <span>All</span>
+              <span>{searchQuery.trim() ? 'All visible' : 'All'}</span>
             </div>
 
             {/* Individual options */}
