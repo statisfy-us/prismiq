@@ -1153,10 +1153,7 @@ class QueryBuilder:
             target_fq_index = current_fq_index + offset
             # Convert to absolute month
             # Each quarter is 3 months from fiscal year start
-            if ref.month >= fy_start:
-                fy_start_year = ref.year
-            else:
-                fy_start_year = ref.year - 1
+            fy_start_year = ref.year if ref.month >= fy_start else ref.year - 1
 
             total_months_from_fy_start = target_fq_index * 3
             # Calculate the actual start month/year

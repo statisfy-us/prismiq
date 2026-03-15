@@ -233,7 +233,7 @@ function SelectInner<T>(
   // Reset highlighted index when options change
   useEffect(() => {
     setHighlightedIndex(-1);
-  }, [filteredOptions.length]);
+  }, [search, filteredOptions.length]);
 
   const handleToggle = useCallback(() => {
     if (!disabled) {
