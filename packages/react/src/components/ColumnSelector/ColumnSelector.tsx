@@ -4,7 +4,7 @@
 
 import { useCallback, type DragEvent } from 'react';
 
-import type { ColumnSelection, DatabaseSchema, QueryTable } from '../../types';
+import type { CalculatedField, ColumnSelection, DatabaseSchema, QueryTable } from '../../types';
 import { Icon } from '../ui';
 import { SelectedColumn } from './SelectedColumn';
 
@@ -21,6 +21,8 @@ export interface ColumnSelectorProps {
   onChange: (columns: ColumnSelection[]) => void;
   /** Database schema for type information. */
   schema: DatabaseSchema;
+  /** Calculated fields defined in the query. */
+  calculatedFields?: CalculatedField[];
   /** Additional class name. */
   className?: string;
   /** Additional styles. */
@@ -99,6 +101,7 @@ export function ColumnSelector({
   columns,
   onChange,
   schema,
+  calculatedFields,
   className,
   style,
 }: ColumnSelectorProps): JSX.Element {
@@ -236,19 +239,25 @@ export function ColumnSelector({
           {columns.map((column, index) => {
             const table = getTable(column.table_id);
             const tableSchema = getTableSchema(column.table_id);
+            const calcField = calculatedFields?.find((cf) => cf.name === column.column);
 
-            if (!table) return null;
+            // Skip columns with no matching table unless they're calculated fields
+            if (!table && !calcField) return null;
+
+            // For calculated fields without a matching table, use a placeholder
+            const effectiveTable = table ?? { id: column.table_id, name: '' };
 
             return (
               <SelectedColumn
                 key={`${column.table_id}-${column.column}-${index}`}
                 column={column}
-                table={table}
+                table={effectiveTable}
                 tableSchema={tableSchema}
                 index={index}
                 onRemove={() => handleRemove(index)}
                 onUpdate={(updated) => handleUpdate(index, updated)}
                 onDragEnd={handleDragEnd}
+                calculatedField={calcField}
               />
             );
           })}

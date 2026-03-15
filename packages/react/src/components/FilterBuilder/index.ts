@@ -10,3 +10,6 @@ export type { FilterRowProps } from './FilterRow';
 
 export { FilterValueInput } from './FilterValueInput';
 export type { FilterValueInputProps } from './FilterValueInput';
+
+export { getDatePresets, findPresetKey, DATE_RELATIVE_INFINITY_DAYS } from './datePresets';
+export type { DatePreset } from './datePresets';

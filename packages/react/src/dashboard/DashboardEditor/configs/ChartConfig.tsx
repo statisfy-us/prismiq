@@ -40,6 +40,8 @@ export interface ChartConfigProps {
   query: QueryDefinition | null;
   /** Callback when query changes. */
   onChange: (query: QueryDefinition) => void;
+  /** Month (1-12) when the fiscal year starts. Used for date filter presets. */
+  fiscalYearStartMonth?: number;
 }
 
 /**
@@ -124,6 +126,7 @@ export function ChartConfig({
   schema,
   query,
   onChange,
+  fiscalYearStartMonth,
 }: ChartConfigProps): JSX.Element {
   const { theme } = useTheme();
   const { getDisplayName } = useSchema();
@@ -541,6 +544,7 @@ export function ChartConfig({
               value={groupByValue}
               onChange={handleGroupByChange}
               options={[{ value: '', label: 'Select a column...' }, ...groupByOptions]}
+              searchable
             />
           ) : (
             <span style={helpTextStyle}>No categorical columns available</span>
@@ -644,6 +648,7 @@ export function ChartConfig({
             filters={filters}
             onChange={setFilters}
             schema={schema}
+            fiscalYearStartMonth={fiscalYearStartMonth}
           />
         </div>
       )}

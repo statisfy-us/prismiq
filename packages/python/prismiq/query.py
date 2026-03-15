@@ -6,7 +6,7 @@ parameterized SQL queries from QueryDefinition objects.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from difflib import get_close_matches
 from typing import Any
 
@@ -92,6 +92,7 @@ class QueryBuilder:
         self,
         schema: DatabaseSchema,
         schema_name: str | None = None,
+        fiscal_year_start_month: int = 1,
     ) -> None:
         """Initialize the query builder.
 
@@ -99,9 +100,12 @@ class QueryBuilder:
             schema: Database schema for validation.
             schema_name: PostgreSQL schema name for schema-qualified table references.
                 If None, tables are referenced without schema prefix (uses search_path).
+            fiscal_year_start_month: Month (1-12) when the fiscal year starts.
+                Used for date_window filters. Defaults to 1 (January / calendar year).
         """
         self._schema = schema
         self._schema_name = schema_name
+        self._fiscal_year_start_month = fiscal_year_start_month
 
     def validate(self, query: QueryDefinition) -> list[str]:
         """Validate a query definition against the schema.
@@ -1078,6 +1082,105 @@ class QueryBuilder:
 
         return None
 
+    @staticmethod
+    def _resolve_date_relative(days: int, reference: date | None = None) -> tuple[date, date]:
+        """Resolve a relative date range from a reference date.
+
+        Args:
+            days: Number of days relative to reference. Negative = past, positive = future.
+            reference: Reference date (defaults to today).
+
+        Returns:
+            (start_date, end_date) tuple with start <= end.
+        """
+        ref = reference or date.today()
+        target = ref + timedelta(days=days)
+        if days < 0:
+            return target, ref
+        return ref, target
+
+    @staticmethod
+    def _resolve_date_window(
+        period: str,
+        offset: int,
+        fiscal_year_start_month: int = 1,
+        reference: date | None = None,
+    ) -> tuple[date, date]:
+        """Resolve a fiscal period window to concrete start/end dates.
+
+        Args:
+            period: "quarterly" or "yearly".
+            offset: Relative offset (0=current, -1=previous, 1=next).
+            fiscal_year_start_month: Month (1-12) when fiscal year starts.
+            reference: Reference date (defaults to today).
+
+        Returns:
+            (start_date, end_date) tuple for the resolved period.
+        """
+        ref = reference or date.today()
+        fy_start = fiscal_year_start_month
+
+        if period == "yearly":
+            # Determine the start of the current fiscal year
+            if ref.month >= fy_start:
+                current_fy_start = date(ref.year, fy_start, 1)
+            else:
+                current_fy_start = date(ref.year - 1, fy_start, 1)
+
+            # Apply offset
+            target_year = current_fy_start.year + offset
+            start = date(target_year, fy_start, 1)
+            # End is the day before next fiscal year starts
+            end_year = target_year + 1
+            end = date(end_year, fy_start, 1) - timedelta(days=1)
+
+            # For current fiscal year (YTD), cap end at today
+            if offset == 0:
+                end = min(end, ref)
+
+            return start, end
+
+        if period == "quarterly":
+            # Determine which fiscal quarter the reference date is in
+            # Fiscal quarters are 3-month periods starting from fy_start
+            if ref.month >= fy_start:
+                months_into_fy = ref.month - fy_start
+            else:
+                months_into_fy = ref.month + 12 - fy_start
+            current_fq_index = months_into_fy // 3  # 0-based (0=Q1, 1=Q2, 2=Q3, 3=Q4)
+
+            # Apply offset to get target quarter
+            target_fq_index = current_fq_index + offset
+            # Convert to absolute month
+            # Each quarter is 3 months from fiscal year start
+            fy_start_year = ref.year if ref.month >= fy_start else ref.year - 1
+
+            total_months_from_fy_start = target_fq_index * 3
+            # Calculate the actual start month/year
+            start_month = fy_start + total_months_from_fy_start
+            start_year = fy_start_year
+            while start_month > 12:
+                start_month -= 12
+                start_year += 1
+            while start_month < 1:
+                start_month += 12
+                start_year -= 1
+
+            start = date(start_year, start_month, 1)
+            # Quarter end = 3 months later minus 1 day
+            end_month = start_month + 3
+            end_year = start_year
+            if end_month > 12:
+                end_month -= 12
+                end_year += 1
+            end = date(end_year, end_month, 1) - timedelta(days=1)
+
+            return start, end
+
+        raise ValueError(
+            f"Unknown date_window period: {period!r}. Expected 'quarterly' or 'yearly'."
+        )
+
     def _build_condition(
         self,
         col_ref: str,
@@ -1087,6 +1190,42 @@ class QueryBuilder:
     ) -> tuple[str, list[Any]]:
         """Build a single filter condition."""
         op = f.operator
+
+        # Handle date-relative operators before coercion (values are int/dict, not date strings)
+        if op == FilterOperator.DATE_RELATIVE:
+            days = int(f.value) if f.value is not None else 0
+            start_date, end_date = self._resolve_date_relative(days)
+            params.append(start_date)
+            p1 = len(params)
+            params.append(end_date)
+            p2 = len(params)
+            return f"{col_ref} BETWEEN ${p1} AND ${p2}", params
+
+        if op == FilterOperator.NOT_DATE_RELATIVE:
+            days = int(f.value) if f.value is not None else 0
+            start_date, end_date = self._resolve_date_relative(days)
+            params.append(start_date)
+            p1 = len(params)
+            params.append(end_date)
+            p2 = len(params)
+            return f"({col_ref} < ${p1} OR {col_ref} > ${p2})", params
+
+        if op == FilterOperator.DATE_WINDOW:
+            if not isinstance(f.value, dict):
+                raise ValueError(
+                    f"DATE_WINDOW filter on column '{f.column}' requires "
+                    f"value={{'period': '...', 'value': N}}, got {type(f.value).__name__}"
+                )
+            period = f.value.get("period", "quarterly")
+            offset = int(f.value.get("value", 0))
+            start_date, end_date = self._resolve_date_window(
+                period, offset, self._fiscal_year_start_month
+            )
+            params.append(start_date)
+            p1 = len(params)
+            params.append(end_date)
+            p2 = len(params)
+            return f"{col_ref} BETWEEN ${p1} AND ${p2}", params
 
         # Coerce the filter value to the appropriate Python type
         coerced_value = self._coerce_value(f.value, data_type)

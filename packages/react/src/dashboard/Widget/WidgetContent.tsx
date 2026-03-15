@@ -11,6 +11,7 @@ import {
   AreaChart,
   PieChart,
   ScatterChart,
+  formatAxisLabel,
 } from '../../charts';
 import { ResultsTable } from '../../components';
 import { useCrossFilterOptional } from '../../context';
@@ -593,12 +594,37 @@ export function WidgetContent({
         position: 'relative',
       };
 
+      // Build combined formatters: date formatters + per-column value formatters
+      let tableFormatters: Record<string, (value: unknown) => string> | undefined = dateFormatters;
+      const columnFormats = widget.config.columnFormats;
+      if (columnFormats && Object.keys(columnFormats).length > 0) {
+        const merged: Record<string, (value: unknown) => string> = {};
+        if (dateFormatters) Object.assign(merged, dateFormatters);
+        for (const col of tableResult.columns) {
+          const colFmt = columnFormats[col];
+          if (colFmt && colFmt.format !== 'number' && !merged[col]) {
+            const fmtOpts = {
+              currencySymbol: colFmt.currencySymbol,
+              decimals: colFmt.decimalDigits,
+              compactNotation: colFmt.compactNotation,
+            };
+            merged[col] = (v: unknown) => {
+              if (typeof v !== 'number') return String(v ?? '');
+              return formatAxisLabel(v, colFmt.format, fmtOpts);
+            };
+          }
+        }
+        if (Object.keys(merged).length > 0) {
+          tableFormatters = merged;
+        }
+      }
+
       const tableContent = (
         <ResultsTable
           result={tableResult}
           pageSize={widget.config.page_size ?? 10}
           sortable={widget.config.sortable ?? true}
-          formatters={dateFormatters}
+          formatters={tableFormatters}
         />
       );
 

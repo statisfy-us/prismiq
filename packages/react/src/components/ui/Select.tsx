@@ -207,22 +207,33 @@ function SelectInner<T>(
     }
   }, [isOpen, searchable]);
 
-  // Reset highlighted index when options change
-  useEffect(() => {
-    setHighlightedIndex(-1);
-  }, [filteredOptions.length]);
-
   // Update dropdown position when opening
   const updateDropdownPosition = useCallback(() => {
     if (triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
       setDropdownPosition({
-        top: rect.bottom + window.scrollY + 4, // 4px gap
-        left: rect.left + window.scrollX,
+        top: rect.bottom + 4, // 4px gap, using viewport coords for position:fixed
+        left: rect.left,
         width: rect.width,
       });
     }
   }, []);
+
+  // Reposition dropdown on scroll so it stays aligned with the trigger
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleScroll = (e: Event) => {
+      if (dropdownRef.current?.contains(e.target as Node)) return;
+      updateDropdownPosition();
+    };
+    window.addEventListener('scroll', handleScroll, true);
+    return () => window.removeEventListener('scroll', handleScroll, true);
+  }, [isOpen, updateDropdownPosition]);
+
+  // Reset highlighted index when options change
+  useEffect(() => {
+    setHighlightedIndex(-1);
+  }, [search, filteredOptions.length]);
 
   const handleToggle = useCallback(() => {
     if (!disabled) {

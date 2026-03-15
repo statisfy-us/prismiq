@@ -28,6 +28,8 @@ export interface PieConfigProps {
   query: QueryDefinition | null;
   /** Callback when query changes. */
   onChange: (query: QueryDefinition) => void;
+  /** Month (1-12) when the fiscal year starts. Used for date filter presets. */
+  fiscalYearStartMonth?: number;
 }
 
 /**
@@ -96,6 +98,7 @@ export function PieConfig({
   schema,
   query,
   onChange,
+  fiscalYearStartMonth,
 }: PieConfigProps): JSX.Element {
   const { theme } = useTheme();
   const { getDisplayName } = useSchema();
@@ -361,6 +364,7 @@ export function PieConfig({
             filters={filters}
             onChange={setFilters}
             schema={schema}
+            fiscalYearStartMonth={fiscalYearStartMonth}
           />
         </div>
       )}

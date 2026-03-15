@@ -35,9 +35,11 @@ import { TrendConfigSection } from './configs/TrendConfigSection';
 import { HyperlinkSection } from './configs/HyperlinkSection';
 import { ReferenceLinesSection } from './configs/ReferenceLinesSection';
 import { TextFormattingSection } from './configs/TextFormattingSection';
+import { ColumnValueFormattingSection } from './configs/ColumnValueFormattingSection';
 import { PivotConfigSection } from './configs/PivotConfigSection';
 import { LayoutConstraintsSection } from './configs/LayoutConstraintsSection';
 import { CrossFilterSection } from './configs/CrossFilterSection';
+import { FiscalYearSection } from './configs/FiscalYearSection';
 import type { Widget, WidgetConfig, WidgetType, WidgetHyperlink, WidgetPosition } from '../types';
 import type {
   DatabaseSchema,
@@ -436,7 +438,7 @@ export function WidgetEditorPage({
   const leftPanelStyle: React.CSSProperties = {
     borderRight: `1px solid ${theme.colors.border}`,
     padding: theme.spacing.md,
-    paddingBottom: theme.spacing.xl,
+    paddingBottom: '120px',
     display: 'flex',
     flexDirection: 'column',
     gap: theme.spacing.lg,
@@ -708,6 +710,13 @@ export function WidgetEditorPage({
               schema={schema}
               defaultOpen={false}
             />
+            <ColumnValueFormattingSection
+              config={config}
+              onChange={updateConfig}
+              query={query}
+              schema={schema}
+              defaultOpen={false}
+            />
           </>
         );
 
@@ -805,6 +814,13 @@ export function WidgetEditorPage({
             <h3 style={sectionTitleStyle}>Configuration</h3>
             {renderConfigFields()}
           </div>
+
+          {/* Fiscal Year */}
+          <FiscalYearSection
+            config={config}
+            onChange={updateConfig}
+            defaultOpen={false}
+          />
 
           {/* Hyperlink */}
           <HyperlinkSection
@@ -906,6 +922,7 @@ export function WidgetEditorPage({
                     schema={schema}
                     query={query}
                     onChange={handleQueryChange}
+                    fiscalYearStartMonth={config.fiscalYearStartMonth}
                   />
                 )}
 

@@ -28,6 +28,8 @@ export interface MetricConfigProps {
   query: QueryDefinition | null;
   /** Callback when query changes. */
   onChange: (query: QueryDefinition) => void;
+  /** Month (1-12) when the fiscal year starts. Used for date filter presets. */
+  fiscalYearStartMonth?: number;
 }
 
 /**
@@ -71,6 +73,7 @@ export function MetricConfig({
   schema,
   query,
   onChange,
+  fiscalYearStartMonth,
 }: MetricConfigProps): JSX.Element {
   const { theme } = useTheme();
   const { getDisplayName } = useSchema();
@@ -259,6 +262,7 @@ export function MetricConfig({
             filters={filters}
             onChange={setFilters}
             schema={schema}
+            fiscalYearStartMonth={fiscalYearStartMonth}
           />
         </div>
       )}

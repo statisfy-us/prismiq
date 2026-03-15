@@ -409,6 +409,25 @@ export function QueryBuilder({
     []
   );
 
+  // Handle adding a calculated field as a selected column
+  const handleAddCalcFieldAsColumn = useCallback(
+    (field: CalculatedField) => {
+      setQuery((prev) => {
+        // Prevent duplicates
+        if (prev.columns.some((c) => c.column === field.name)) return prev;
+
+        const tableId = prev.tables[0]?.id || 't1';
+        const newColumn: ColumnSelection = {
+          table_id: tableId,
+          column: field.name,
+          aggregation: 'none',
+        };
+        return { ...prev, columns: [...prev.columns, newColumn] };
+      });
+    },
+    []
+  );
+
   // Handle joins change
   const handleJoinsChange = useCallback((joins: JoinDefinition[]) => {
     setQuery((prev) => ({ ...prev, joins }));
@@ -485,6 +504,7 @@ export function QueryBuilder({
               columns={query.columns}
               onChange={handleColumnsChange}
               schema={schema}
+              calculatedFields={query.calculated_fields}
             />
 
             <JoinBuilder
@@ -517,6 +537,7 @@ export function QueryBuilder({
                 onChange={handleCalculatedFieldsChange}
                 tables={query.tables}
                 schema={schema}
+                onAddAsColumn={handleAddCalcFieldAsColumn}
               />
             </CollapsibleSection>
 

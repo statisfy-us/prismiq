@@ -136,6 +136,15 @@ export interface WidgetConfig {
   /** Date format strings for datetime columns (column name -> date-fns format string). Used by tables and chart axes. */
   dateFormats?: Record<string, string>;
 
+  // Per-column value formatting (for table widgets)
+  /** Per-column value format overrides. Maps column name to format config. */
+  columnFormats?: Record<string, {
+    format: 'number' | 'currency' | 'percent' | 'compact';
+    currencySymbol?: string;
+    compactNotation?: 'K' | 'M' | 'B' | 'T' | null;
+    decimalDigits?: number;
+  }>;
+
   // Text options
   /** Text content for text widgets. */
   content?: string;
@@ -149,6 +158,10 @@ export interface WidgetConfig {
   // Raw SQL (for SQL mode widgets)
   /** Raw SQL query for SQL-mode widgets. When set, widget.query should be null. */
   raw_sql?: string;
+
+  // Fiscal year
+  /** Month (1-12) when the fiscal year starts. Defaults to 1 (January). Used for date filter presets. */
+  fiscalYearStartMonth?: number;
 
   // Editor metadata
   /** Editor mode used to build this widget ('guided', 'advanced', 'saved', or 'sql'). */
