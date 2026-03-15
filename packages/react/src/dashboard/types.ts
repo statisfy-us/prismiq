@@ -591,6 +591,18 @@ export interface TextFilterProps {
 }
 
 /**
+ * Props for NumberRangeFilter component.
+ */
+export interface NumberRangeFilterProps {
+  /** Filter definition. */
+  filter: DashboardFilter;
+  /** Current value. */
+  value: NumberRangeValue | null;
+  /** Callback when value changes. */
+  onChange: (value: NumberRangeValue) => void;
+}
+
+/**
  * Props for WidgetPalette component.
  */
 export interface WidgetPaletteProps {
