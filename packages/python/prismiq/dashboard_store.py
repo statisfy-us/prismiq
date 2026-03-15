@@ -530,7 +530,9 @@ class InMemoryDashboardStore:
                         updated_at=now,
                     )
                     for w in dashboard.widgets
-                ] if dashboard.widgets else [],
+                ]
+                if dashboard.widgets
+                else [],
                 filters=[],
                 owner_id=owner_id,
                 created_at=now,
