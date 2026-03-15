@@ -267,7 +267,7 @@ class PostgresDashboardStore:
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING *
         """
-        async with self._pool_write.acquire() as conn:
+        async with self._pool_write.acquire() as conn, conn.transaction():
             await self._set_search_path(conn, schema_name)
             row = await conn.fetchrow(
                 query,
@@ -282,7 +282,38 @@ class PostgresDashboardStore:
                 now,
                 now,
             )
-            return self._row_to_dashboard(row, widgets=[])
+            dashboard_id = str(row["id"])
+
+            # Insert initial widgets if provided
+            if dashboard.widgets:
+                for widget in dashboard.widgets:
+                    await conn.execute(
+                        """
+                        INSERT INTO "prismiq_widgets" (
+                            "dashboard_id", "title", "type", "query", "config", "position",
+                            "created_at", "updated_at"
+                        ) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+                        """,
+                        _parse_int_id(dashboard_id),
+                        widget.title,
+                        widget.type.value,
+                        json.dumps(widget.query.model_dump()) if widget.query else None,
+                        json.dumps(widget.config.model_dump()) if widget.config else None,
+                        json.dumps(widget.position.model_dump()) if widget.position else None,
+                    )
+            else:
+                return self._row_to_dashboard(row, widgets=[])
+
+        # Transaction committed; now fetch the complete dashboard
+        if dashboard.widgets:
+            created = await self.get_dashboard(dashboard_id, tenant_id, schema_name)
+            if created is None:
+                raise RuntimeError(
+                    f"Dashboard '{dashboard_id}' was created but could not be reloaded"
+                )
+            return created
+
+        return self._row_to_dashboard(row, widgets=[])
 
     async def update_dashboard(
         self,

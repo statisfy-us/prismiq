@@ -268,6 +268,19 @@ export function ChartConfig({
     }
   }, [isGroupByDate, timeSeries]);
 
+  // Emit partial query (tables/joins/filters only) so the parent can track state
+  // even before group-by and measures are configured
+  useEffect(() => {
+    if (tables.length === 0 || groupByColumn) return; // skip if no tables or if full query will be emitted below
+    const partialQuery: QueryDefinition = {
+      tables,
+      joins: joins.length > 0 ? joins : undefined,
+      columns: [],
+      filters: filters.length > 0 ? filters : undefined,
+    };
+    onChange(partialQuery);
+  }, [tables, joins, filters, groupByColumn, onChange]);
+
   // Build and emit query when config changes
   useEffect(() => {
     if (tables.length === 0 || !groupByColumn) return;

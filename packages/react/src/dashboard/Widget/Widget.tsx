@@ -46,7 +46,7 @@ export function Widget({
     <div className={`prismiq-widget ${className}`} style={containerStyle}>
       <WidgetHeader
         title={widget.title}
-        hyperlink={widget.hyperlink}
+        hyperlink={widget.config?.hyperlink ?? widget.hyperlink}
         lastRefreshed={lastRefreshed}
         isRefreshing={isRefreshing}
         onRefresh={onRefresh}
