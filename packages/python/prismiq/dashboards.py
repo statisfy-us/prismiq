@@ -154,6 +154,10 @@ class WidgetConfig(BaseModel):
     value_column: str | None = None
     """Column containing values to distribute across pivoted columns."""
 
+    # Per-column value formatting (for table widgets)
+    columnFormats: dict[str, dict[str, Any]] | None = None
+    """Per-column value format overrides. Maps column name to format config."""
+
     # Date formatting
     dateFormats: dict[str, str] | None = None
     """Date format strings for datetime columns (column name -> date-fns format string)."""

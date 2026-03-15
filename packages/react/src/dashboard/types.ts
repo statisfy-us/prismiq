@@ -136,6 +136,15 @@ export interface WidgetConfig {
   /** Date format strings for datetime columns (column name -> date-fns format string). Used by tables and chart axes. */
   dateFormats?: Record<string, string>;
 
+  // Per-column value formatting (for table widgets)
+  /** Per-column value format overrides. Maps column name to format config. */
+  columnFormats?: Record<string, {
+    format: 'number' | 'currency' | 'percent' | 'compact';
+    currencySymbol?: string;
+    compactNotation?: 'K' | 'M' | 'B' | 'T' | null;
+    decimalDigits?: number;
+  }>;
+
   // Text options
   /** Text content for text widgets. */
   content?: string;

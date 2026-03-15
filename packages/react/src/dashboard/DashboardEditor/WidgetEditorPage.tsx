@@ -35,6 +35,7 @@ import { TrendConfigSection } from './configs/TrendConfigSection';
 import { HyperlinkSection } from './configs/HyperlinkSection';
 import { ReferenceLinesSection } from './configs/ReferenceLinesSection';
 import { TextFormattingSection } from './configs/TextFormattingSection';
+import { ColumnValueFormattingSection } from './configs/ColumnValueFormattingSection';
 import { PivotConfigSection } from './configs/PivotConfigSection';
 import { LayoutConstraintsSection } from './configs/LayoutConstraintsSection';
 import { CrossFilterSection } from './configs/CrossFilterSection';
@@ -703,6 +704,13 @@ export function WidgetEditorPage({
               defaultOpen={false}
             />
             <DateFormattingSection
+              config={config}
+              onChange={updateConfig}
+              query={query}
+              schema={schema}
+              defaultOpen={false}
+            />
+            <ColumnValueFormattingSection
               config={config}
               onChange={updateConfig}
               query={query}
