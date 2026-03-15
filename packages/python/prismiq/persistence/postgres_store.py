@@ -301,14 +301,19 @@ class PostgresDashboardStore:
                         json.dumps(widget.config.model_dump()) if widget.config else None,
                         json.dumps(widget.position.model_dump()) if widget.position else None,
                     )
-                created = await self.get_dashboard(dashboard_id, tenant_id, schema_name)
-                if created is None:
-                    raise RuntimeError(
-                        f"Dashboard '{dashboard_id}' was created but could not be reloaded"
-                    )
-                return created
+            else:
+                return self._row_to_dashboard(row, widgets=[])
 
-            return self._row_to_dashboard(row, widgets=[])
+        # Transaction committed; now fetch the complete dashboard
+        if dashboard.widgets:
+            created = await self.get_dashboard(dashboard_id, tenant_id, schema_name)
+            if created is None:
+                raise RuntimeError(
+                    f"Dashboard '{dashboard_id}' was created but could not be reloaded"
+                )
+            return created
+
+        return self._row_to_dashboard(row, widgets=[])
 
     async def update_dashboard(
         self,
