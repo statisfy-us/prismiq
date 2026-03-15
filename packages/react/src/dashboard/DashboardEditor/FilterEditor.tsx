@@ -298,7 +298,7 @@ export function FilterEditor({
             <Select
               value={formState.datePreset || null}
               onChange={(value) =>
-                setFormState((prev) => ({ ...prev, datePreset: value }))
+                setFormState((prev) => ({ ...prev, datePreset: value ?? '' }))
               }
               options={DATE_PRESET_OPTIONS}
               placeholder="Select a preset..."
@@ -323,7 +323,8 @@ export function FilterEditor({
                 placeholder="Min"
                 value={rangeVal.min ?? ''}
                 onChange={(e) => {
-                  const val = e.target.value === '' ? null : Number(e.target.value);
+                  const parsed = Number(e.target.value);
+                  const val = e.target.value === '' || isNaN(parsed) ? null : parsed;
                   setFormState((prev) => ({
                     ...prev,
                     defaultValue: {
@@ -339,7 +340,8 @@ export function FilterEditor({
                 placeholder="Max"
                 value={rangeVal.max ?? ''}
                 onChange={(e) => {
-                  const val = e.target.value === '' ? null : Number(e.target.value);
+                  const parsed = Number(e.target.value);
+                  const val = e.target.value === '' || isNaN(parsed) ? null : parsed;
                   setFormState((prev) => ({
                     ...prev,
                     defaultValue: {

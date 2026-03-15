@@ -65,6 +65,10 @@ export function NumberRangeFilter({
   );
 
   const handleClear = useCallback(() => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = undefined;
+    }
     setLocalMin('');
     setLocalMax('');
     onChange({ min: null, max: null });

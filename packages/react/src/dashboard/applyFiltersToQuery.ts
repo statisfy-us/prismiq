@@ -71,6 +71,7 @@ export function applyFiltersToQuery(
         }
         break;
       case 'text':
+        if (typeof value !== 'string' || value.trim() === '') break;
         additionalFilters.push({
           table_id: tableId,
           column: filter.field,
@@ -79,6 +80,7 @@ export function applyFiltersToQuery(
         });
         break;
       case 'number_range': {
+        if (typeof value !== 'object' || value === null) break;
         const rangeValue = value as { min: number | null; max: number | null };
         if (rangeValue.min !== null && rangeValue.max !== null) {
           additionalFilters.push({
