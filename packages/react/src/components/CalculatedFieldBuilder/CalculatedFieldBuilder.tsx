@@ -63,20 +63,18 @@ export function CalculatedFieldBuilder({
 
   // Counter for generating unique IDs when no stable property exists
   const idCounter = useRef(0);
-  // Map from index to generated ID — stable across re-renders
-  const stableIdsRef = useRef<Map<number, string>>(new Map());
+  // Stable IDs aligned to field order; splice on delete to preserve identity
+  const stableIdsRef = useRef<string[]>([]);
 
   /**
    * Get or create a stable ID for a field by index.
    * Uses index only so that editing field properties (like name) doesn't change the key.
    */
   const getFieldId = useCallback((_field: CalculatedField, index: number): string => {
-    let id = stableIdsRef.current.get(index);
-    if (!id) {
-      id = `field-${++idCounter.current}`;
-      stableIdsRef.current.set(index, id);
+    if (!stableIdsRef.current[index]) {
+      stableIdsRef.current[index] = `field-${++idCounter.current}`;
     }
-    return id;
+    return stableIdsRef.current[index];
   }, []);
 
   const addField = useCallback(() => {
@@ -101,6 +99,7 @@ export function CalculatedFieldBuilder({
   // Remove a field
   const removeField = useCallback(
     (index: number) => {
+      stableIdsRef.current.splice(index, 1);
       onChange(fields.filter((_, i) => i !== index));
     },
     [fields, onChange]

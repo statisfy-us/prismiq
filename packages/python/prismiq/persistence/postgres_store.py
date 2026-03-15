@@ -267,7 +267,7 @@ class PostgresDashboardStore:
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING *
         """
-        async with self._pool_write.acquire() as conn:
+        async with self._pool_write.acquire() as conn, conn.transaction():
             await self._set_search_path(conn, schema_name)
             row = await conn.fetchrow(
                 query,
@@ -301,7 +301,12 @@ class PostgresDashboardStore:
                         json.dumps(widget.config.model_dump()) if widget.config else None,
                         json.dumps(widget.position.model_dump()) if widget.position else None,
                     )
-                return await self.get_dashboard(dashboard_id, tenant_id, schema_name)
+                created = await self.get_dashboard(dashboard_id, tenant_id, schema_name)
+                if created is None:
+                    raise RuntimeError(
+                        f"Dashboard '{dashboard_id}' was created but could not be reloaded"
+                    )
+                return created
 
             return self._row_to_dashboard(row, widgets=[])
 

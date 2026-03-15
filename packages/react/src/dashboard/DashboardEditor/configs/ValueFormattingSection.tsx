@@ -100,7 +100,7 @@ export function ValueFormattingSection({
             onChange('valueFormat', formatValue);
             onChange('format', formatValue);
             // Set default currency symbol when switching to currency format
-            if (formatValue === 'currency' && !config.currencySymbol) {
+            if (formatValue === 'currency' && config.currencySymbol == null) {
               onChange('currencySymbol', '$');
             }
           }}
