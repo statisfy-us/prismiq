@@ -5,6 +5,7 @@
 import { useCallback, useMemo } from 'react';
 
 import type {
+  CalculatedField,
   DatabaseSchema,
   FilterDefinition,
   FilterOperator,
@@ -25,6 +26,8 @@ export interface FilterRowProps {
   tables: QueryTable[];
   /** Database schema. */
   schema: DatabaseSchema;
+  /** Calculated fields defined in the query, available for filtering. */
+  calculatedFields?: CalculatedField[];
   /** Callback when the filter changes. */
   onChange: (filter: FilterDefinition) => void;
   /** Callback when the filter should be removed. */
@@ -175,6 +178,7 @@ export function FilterRow({
   filter,
   tables,
   schema,
+  calculatedFields,
   onChange,
   onRemove,
   fiscalYearStartMonth = 1,
@@ -196,8 +200,18 @@ export function FilterRow({
       });
     });
 
+    // Add calculated fields as filterable options
+    calculatedFields?.forEach((cf) => {
+      if (!cf.name) return;
+      const tableId = tables[0]?.id ?? 't1';
+      options.push({
+        value: `${tableId}.${cf.name}`,
+        label: `fx: ${cf.name}`,
+      });
+    });
+
     return options;
-  }, [tables, schema]);
+  }, [tables, schema, calculatedFields]);
 
   // Get current table for passing to FilterValueInput
   const currentTable = useMemo(
@@ -212,8 +226,17 @@ export function FilterRow({
     const tableSchema = schema.tables.find((t) => t.name === currentTable.name);
     if (!tableSchema) return undefined;
 
-    return tableSchema.columns.find((c) => c.name === filter.column);
-  }, [currentTable, schema, filter.column]);
+    const col = tableSchema.columns.find((c) => c.name === filter.column);
+    if (col) return col;
+
+    // Check if this is a calculated field — use its data_type for operators
+    const calcField = calculatedFields?.find((cf) => cf.name === filter.column);
+    if (calcField) {
+      return { name: filter.column, data_type: calcField.data_type ?? 'numeric', is_nullable: false };
+    }
+
+    return undefined;
+  }, [currentTable, schema, filter.column, calculatedFields]);
 
   // Get date presets when the column is a date type
   const datePresets = useMemo(
@@ -309,8 +332,8 @@ export function FilterRow({
           value={filter.value}
           onChange={handleValueChange}
           dataType={currentColumnSchema?.data_type}
-          tableName={currentTable?.name}
-          columnName={filter.column}
+          tableName={calculatedFields?.some((cf) => cf.name === filter.column) ? undefined : currentTable?.name}
+          columnName={calculatedFields?.some((cf) => cf.name === filter.column) ? undefined : filter.column}
         />
       </div>
 

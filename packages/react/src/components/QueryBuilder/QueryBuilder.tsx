@@ -519,6 +519,7 @@ export function QueryBuilder({
               filters={query.filters ?? []}
               onChange={handleFiltersChange}
               schema={schema}
+              calculatedFields={query.calculated_fields}
             />
 
             <SortBuilder
