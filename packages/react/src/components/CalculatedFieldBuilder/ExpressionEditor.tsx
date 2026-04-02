@@ -92,8 +92,16 @@ export function ExpressionEditor({
 
   // Sync local value when prop changes externally (e.g., inserting field ref)
   useEffect(() => {
+    clearTimeout(debounceRef.current);
     setLocalValue(value);
   }, [value]);
+
+  // Cleanup debounce on unmount
+  useEffect(() => {
+    return () => {
+      clearTimeout(debounceRef.current);
+    };
+  }, []);
 
   // Debounced propagation to parent
   const handleExpressionChange = useCallback(

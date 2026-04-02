@@ -229,10 +229,10 @@ export function FilterRow({
     const col = tableSchema.columns.find((c) => c.name === filter.column);
     if (col) return col;
 
-    // Check if this is a calculated field — treat as numeric type for operators
-    const isCalcField = calculatedFields?.some((cf) => cf.name === filter.column);
-    if (isCalcField) {
-      return { name: filter.column, data_type: 'numeric', is_nullable: false };
+    // Check if this is a calculated field — use its data_type for operators
+    const calcField = calculatedFields?.find((cf) => cf.name === filter.column);
+    if (calcField) {
+      return { name: filter.column, data_type: calcField.data_type ?? 'numeric', is_nullable: false };
     }
 
     return undefined;
