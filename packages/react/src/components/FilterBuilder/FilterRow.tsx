@@ -200,12 +200,11 @@ export function FilterRow({
       });
     });
 
-    // Add calculated fields as filterable options
+    // Add calculated fields as filterable options with a distinct prefix
     calculatedFields?.forEach((cf) => {
       if (!cf.name) return;
-      const tableId = tables[0]?.id ?? 't1';
       options.push({
-        value: `${tableId}.${cf.name}`,
+        value: `__calc__.${cf.name}`,
         label: `fx: ${cf.name}`,
       });
     });
@@ -219,24 +218,29 @@ export function FilterRow({
     [tables, filter.table_id]
   );
 
+  // Check if the current filter targets a calculated field
+  const isCalculatedField = useMemo(
+    () => calculatedFields?.some((cf) => cf.name === filter.column) ?? false,
+    [calculatedFields, filter.column]
+  );
+
   // Get current column's schema for type-aware operators
   const currentColumnSchema = useMemo(() => {
+    if (isCalculatedField) {
+      const calcField = calculatedFields?.find((cf) => cf.name === filter.column);
+      if (calcField) {
+        return { name: filter.column, data_type: calcField.data_type ?? 'numeric', is_nullable: false };
+      }
+      return undefined;
+    }
+
     if (!currentTable) return undefined;
 
     const tableSchema = schema.tables.find((t) => t.name === currentTable.name);
     if (!tableSchema) return undefined;
 
-    const col = tableSchema.columns.find((c) => c.name === filter.column);
-    if (col) return col;
-
-    // Check if this is a calculated field — use its data_type for operators
-    const calcField = calculatedFields?.find((cf) => cf.name === filter.column);
-    if (calcField) {
-      return { name: filter.column, data_type: calcField.data_type ?? 'numeric', is_nullable: false };
-    }
-
-    return undefined;
-  }, [currentTable, schema, filter.column, calculatedFields]);
+    return tableSchema.columns.find((c) => c.name === filter.column);
+  }, [currentTable, schema, filter.column, calculatedFields, isCalculatedField]);
 
   // Get date presets when the column is a date type
   const datePresets = useMemo(
@@ -260,8 +264,10 @@ export function FilterRow({
 
   const handleColumnChange = useCallback(
     (columnId: string) => {
-      const [tableId, columnName] = columnId.split('.');
-      if (tableId && columnName) {
+      const [rawTableId, columnName] = columnId.split('.');
+      if (rawTableId && columnName) {
+        // Map __calc__ back to first table's ID for the backend
+        const tableId = rawTableId === '__calc__' ? (tables[0]?.id ?? 't1') : rawTableId;
         onChange({
           ...filter,
           table_id: tableId,
@@ -302,7 +308,9 @@ export function FilterRow({
     [filter, onChange]
   );
 
-  const currentColumnId = `${filter.table_id}.${filter.column}`;
+  const currentColumnId = isCalculatedField
+    ? `__calc__.${filter.column}`
+    : `${filter.table_id}.${filter.column}`;
 
   return (
     <div className={className} style={rowStyles}>
@@ -332,8 +340,8 @@ export function FilterRow({
           value={filter.value}
           onChange={handleValueChange}
           dataType={currentColumnSchema?.data_type}
-          tableName={calculatedFields?.some((cf) => cf.name === filter.column) ? undefined : currentTable?.name}
-          columnName={calculatedFields?.some((cf) => cf.name === filter.column) ? undefined : filter.column}
+          tableName={isCalculatedField ? undefined : currentTable?.name}
+          columnName={isCalculatedField ? undefined : filter.column}
         />
       </div>
 
