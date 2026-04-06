@@ -7,7 +7,7 @@
  * - Field reference insertion
  */
 
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { useTheme } from '../../theme';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
@@ -86,18 +86,58 @@ export function ExpressionEditor({
   const [showHelp, setShowHelp] = useState(false);
   const [fieldSearch, setFieldSearch] = useState('');
 
-  // Insert text at cursor position
+  // Local state for the expression input to avoid firing onChange on every keystroke
+  const [localValue, setLocalValue] = useState(value);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Sync local value when prop changes externally (e.g., inserting field ref)
+  useEffect(() => {
+    clearTimeout(debounceRef.current);
+    setLocalValue(value);
+  }, [value]);
+
+  // Cleanup debounce on unmount
+  useEffect(() => {
+    return () => {
+      clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  // Debounced propagation to parent
+  const handleExpressionChange = useCallback(
+    (newValue: string) => {
+      setLocalValue(newValue);
+      clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        onChange(newValue);
+      }, 500);
+    },
+    [onChange]
+  );
+
+  // Flush on blur so the latest value is always propagated
+  const handleBlur = useCallback(() => {
+    clearTimeout(debounceRef.current);
+    if (localValue !== value) {
+      onChange(localValue);
+    }
+  }, [localValue, value, onChange]);
+
+  // Insert text at cursor position (immediate propagation, no debounce)
   const insertText = useCallback(
     (text: string) => {
       const input = inputRef.current;
       if (!input) {
-        onChange(value + text);
+        const newVal = localValue + text;
+        setLocalValue(newVal);
+        onChange(newVal);
         return;
       }
 
-      const start = input.selectionStart ?? value.length;
-      const end = input.selectionEnd ?? value.length;
-      const newValue = value.slice(0, start) + text + value.slice(end);
+      const start = input.selectionStart ?? localValue.length;
+      const end = input.selectionEnd ?? localValue.length;
+      const newValue = localValue.slice(0, start) + text + localValue.slice(end);
+      setLocalValue(newValue);
       onChange(newValue);
 
       // Move cursor after inserted text
@@ -106,7 +146,7 @@ export function ExpressionEditor({
         input.focus();
       }, 0);
     },
-    [value, onChange]
+    [localValue, onChange]
   );
 
   // Insert field reference
@@ -210,8 +250,9 @@ export function ExpressionEditor({
       <div style={inputRowStyle}>
         <Input
           ref={inputRef}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
+          value={localValue}
+          onChange={(e) => handleExpressionChange(e.target.value)}
+          onBlur={handleBlur}
           placeholder={placeholder}
           disabled={disabled}
           style={{ flex: 1, fontFamily: 'monospace' }}

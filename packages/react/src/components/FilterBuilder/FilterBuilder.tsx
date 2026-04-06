@@ -4,7 +4,7 @@
 
 import { useCallback } from 'react';
 
-import type { DatabaseSchema, FilterDefinition, QueryTable } from '../../types';
+import type { CalculatedField, DatabaseSchema, FilterDefinition, QueryTable } from '../../types';
 import { Button, Icon } from '../ui';
 import { FilterRow } from './FilterRow';
 
@@ -21,6 +21,8 @@ export interface FilterBuilderProps {
   onChange: (filters: FilterDefinition[]) => void;
   /** Database schema. */
   schema: DatabaseSchema;
+  /** Calculated fields defined in the query, available for filtering. */
+  calculatedFields?: CalculatedField[];
   /** Month (1-12) when the fiscal year starts. Defaults to 1 (January). */
   fiscalYearStartMonth?: number;
   /** Additional class name. */
@@ -100,6 +102,7 @@ export function FilterBuilder({
   filters,
   onChange,
   schema,
+  calculatedFields,
   fiscalYearStartMonth,
   className,
   style,
@@ -191,6 +194,7 @@ export function FilterBuilder({
               filter={filter}
               tables={tables}
               schema={schema}
+              calculatedFields={calculatedFields}
               onChange={(updated) => handleUpdateFilter(index, updated)}
               onRemove={() => handleRemoveFilter(index)}
               fiscalYearStartMonth={fiscalYearStartMonth}

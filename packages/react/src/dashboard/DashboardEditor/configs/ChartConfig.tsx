@@ -648,6 +648,7 @@ export function ChartConfig({
             filters={filters}
             onChange={setFilters}
             schema={schema}
+            calculatedFields={calculatedFields}
             fiscalYearStartMonth={fiscalYearStartMonth}
           />
         </div>
