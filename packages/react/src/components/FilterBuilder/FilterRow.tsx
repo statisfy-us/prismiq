@@ -229,7 +229,16 @@ export function FilterRow({
     if (isCalculatedField) {
       const calcField = calculatedFields?.find((cf) => cf.name === filter.column);
       if (calcField) {
-        return { name: filter.column, data_type: calcField.data_type ?? 'numeric', is_nullable: false };
+        // Map UI data types ('number','string','date','boolean') to PG types
+        // so FilterValueInput.parseValue() correctly casts values
+        const typeMap: Record<string, string> = {
+          number: 'numeric',
+          string: 'text',
+          date: 'date',
+          boolean: 'boolean',
+        };
+        const pgType = typeMap[calcField.data_type ?? 'number'] ?? 'numeric';
+        return { name: filter.column, data_type: pgType, is_nullable: false };
       }
       return undefined;
     }
