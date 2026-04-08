@@ -12,6 +12,7 @@ import logging
 from typing import Any
 
 import sqlglot
+import sqlglot.errors
 from sqlglot import exp
 
 from prismiq.dashboards import DashboardFilter, DashboardFilterType
