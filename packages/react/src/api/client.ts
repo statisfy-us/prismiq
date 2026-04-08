@@ -21,6 +21,8 @@ import type {
   SavedQuery,
   SavedQueryCreate,
   SavedQueryUpdate,
+  SQLDashboardFilter,
+  SQLFilterValue,
   SQLValidationResult,
   StreamChunk,
   TableSchema,
@@ -421,15 +423,25 @@ export class PrismiqClient {
    *
    * @param sql - Raw SQL query (SELECT only).
    * @param params - Optional named parameters for the query.
+   * @param dashboardFilters - Optional dashboard filters to inject into the SQL.
+   * @param filterValues - Runtime values for the dashboard filters.
    * @returns The query result with all rows.
    */
   async executeSQL(
     sql: string,
-    params?: Record<string, unknown>
+    params?: Record<string, unknown>,
+    dashboardFilters?: SQLDashboardFilter[],
+    filterValues?: SQLFilterValue[]
   ): Promise<QueryResult> {
     const body: ExecuteSQLRequest = { sql };
     if (params) {
       body.params = params;
+    }
+    if (dashboardFilters && dashboardFilters.length > 0) {
+      body.dashboard_filters = dashboardFilters;
+    }
+    if (filterValues && filterValues.length > 0) {
+      body.filter_values = filterValues;
     }
     return this.request<QueryResult>('/query/execute-sql', {
       method: 'POST',

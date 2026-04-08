@@ -637,6 +637,25 @@ export interface ExecuteSQLRequest {
   sql: string;
   /** Optional named parameters for the query. */
   params?: Record<string, unknown>;
+  /** Optional dashboard filters to inject into the SQL. */
+  dashboard_filters?: SQLDashboardFilter[];
+  /** Runtime values for the dashboard filters. */
+  filter_values?: SQLFilterValue[];
+}
+
+/** Dashboard filter definition for SQL filter injection. */
+export interface SQLDashboardFilter {
+  id: string;
+  type: string;
+  label: string;
+  field: string;
+  table?: string | null;
+}
+
+/** Filter runtime value for SQL filter injection. */
+export interface SQLFilterValue {
+  filter_id: string;
+  value: unknown;
 }
 
 /**
