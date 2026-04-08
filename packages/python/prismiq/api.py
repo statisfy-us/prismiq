@@ -941,10 +941,7 @@ def create_router(
                     if params is None:
                         # Convert positional filter params to named params
                         # since execute_raw_sql expects named params
-                        params = {
-                            f"__filter_{i}": v
-                            for i, v in enumerate(filter_params)
-                        }
+                        params = {f"__filter_{i}": v for i, v in enumerate(filter_params)}
                         # Replace $N placeholders with :__filter_N named params
                         for i in range(len(filter_params)):
                             sql = sql.replace(
