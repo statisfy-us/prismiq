@@ -233,8 +233,24 @@ export function DashboardProvider({
         let result;
 
         if (isSqlMode) {
-          // Execute raw SQL for SQL-mode widgets
-          result = await client.executeSQL(widget.config.raw_sql!);
+          // Execute raw SQL with dashboard filters injected server-side
+          const sqlFilters = currentDashboard.filters.map((f) => ({
+            id: f.id,
+            type: f.type,
+            label: f.label,
+            field: f.field,
+            table: f.table,
+          }));
+          const sqlFilterValues = currentFilters.map((fv) => ({
+            filter_id: fv.filter_id,
+            value: fv.value,
+          }));
+          result = await client.executeSQL(
+            widget.config.raw_sql!,
+            undefined,
+            sqlFilters,
+            sqlFilterValues
+          );
         } else {
           // Apply dashboard filters to widget query
           let query = applyFiltersToQuery(

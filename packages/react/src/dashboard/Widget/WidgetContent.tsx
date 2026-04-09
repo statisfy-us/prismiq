@@ -463,12 +463,26 @@ export function WidgetContent({
       );
     }
 
-    case 'bar_chart':
+    case 'bar_chart': {
+      // Auto-detect series column: if result has exactly one column beyond xAxis
+      // and yAxis, use it as the series dimension for stacking
+      const configuredSeriesColumn = widget.config.series_column?.trim();
+      const candidateSeriesColumns = result.columns.filter(
+        (col) => col !== xAxis && !yAxis.includes(col)
+      );
+      const barSeriesColumn =
+        configuredSeriesColumn && result.columns.includes(configuredSeriesColumn)
+          ? configuredSeriesColumn
+          : candidateSeriesColumns.length === 1
+            ? candidateSeriesColumns[0]
+            : undefined;
       return wrapWithContainer(
         <BarChart
           data={data}
           xAxis={xAxis}
           yAxis={yAxis}
+          seriesColumn={barSeriesColumn}
+          maxSeries={widget.config.max_series}
           orientation={widget.config.orientation ?? 'vertical'}
           stacked={widget.config.stacked}
           showLegend={showLegend}
@@ -486,6 +500,7 @@ export function WidgetContent({
           onDataPointClick={crossFilterEnabled ? handleChartClick : undefined}
         />
       );
+    }
 
     case 'line_chart':
       return wrapWithContainer(

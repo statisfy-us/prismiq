@@ -37,6 +37,8 @@ export function BarChart({
   data,
   xAxis,
   yAxis,
+  seriesColumn,
+  maxSeries,
   orientation = 'vertical',
   stacked = false,
   showDataLabels = false,
@@ -69,10 +71,26 @@ export function BarChart({
   );
 
   // Transform data
-  const chartData = useMemo(
-    () => toChartData(data, xAxis, yColumns),
-    [data, xAxis, yColumns]
+  const rawChartData = useMemo(
+    () => toChartData(data, xAxis, yColumns, seriesColumn),
+    [data, xAxis, yColumns, seriesColumn]
   );
+
+  // Limit series to top N by total value if maxSeries is specified
+  const chartData = useMemo(() => {
+    if (!maxSeries || rawChartData.series.length <= maxSeries) {
+      return rawChartData;
+    }
+    const seriesWithTotals = rawChartData.series.map((s) => ({
+      ...s,
+      total: s.data.reduce<number>((sum, val) => sum + (val ?? 0), 0),
+    }));
+    const topSeries = seriesWithTotals
+      .sort((a, b) => (b.total ?? 0) - (a.total ?? 0))
+      .slice(0, maxSeries)
+      .map(({ total: _total, ...rest }) => rest);
+    return { categories: rawChartData.categories, series: topSeries };
+  }, [rawChartData, maxSeries]);
 
   // Create date formatter if xAxisFormat is provided
   const dateFormatter = useMemo(
@@ -86,10 +104,10 @@ export function BarChart({
     return chartData.categories.map((cat) => dateFormatter(cat));
   }, [chartData.categories, dateFormatter]);
 
-  // Get colors
+  // Get colors — use series count when seriesColumn pivots data into multiple series
   const seriesColors = useMemo(
-    () => colors || getChartColors(theme, yColumns.length),
-    [colors, theme, yColumns.length]
+    () => colors || getChartColors(theme, chartData.series.length || yColumns.length),
+    [colors, theme, chartData.series.length, yColumns.length]
   );
 
   // Check for empty data
@@ -202,7 +220,7 @@ export function BarChart({
     // Legend config
     const legend = showLegend
       ? {
-          show: yColumns.length > 1,
+          show: chartData.series.length > 1,
           data: chartData.series.map((s) => s.name),
           selectedMode: 'multiple' as const,
           [legendPosition === 'left' || legendPosition === 'right'

@@ -22,6 +22,7 @@ from prismiq.dashboards import (
     Dashboard,
     DashboardCreate,
     DashboardExport,
+    DashboardFilter,
     DashboardUpdate,
     Widget,
     WidgetCreate,
@@ -39,6 +40,7 @@ from prismiq.permissions import (
 from prismiq.pins import PinnedDashboard, PinRequest, ReorderPinsRequest, UnpinRequest
 from prismiq.query import ValidationResult
 from prismiq.schema_config import EnhancedDatabaseSchema, EnhancedTableSchema
+from prismiq.sql_filters import inject_dashboard_filters
 from prismiq.sql_validator import SQLValidationError
 from prismiq.timeseries import TimeInterval
 from prismiq.transforms import pivot_data
@@ -157,6 +159,12 @@ class ExecuteSQLRequest(BaseModel):
 
     params: dict[str, Any] | None = None
     """Optional named parameters for the query."""
+
+    dashboard_filters: list[DashboardFilter] | None = None
+    """Optional dashboard-level filters to inject into the SQL."""
+
+    filter_values: list[FilterValue] | None = None
+    """Runtime values for the dashboard filters."""
 
 
 class SQLValidationResponse(BaseModel):
@@ -914,9 +922,43 @@ def create_router(
         """
         schema_name = auth.schema_name
         try:
+            sql = request.sql
+            params = request.params
+
+            # Inject dashboard filters into the SQL if provided
+            if request.dashboard_filters and request.filter_values:
+                # Count existing user params so injected $N don't collide
+                param_offset = len(params) if params else 0
+                modified_sql, filter_params = inject_dashboard_filters(
+                    sql,
+                    request.dashboard_filters,
+                    request.filter_values,
+                    param_offset=param_offset,
+                )
+                if filter_params:
+                    sql = modified_sql
+                    # Merge filter params with user params
+                    if params is None:
+                        # Convert positional filter params to named params
+                        # since execute_raw_sql expects named params
+                        params = {f"__filter_{i}": v for i, v in enumerate(filter_params)}
+                        # Replace $N placeholders with :__filter_N named params
+                        for i in range(len(filter_params)):
+                            sql = sql.replace(
+                                f"${param_offset + i + 1}",
+                                f":__filter_{i}",
+                            )
+                    else:
+                        for i, v in enumerate(filter_params):
+                            params[f"__filter_{i}"] = v
+                            sql = sql.replace(
+                                f"${param_offset + i + 1}",
+                                f":__filter_{i}",
+                            )
+
             return await engine.execute_raw_sql(
-                sql=request.sql,
-                params=request.params,
+                sql=sql,
+                params=params,
                 schema_name=schema_name,
             )
         except SQLValidationError as e:
