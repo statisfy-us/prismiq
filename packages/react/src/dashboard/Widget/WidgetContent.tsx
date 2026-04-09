@@ -464,10 +464,18 @@ export function WidgetContent({
     }
 
     case 'bar_chart': {
-      // Auto-detect series column: if result has columns beyond xAxis and yAxis,
-      // use the first extra column as the series dimension for stacking
-      const barSeriesColumn = widget.config.series_column
-        ?? result.columns.find((col) => col !== xAxis && !yAxis.includes(col));
+      // Auto-detect series column: if result has exactly one column beyond xAxis
+      // and yAxis, use it as the series dimension for stacking
+      const configuredSeriesColumn = widget.config.series_column?.trim();
+      const candidateSeriesColumns = result.columns.filter(
+        (col) => col !== xAxis && !yAxis.includes(col)
+      );
+      const barSeriesColumn =
+        configuredSeriesColumn && result.columns.includes(configuredSeriesColumn)
+          ? configuredSeriesColumn
+          : candidateSeriesColumns.length === 1
+            ? candidateSeriesColumns[0]
+            : undefined;
       return wrapWithContainer(
         <BarChart
           data={data}
