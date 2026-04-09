@@ -153,6 +153,10 @@ export interface BarChartProps extends BaseChartProps {
   xAxis: string;
   /** Column name(s) for Y axis values. */
   yAxis: string | string[];
+  /** Column name that defines series (for stacked/grouped charts with long-format data). */
+  seriesColumn?: string;
+  /** Maximum number of series to display (top N by total value). */
+  maxSeries?: number;
   /** Bar orientation. */
   orientation?: 'vertical' | 'horizontal';
   /** Whether to stack bars. */
