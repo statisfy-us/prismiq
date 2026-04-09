@@ -1213,7 +1213,7 @@ def create_router(
         if dashboard is None:
             raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
 
-        if not can_edit_dashboard(dashboard, auth.user_id):
+        if not can_edit_dashboard(dashboard, auth.user_id, is_admin=getattr(auth, "is_admin", False)):
             raise HTTPException(status_code=403, detail="Permission denied")
 
         updated = await store.update_dashboard(
@@ -1246,7 +1246,7 @@ def create_router(
         if dashboard is None:
             raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
 
-        if not can_delete_dashboard(dashboard, auth.user_id):
+        if not can_delete_dashboard(dashboard, auth.user_id, is_admin=getattr(auth, "is_admin", False)):
             raise HTTPException(status_code=403, detail="Permission denied")
 
         deleted = await store.delete_dashboard(
@@ -1289,7 +1289,7 @@ def create_router(
         if dashboard is None:
             raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
 
-        if not can_edit_widget(dashboard, auth.user_id):
+        if not can_edit_widget(dashboard, auth.user_id, is_admin=getattr(auth, "is_admin", False)):
             raise HTTPException(status_code=403, detail="Permission denied")
 
         created = await store.add_widget(
@@ -1326,7 +1326,7 @@ def create_router(
         if dashboard is None:
             raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
 
-        if not can_edit_widget(dashboard, auth.user_id):
+        if not can_edit_widget(dashboard, auth.user_id, is_admin=getattr(auth, "is_admin", False)):
             raise HTTPException(status_code=403, detail="Permission denied")
 
         updated = await store.update_widget(
@@ -1361,7 +1361,7 @@ def create_router(
         if dashboard is None:
             raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
 
-        if not can_edit_widget(dashboard, auth.user_id):
+        if not can_edit_widget(dashboard, auth.user_id, is_admin=getattr(auth, "is_admin", False)):
             raise HTTPException(status_code=403, detail="Permission denied")
 
         deleted = await store.delete_widget(
@@ -1400,7 +1400,7 @@ def create_router(
         if dashboard is None:
             raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
 
-        if not can_edit_widget(dashboard, auth.user_id):
+        if not can_edit_widget(dashboard, auth.user_id, is_admin=getattr(auth, "is_admin", False)):
             raise HTTPException(status_code=403, detail="Permission denied")
 
         duplicated = await store.duplicate_widget(
@@ -1440,7 +1440,7 @@ def create_router(
         if dashboard is None:
             raise HTTPException(status_code=404, detail=f"Dashboard '{dashboard_id}' not found")
 
-        if not can_edit_dashboard(dashboard, auth.user_id):
+        if not can_edit_dashboard(dashboard, auth.user_id, is_admin=getattr(auth, "is_admin", False)):
             raise HTTPException(status_code=403, detail="Permission denied")
 
         success = await store.update_widget_positions(
