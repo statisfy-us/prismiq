@@ -78,9 +78,7 @@ def can_delete_dashboard(
     return is_admin or dashboard.owner_id == user_id
 
 
-def can_edit_widget(
-    dashboard: Dashboard, user_id: str | None, *, is_admin: bool = False
-) -> bool:
+def can_edit_widget(dashboard: Dashboard, user_id: str | None, *, is_admin: bool = False) -> bool:
     """Check if a user can edit widgets in a dashboard.
 
     Requires dashboard edit permission.
