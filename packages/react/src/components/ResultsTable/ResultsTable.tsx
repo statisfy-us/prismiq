@@ -240,6 +240,7 @@ export function ResultsTable({
   const [pageSize, setPageSize] = useState(initialPageSize);
   const [sortColumn, setSortColumn] = useState<string | undefined>();
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [wrapText, setWrapText] = useState(false);
 
   // Handle sort
   const handleSort = useCallback(
@@ -423,6 +424,14 @@ export function ResultsTable({
           )}
         </div>
         <div style={toolbarRightStyles}>
+          <Button
+            variant={wrapText ? 'primary' : 'ghost'}
+            size="sm"
+            onClick={() => setWrapText((w) => !w)}
+            title={wrapText ? 'Disable text wrap' : 'Wrap long cell text'}
+          >
+            <span>Wrap</span>
+          </Button>
           <Button variant="ghost" size="sm" onClick={handleExportCSV} title="Export as CSV">
             <Icon name="download" size={14} />
             <span>CSV</span>
@@ -452,6 +461,7 @@ export function ResultsTable({
                 index={(currentPage - 1) * pageSize + index}
                 columnTypes={result.column_types}
                 formatters={formattersByIndex}
+                wrapText={wrapText}
                 onRowClick={onRowClick}
                 onCellClick={onCellClick ? handleCellClick : undefined}
               />

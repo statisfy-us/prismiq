@@ -9,6 +9,7 @@ to prevent SQL injection.
 from __future__ import annotations
 
 import logging
+from datetime import date, datetime
 from typing import Any
 
 import sqlglot
@@ -66,11 +67,14 @@ def inject_dashboard_filters(
         _logger.warning("Failed to parse SQL for filter injection; returning unmodified")
         return sql, []
 
-    # Extract table names referenced in the query (lowercased)
-    sql_tables: set[str] = set()
+    # Extract table names referenced in the query, mapping each to the
+    # alias used in the SQL (or the bare name if not aliased). Lower-cased
+    # for case-insensitive matching against ``dash_filter.table``.
+    sql_tables: dict[str, str] = {}
     for table in parsed.find_all(exp.Table):
         if table.name:
-            sql_tables.add(table.name.lower())
+            qualifier = table.alias or table.name
+            sql_tables.setdefault(table.name.lower(), qualifier)
 
     # Build conditions and collect param values
     conditions: list[exp.Expression] = []
@@ -81,16 +85,22 @@ def inject_dashboard_filters(
         if value is None or value == "" or value == []:
             continue
 
-        # Check if the filter's table is referenced in the SQL
+        # Check if the filter's table is referenced in the SQL, and resolve
+        # the qualifier to use (alias if the SQL aliases the table, else the
+        # bare table name). Without a qualifier, columns shared across joined
+        # tables (e.g. shared custom fields on Account + Opportunity views)
+        # produce 'column reference X is ambiguous'.
+        qualifier: str | None = None
         if dash_filter.table:
-            if dash_filter.table.lower() not in sql_tables:
+            qualifier = sql_tables.get(dash_filter.table.lower())
+            if qualifier is None:
                 continue
         elif known_tables is not None and not any(t in known_tables for t in sql_tables):
             # No table specified on filter and no query table is in the
             # known schema — skip this filter.
             continue
 
-        col = exp.Column(this=exp.Identifier(this=dash_filter.field, quoted=True))
+        col = _build_column(dash_filter.field, qualifier)
 
         new_conditions = _build_filter_conditions(
             dash_filter.type, col, value, params, param_offset
@@ -152,9 +162,9 @@ def _build_filter_conditions(
 
     elif filter_type == DashboardFilterType.DATE_RANGE:
         if isinstance(value, dict):
-            start = value.get("start")
-            end = value.get("end")
-            if start and end:
+            start = _parse_iso_date(value.get("start"))
+            end = _parse_iso_date(value.get("end"))
+            if start is not None and end is not None:
                 conditions.append(exp.GTE(this=col, expression=_next_param(start)))
                 conditions.append(exp.LTE(this=col, expression=_next_param(end)))
 
@@ -179,3 +189,34 @@ def _build_filter_conditions(
 def _param(index: int) -> exp.Parameter:
     """Create a ``$N`` parameter placeholder."""
     return exp.Parameter(this=exp.Literal.number(index))
+
+
+def _build_column(field: str, qualifier: str | None) -> exp.Column:
+    """Build a (optionally table-qualified) column reference."""
+    column = exp.Column(this=exp.Identifier(this=field, quoted=True))
+    if qualifier:
+        column.set("table", exp.Identifier(this=qualifier, quoted=True))
+    return column
+
+
+def _parse_iso_date(value: Any) -> date | datetime | None:
+    """Parse an ISO date/datetime string into a Python ``date`` or ``datetime``.
+
+    asyncpg refuses to bind a ``str`` to a ``DATE``/``TIMESTAMP`` column, so
+    DATE_RANGE filter values arriving as ISO strings from the frontend must be
+    coerced before being appended to the parameter list.
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            if "T" in value or " " in value:
+                return datetime.fromisoformat(value.replace(" ", "T"))
+            return date.fromisoformat(value)
+        except ValueError:
+            return None
+    return None

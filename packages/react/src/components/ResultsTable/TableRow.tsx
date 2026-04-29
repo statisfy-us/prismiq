@@ -17,6 +17,8 @@ export interface TableRowProps {
   columnTypes?: string[];
   /** Custom formatters by column index or name. */
   formatters?: Record<string | number, (value: unknown) => string>;
+  /** Wrap long text in cells onto multiple lines instead of truncating. */
+  wrapText?: boolean;
   /** Callback when the row is clicked. */
   onRowClick?: (row: unknown[], index: number) => void;
   /** Callback when a cell is clicked. */
@@ -59,6 +61,7 @@ export function TableRow({
   index,
   columnTypes,
   formatters,
+  wrapText = false,
   onRowClick,
   onCellClick,
   isSelected = false,
@@ -98,6 +101,7 @@ export function TableRow({
           value={cell}
           columnType={columnTypes?.[cellIndex]}
           formatter={formatters?.[cellIndex]}
+          wrapText={wrapText}
           onClick={onCellClick ? () => handleCellClick(cell, cellIndex) : undefined}
         />
       ))}

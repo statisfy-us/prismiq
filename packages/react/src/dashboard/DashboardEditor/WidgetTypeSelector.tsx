@@ -26,7 +26,7 @@ const WIDGET_TYPES: WidgetTypeInfo[] = [
   {
     type: 'metric',
     label: 'Metric',
-    description: 'Single value with trend',
+    description: 'Single value',
     icon: 'info',
   },
   {
