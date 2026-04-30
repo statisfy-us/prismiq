@@ -14,7 +14,9 @@ from prismiq.sql_filters import _parse_iso_date, inject_dashboard_filters
 def _df(
     filter_id: str, type_: DashboardFilterType, field: str, table: str = "tasks"
 ) -> DashboardFilter:
-    return DashboardFilter(id=filter_id, type=type_, label=field, field=field, table=table)
+    return DashboardFilter(
+        id=filter_id, type=type_, label=field, field=field, table=table
+    )
 
 
 def _fv(filter_id: str, value: object) -> FilterValue:
@@ -70,7 +72,9 @@ def test_date_range_with_param_offset() -> None:
     filters = [_df("f1", DashboardFilterType.DATE_RANGE, "due_date")]
     values = [_fv("f1", {"start": "2026-04-29", "end": "2026-05-01"})]
 
-    modified_sql, params = inject_dashboard_filters(sql, filters, values, param_offset=3)
+    modified_sql, params = inject_dashboard_filters(
+        sql, filters, values, param_offset=3
+    )
 
     assert params == [date(2026, 4, 29), date(2026, 5, 1)]
     assert "$4" in modified_sql and "$5" in modified_sql
@@ -157,7 +161,12 @@ def test_qualifies_column_with_table_name_when_no_alias() -> None:
         'ON "account_custom_fields_view"."account_id" = "opportunity_custom_fields_view"."account_id"'
     )
     filters = [
-        _df("f1", DashboardFilterType.MULTI_SELECT, "AGP Owner", table="account_custom_fields_view")
+        _df(
+            "f1",
+            DashboardFilterType.MULTI_SELECT,
+            "AGP Owner",
+            table="account_custom_fields_view",
+        )
     ]
     values = [_fv("f1", ["John"])]
 
@@ -175,7 +184,12 @@ def test_qualifies_column_with_alias_when_table_aliased() -> None:
         'JOIN "opportunity_custom_fields_view" AS o ON a."account_id" = o."account_id"'
     )
     filters = [
-        _df("f1", DashboardFilterType.MULTI_SELECT, "AGP Owner", table="account_custom_fields_view")
+        _df(
+            "f1",
+            DashboardFilterType.MULTI_SELECT,
+            "AGP Owner",
+            table="account_custom_fields_view",
+        )
     ]
     values = [_fv("f1", ["John"])]
 
@@ -189,7 +203,9 @@ def test_unqualified_when_filter_has_no_table() -> None:
     """If the filter has no table specified, the column stays unqualified (existing behavior)."""
     sql = 'SELECT * FROM "tasks"'
     filters = [
-        DashboardFilter(id="f1", type=DashboardFilterType.SELECT, label="status", field="status")
+        DashboardFilter(
+            id="f1", type=DashboardFilterType.SELECT, label="status", field="status"
+        )
     ]
     values = [_fv("f1", "open")]
 
@@ -237,7 +253,9 @@ def test_date_range_accepts_z_suffixed_datetime() -> None:
     """Frontend ISO datetimes ending in 'Z' must round-trip through DATE_RANGE."""
     sql = 'SELECT * FROM "tasks"'
     filters = [_df("f1", DashboardFilterType.DATE_RANGE, "due_date")]
-    values = [_fv("f1", {"start": "2026-04-29T00:00:00Z", "end": "2026-05-01T23:59:59Z"})]
+    values = [
+        _fv("f1", {"start": "2026-04-29T00:00:00Z", "end": "2026-05-01T23:59:59Z"})
+    ]
 
     _, params = inject_dashboard_filters(sql, filters, values)
 
