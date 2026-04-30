@@ -429,6 +429,7 @@ export function ResultsTable({
             size="sm"
             onClick={() => setWrapText((w) => !w)}
             title={wrapText ? 'Disable text wrap' : 'Wrap long cell text'}
+            data-testid="results-table-wrap-toggle"
           >
             <span>Wrap</span>
           </Button>

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 import pytest
 
@@ -11,7 +11,9 @@ from prismiq.filter_merge import FilterValue
 from prismiq.sql_filters import _parse_iso_date, inject_dashboard_filters
 
 
-def _df(filter_id: str, type_: DashboardFilterType, field: str, table: str = "tasks") -> DashboardFilter:
+def _df(
+    filter_id: str, type_: DashboardFilterType, field: str, table: str = "tasks"
+) -> DashboardFilter:
     return DashboardFilter(id=filter_id, type=type_, label=field, field=field, table=table)
 
 
@@ -59,7 +61,7 @@ def test_date_range_skips_when_unparseable() -> None:
     modified_sql, params = inject_dashboard_filters(sql, filters, values)
 
     assert params == []
-    assert modified_sql == sql or 'WHERE' not in modified_sql.upper().split('FROM')[1]
+    assert modified_sql == sql or "WHERE" not in modified_sql.upper().split("FROM")[1]
 
 
 def test_date_range_with_param_offset() -> None:
@@ -154,7 +156,9 @@ def test_qualifies_column_with_table_name_when_no_alias() -> None:
         'JOIN "opportunity_custom_fields_view" '
         'ON "account_custom_fields_view"."account_id" = "opportunity_custom_fields_view"."account_id"'
     )
-    filters = [_df("f1", DashboardFilterType.MULTI_SELECT, "AGP Owner", table="account_custom_fields_view")]
+    filters = [
+        _df("f1", DashboardFilterType.MULTI_SELECT, "AGP Owner", table="account_custom_fields_view")
+    ]
     values = [_fv("f1", ["John"])]
 
     modified_sql, _ = inject_dashboard_filters(sql, filters, values)
@@ -170,7 +174,9 @@ def test_qualifies_column_with_alias_when_table_aliased() -> None:
         'SELECT * FROM "account_custom_fields_view" AS a '
         'JOIN "opportunity_custom_fields_view" AS o ON a."account_id" = o."account_id"'
     )
-    filters = [_df("f1", DashboardFilterType.MULTI_SELECT, "AGP Owner", table="account_custom_fields_view")]
+    filters = [
+        _df("f1", DashboardFilterType.MULTI_SELECT, "AGP Owner", table="account_custom_fields_view")
+    ]
     values = [_fv("f1", ["John"])]
 
     modified_sql, _ = inject_dashboard_filters(sql, filters, values)
@@ -182,10 +188,14 @@ def test_qualifies_column_with_alias_when_table_aliased() -> None:
 def test_unqualified_when_filter_has_no_table() -> None:
     """If the filter has no table specified, the column stays unqualified (existing behavior)."""
     sql = 'SELECT * FROM "tasks"'
-    filters = [DashboardFilter(id="f1", type=DashboardFilterType.SELECT, label="status", field="status")]
+    filters = [
+        DashboardFilter(id="f1", type=DashboardFilterType.SELECT, label="status", field="status")
+    ]
     values = [_fv("f1", "open")]
 
-    modified_sql, _ = inject_dashboard_filters(sql, filters, values, known_tables=frozenset({"tasks"}))
+    modified_sql, _ = inject_dashboard_filters(
+        sql, filters, values, known_tables=frozenset({"tasks"})
+    )
 
     assert '"status"' in modified_sql
     # No table qualifier prefixed
@@ -206,6 +216,14 @@ def test_unqualified_when_filter_has_no_table() -> None:
         ("2026-04-29", date(2026, 4, 29)),
         ("2026-04-29T12:30:00", datetime(2026, 4, 29, 12, 30, 0)),
         ("2026-04-29 12:30:00", datetime(2026, 4, 29, 12, 30, 0)),
+        (
+            "2026-04-29T12:30:00Z",
+            datetime(2026, 4, 29, 12, 30, 0, tzinfo=timezone.utc),
+        ),
+        (
+            "2026-04-29T12:30:00+00:00",
+            datetime(2026, 4, 29, 12, 30, 0, tzinfo=timezone.utc),
+        ),
         (date(2026, 4, 29), date(2026, 4, 29)),
         (datetime(2026, 4, 29, 12, 0), datetime(2026, 4, 29, 12, 0)),
         (12345, None),  # unsupported types fall through to None
@@ -213,3 +231,33 @@ def test_unqualified_when_filter_has_no_table() -> None:
 )
 def test_parse_iso_date(value: object, expected: object) -> None:
     assert _parse_iso_date(value) == expected
+
+
+def test_date_range_accepts_z_suffixed_datetime() -> None:
+    """Frontend ISO datetimes ending in 'Z' must round-trip through DATE_RANGE."""
+    sql = 'SELECT * FROM "tasks"'
+    filters = [_df("f1", DashboardFilterType.DATE_RANGE, "due_date")]
+    values = [
+        _fv("f1", {"start": "2026-04-29T00:00:00Z", "end": "2026-05-01T23:59:59Z"})
+    ]
+
+    _, params = inject_dashboard_filters(sql, filters, values)
+
+    assert params == [
+        datetime(2026, 4, 29, 0, 0, 0, tzinfo=timezone.utc),
+        datetime(2026, 5, 1, 23, 59, 59, tzinfo=timezone.utc),
+    ]
+
+
+def test_self_joined_table_filter_skipped() -> None:
+    """A dashboard filter on a self-joined table can't disambiguate aliases — must skip."""
+    sql = (
+        'SELECT * FROM "tasks" AS t1 JOIN "tasks" AS t2 ON t1."parent_id" = t2."id"'
+    )
+    filters = [_df("f1", DashboardFilterType.SELECT, "status", table="tasks")]
+    values = [_fv("f1", "open")]
+
+    modified_sql, params = inject_dashboard_filters(sql, filters, values)
+
+    assert params == []
+    assert modified_sql == sql

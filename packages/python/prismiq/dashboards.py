@@ -162,7 +162,7 @@ class WidgetConfig(BaseModel):
     dateFormats: dict[str, str] | None = None
     """Date format strings for datetime columns (column name -> date-fns format string)."""
 
-    fiscalYearStartMonth: int | None = None
+    fiscalYearStartMonth: int | None = Field(default=None, ge=1, le=12)
     """Month (1-12) when the fiscal year starts. Drives fiscal quarter/year date presets."""
 
     # Text options

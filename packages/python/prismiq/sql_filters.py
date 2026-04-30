@@ -68,13 +68,17 @@ def inject_dashboard_filters(
         return sql, []
 
     # Extract table names referenced in the query, mapping each to the
-    # alias used in the SQL (or the bare name if not aliased). Lower-cased
-    # for case-insensitive matching against ``dash_filter.table``.
-    sql_tables: dict[str, str] = {}
+    # set of qualifiers (alias used in the SQL, or the bare name if not
+    # aliased). Lower-cased for case-insensitive matching against
+    # ``dash_filter.table``. A table can map to multiple qualifiers when
+    # it is self-joined (e.g. ``tasks t1 JOIN tasks t2``); in that case
+    # the dashboard filter's ``table`` field cannot disambiguate which
+    # side to filter, so we skip the filter entirely.
+    sql_tables: dict[str, set[str]] = {}
     for table in parsed.find_all(exp.Table):
         if table.name:
             qualifier = table.alias or table.name
-            sql_tables.setdefault(table.name.lower(), qualifier)
+            sql_tables.setdefault(table.name.lower(), set()).add(qualifier)
 
     # Build conditions and collect param values
     conditions: list[exp.Expression] = []
@@ -92,9 +96,22 @@ def inject_dashboard_filters(
         # produce 'column reference X is ambiguous'.
         qualifier: str | None = None
         if dash_filter.table:
-            qualifier = sql_tables.get(dash_filter.table.lower())
-            if qualifier is None:
+            qualifiers = sql_tables.get(dash_filter.table.lower())
+            if not qualifiers:
                 continue
+            if len(qualifiers) > 1:
+                # Self-joined table: dashboard filter cannot disambiguate
+                # between the aliases. Skip rather than silently apply to
+                # one side and ignore the other.
+                _logger.warning(
+                    "Skipping dashboard filter on %r: table %r is self-joined "
+                    "(aliases: %s) and cannot be disambiguated.",
+                    dash_filter.field,
+                    dash_filter.table,
+                    sorted(qualifiers),
+                )
+                continue
+            qualifier = next(iter(qualifiers))
         elif known_tables is not None and not any(t in known_tables for t in sql_tables):
             # No table specified on filter and no query table is in the
             # known schema — skip this filter.
@@ -213,10 +230,16 @@ def _parse_iso_date(value: Any) -> date | datetime | None:
     if isinstance(value, date):
         return value
     if isinstance(value, str):
+        # Normalise trailing 'Z' (UTC designator) to '+00:00'. Python's
+        # ``datetime.fromisoformat`` only accepts the bare 'Z' suffix on
+        # 3.11+, but the package targets 3.10.
+        normalised = value
+        if normalised.endswith("Z"):
+            normalised = normalised[:-1] + "+00:00"
         try:
-            if "T" in value or " " in value:
-                return datetime.fromisoformat(value.replace(" ", "T"))
-            return date.fromisoformat(value)
+            if "T" in normalised or " " in normalised:
+                return datetime.fromisoformat(normalised.replace(" ", "T"))
+            return date.fromisoformat(normalised)
         except ValueError:
             return None
     return None
