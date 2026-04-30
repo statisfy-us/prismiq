@@ -237,9 +237,7 @@ def test_date_range_accepts_z_suffixed_datetime() -> None:
     """Frontend ISO datetimes ending in 'Z' must round-trip through DATE_RANGE."""
     sql = 'SELECT * FROM "tasks"'
     filters = [_df("f1", DashboardFilterType.DATE_RANGE, "due_date")]
-    values = [
-        _fv("f1", {"start": "2026-04-29T00:00:00Z", "end": "2026-05-01T23:59:59Z"})
-    ]
+    values = [_fv("f1", {"start": "2026-04-29T00:00:00Z", "end": "2026-05-01T23:59:59Z"})]
 
     _, params = inject_dashboard_filters(sql, filters, values)
 
@@ -251,9 +249,7 @@ def test_date_range_accepts_z_suffixed_datetime() -> None:
 
 def test_self_joined_table_filter_skipped() -> None:
     """A dashboard filter on a self-joined table can't disambiguate aliases — must skip."""
-    sql = (
-        'SELECT * FROM "tasks" AS t1 JOIN "tasks" AS t2 ON t1."parent_id" = t2."id"'
-    )
+    sql = 'SELECT * FROM "tasks" AS t1 JOIN "tasks" AS t2 ON t1."parent_id" = t2."id"'
     filters = [_df("f1", DashboardFilterType.SELECT, "status", table="tasks")]
     values = [_fv("f1", "open")]
 
