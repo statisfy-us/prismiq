@@ -19,6 +19,8 @@ export interface TableCellProps {
   formatter?: (value: unknown) => string;
   /** Maximum width before truncation. */
   maxWidth?: number;
+  /** Wrap long text onto multiple lines instead of truncating. */
+  wrapText?: boolean;
   /** Callback when cell is clicked. */
   onClick?: () => void;
   /** Additional class name. */
@@ -53,6 +55,12 @@ const truncatedStyles: React.CSSProperties = {
   overflow: 'hidden',
   textOverflow: 'ellipsis',
   whiteSpace: 'nowrap',
+};
+
+const wrappedStyles: React.CSSProperties = {
+  whiteSpace: 'normal',
+  wordBreak: 'break-word',
+  overflowWrap: 'anywhere',
 };
 
 // ============================================================================
@@ -142,6 +150,7 @@ export function TableCell({
   columnType,
   formatter,
   maxWidth = 200,
+  wrapText = false,
   onClick,
   className,
 }: TableCellProps): JSX.Element {
@@ -155,7 +164,8 @@ export function TableCell({
     return formatValue(value, columnType);
   }, [value, columnType, formatter]);
 
-  const needsTruncation = formattedValue.length > 50;
+  const isLong = formattedValue.length > 50;
+  const needsTruncation = isLong && !wrapText;
 
   const cellContent = (
     <td
@@ -166,6 +176,7 @@ export function TableCell({
         ...(isNull ? nullStyles : {}),
         ...(isNumeric ? numberStyles : {}),
         ...(needsTruncation ? { ...truncatedStyles, maxWidth } : {}),
+        ...(wrapText ? wrappedStyles : {}),
         ...(onClick ? { cursor: 'pointer' } : {}),
       }}
     >
