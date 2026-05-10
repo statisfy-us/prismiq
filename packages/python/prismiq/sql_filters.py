@@ -88,9 +88,7 @@ def inject_dashboard_filters(
     try:
         parsed = sqlglot.parse_one(sql, dialect="postgres")
     except sqlglot.errors.SqlglotError:
-        _logger.warning(
-            "Failed to parse SQL for filter injection; returning unmodified"
-        )
+        _logger.warning("Failed to parse SQL for filter injection; returning unmodified")
         return sql, []
 
     # Enumerate references visible at the outer SELECT's scope. This includes
@@ -214,9 +212,7 @@ def _outer_targets(expr: exp.Expression) -> list[exp.Expression]:
     return found
 
 
-def _build_outer_ref(
-    target: exp.Expression, cte_inner: dict[str, exp.Select]
-) -> _OuterRef | None:
+def _build_outer_ref(target: exp.Expression, cte_inner: dict[str, exp.Select]) -> _OuterRef | None:
     """Convert a FROM/JOIN target into an ``_OuterRef``."""
     if isinstance(target, exp.Table):
         if not target.name:
@@ -311,9 +307,7 @@ def _collect_projected_columns(select_node: exp.Select) -> frozenset[str] | None
     return frozenset(cols)
 
 
-def _resolve_qualifier(
-    outer_refs: list[_OuterRef], dash_filter: DashboardFilter
-) -> str | None:
+def _resolve_qualifier(outer_refs: list[_OuterRef], dash_filter: DashboardFilter) -> str | None:
     """Pick the qualifier (table alias or name) for a dashboard filter, or None.
 
     Returns ``None`` when:
