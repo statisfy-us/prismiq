@@ -4,6 +4,19 @@
 
 import { Icon } from '../ui';
 
+function isNumericType(columnType?: string): boolean {
+  if (!columnType) return false;
+  const type = columnType.toLowerCase();
+  return (
+    type.includes('int') ||
+    type.includes('numeric') ||
+    type.includes('decimal') ||
+    type.includes('float') ||
+    type.includes('double') ||
+    type.includes('real')
+  );
+}
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -77,6 +90,7 @@ const activeSortIconStyles: React.CSSProperties = {
  */
 export function TableHeader({
   columns,
+  columnTypes,
   sortable = false,
   sortColumn,
   sortDirection,
@@ -95,8 +109,9 @@ export function TableHeader({
   return (
     <thead className={className}>
       <tr style={headerRowStyles}>
-        {columns.map((column) => {
+        {columns.map((column, i) => {
           const isActive = sortColumn === column;
+          const isNumeric = isNumericType(columnTypes?.[i]);
 
           return (
             <th
@@ -104,10 +119,16 @@ export function TableHeader({
               onClick={() => handleHeaderClick(column)}
               style={{
                 ...headerCellStyles,
+                ...(isNumeric ? { textAlign: 'right' } : {}),
                 ...(sortable ? sortableStyles : {}),
               }}
             >
-              <div style={headerContentStyles}>
+              <div
+                style={{
+                  ...headerContentStyles,
+                  ...(isNumeric ? { justifyContent: 'flex-end' } : {}),
+                }}
+              >
                 <span>{column}</span>
                 {sortable && (
                   <span
