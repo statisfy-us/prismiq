@@ -13,6 +13,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
+import { createPortal } from 'react-dom';
 
 // ============================================================================
 // Types
@@ -213,31 +214,39 @@ export const Tooltip = forwardRef<HTMLDivElement, TooltipProps>(function Tooltip
       })
     : children;
 
+  // Portal the tooltip to document.body so it renders outside the parent DOM
+  // hierarchy. Necessary when the trigger is inside a <tr> (or any container
+  // that restricts child element types) — inline rendering there produces
+  // invalid HTML that browsers reflow unpredictably.
+  const tooltipNode = isVisible ? (
+    <div
+      ref={(node) => {
+        (tooltipRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+        if (typeof ref === 'function') {
+          ref(node);
+        } else if (ref) {
+          ref.current = node;
+        }
+      }}
+      role="tooltip"
+      className={className}
+      style={{
+        ...tooltipStyles,
+        top: tooltipPosition.top,
+        left: tooltipPosition.left,
+        ...style,
+      }}
+    >
+      {content}
+    </div>
+  ) : null;
+
   return (
     <>
       {trigger}
-      {isVisible && (
-        <div
-          ref={(node) => {
-            (tooltipRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-            if (typeof ref === 'function') {
-              ref(node);
-            } else if (ref) {
-              ref.current = node;
-            }
-          }}
-          role="tooltip"
-          className={className}
-          style={{
-            ...tooltipStyles,
-            top: tooltipPosition.top,
-            left: tooltipPosition.left,
-            ...style,
-          }}
-        >
-          {content}
-        </div>
-      )}
+      {tooltipNode && typeof document !== 'undefined'
+        ? createPortal(tooltipNode, document.body)
+        : tooltipNode}
     </>
   );
 });
