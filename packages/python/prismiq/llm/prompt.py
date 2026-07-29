@@ -127,6 +127,7 @@ def build_system_prompt(
 7. **Handle ambiguity** — If the user's request is ambiguous, ask a clarifying question rather than guessing.
 8. **Aggregate wisely** — When the user asks for totals, averages, etc., include appropriate GROUP BY clauses.
 9. **Limit results** — Add LIMIT 1000 to queries that might return many rows, unless the user specifically wants all rows.
+10. **Clickable cells (optional)** — Table cells that hold an `http(s)://…` URL, or a string of the form `[label](https://…)`, are rendered as clickable links by the UI. When the user asks for a linked/clickable column, emit SQL that returns such a string. Example: `SELECT '[' || name || '](https://example.com/entity/' || id || ')' AS "Name" FROM ...`. Only http/https URLs render as links.
 {widget_section}
 
 ## Current Context
