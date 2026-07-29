@@ -122,6 +122,44 @@ function formatValue(value: unknown, columnType?: string): string {
   return String(value);
 }
 
+// ============================================================================
+// Hyperlink detection
+// ============================================================================
+
+// Only allow http/https URLs — prevents javascript:, data:, vbscript:, file:,
+// etc. from being rendered as clickable links.
+const SAFE_URL_RE = /^https?:\/\/[^\s<>"']+$/i;
+
+// Markdown link: [label](https://url). Label may contain any character except
+// closing bracket; URL must be a safe http/https URL with no whitespace/quotes.
+// Parentheses inside the URL are allowed (e.g. Wikipedia paths); the trailing
+// `\)$` anchor forces the greedy URL match to backtrack to the last `)` in the
+// string, which is the markdown close. The `/i` flag accepts uppercase schemes.
+const MARKDOWN_LINK_RE = /^\[([^\]]+)\]\((https?:\/\/[^\s<>"']+)\)$/i;
+
+/**
+ * Detect a hyperlink in a formatted cell string.
+ *
+ * Supports two forms:
+ *  - Bare URL:      "https://example.com/foo"
+ *  - Markdown link: "[Account Name](https://app.statisfy.com/book/...)"
+ *
+ * Returns `{ label, href }` when a safe link is detected, otherwise null.
+ * Only http/https URLs qualify — javascript:/data:/etc. are treated as plain text.
+ */
+function detectHyperlink(
+  s: string
+): { label: string; href: string } | null {
+  const md = MARKDOWN_LINK_RE.exec(s);
+  if (md && md[1] && md[2]) {
+    return { label: md[1], href: md[2] };
+  }
+  if (SAFE_URL_RE.test(s)) {
+    return { label: s, href: s };
+  }
+  return null;
+}
+
 /**
  * Check if value is numeric type.
  */
@@ -164,7 +202,16 @@ export function TableCell({
     return formatValue(value, columnType);
   }, [value, columnType, formatter]);
 
-  const isLong = formattedValue.length > 50;
+  // Detect http/https URL or markdown-link ("[label](url)") in the cell string.
+  // Skip when NULL, or when a custom onClick handler owns the cell (we don't
+  // want two competing click behaviors on the same target).
+  const link = useMemo(() => {
+    if (isNull || onClick) return null;
+    return detectHyperlink(formattedValue);
+  }, [formattedValue, isNull, onClick]);
+
+  const displayText = link ? link.label : formattedValue;
+  const isLong = displayText.length > 50;
   const needsTruncation = isLong && !wrapText;
 
   const cellContent = (
@@ -180,7 +227,22 @@ export function TableCell({
         ...(onClick ? { cursor: 'pointer' } : {}),
       }}
     >
-      {formattedValue}
+      {link ? (
+        <a
+          href={link.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            color: 'var(--prismiq-color-primary)',
+            textDecoration: 'underline',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {link.label}
+        </a>
+      ) : (
+        formattedValue
+      )}
     </td>
   );
 
