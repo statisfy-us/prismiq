@@ -148,7 +148,7 @@ function detectHyperlink(
   s: string
 ): { label: string; href: string } | null {
   const md = MARKDOWN_LINK_RE.exec(s);
-  if (md) {
+  if (md && md[1] && md[2]) {
     return { label: md[1], href: md[2] };
   }
   if (SAFE_URL_RE.test(s)) {
