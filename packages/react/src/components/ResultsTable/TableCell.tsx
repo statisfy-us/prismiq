@@ -132,7 +132,10 @@ const SAFE_URL_RE = /^https?:\/\/[^\s<>"']+$/i;
 
 // Markdown link: [label](https://url). Label may contain any character except
 // closing bracket; URL must be a safe http/https URL with no whitespace/quotes.
-const MARKDOWN_LINK_RE = /^\[([^\]]+)\]\((https?:\/\/[^\s<>"')]+)\)$/;
+// Parentheses inside the URL are allowed (e.g. Wikipedia paths); the trailing
+// `\)$` anchor forces the greedy URL match to backtrack to the last `)` in the
+// string, which is the markdown close. The `/i` flag accepts uppercase schemes.
+const MARKDOWN_LINK_RE = /^\[([^\]]+)\]\((https?:\/\/[^\s<>"']+)\)$/i;
 
 /**
  * Detect a hyperlink in a formatted cell string.
