@@ -402,6 +402,66 @@ class QueryCache:
 
         return cached_at
 
+    def make_raw_sql_key(
+        self,
+        sql: str,
+        params: dict[str, Any] | None = None,
+    ) -> str:
+        """Generate a cache key for a raw SQL query.
+
+        Includes ``schema_name`` for multi-tenant isolation and hashes the
+        canonicalised SQL + params so semantically identical calls share a
+        cache entry.
+        """
+        param_repr = json.dumps(params, sort_keys=True, default=str) if params else ""
+        payload = f"{sql}\n{param_repr}"
+        query_hash = hashlib.sha256(payload.encode()).hexdigest()[:16]
+        return f"query:raw:{self._schema_name}:{query_hash}"
+
+    async def get_raw_sql_result(
+        self,
+        sql: str,
+        params: dict[str, Any] | None = None,
+    ) -> QueryResult | None:
+        """Get a cached raw-SQL query result.
+
+        Returns ``None`` if not cached.
+        """
+        from prismiq.types import QueryResult
+
+        key = self.make_raw_sql_key(sql, params)
+        cached = await self._backend.get(key)
+        if cached is None:
+            return None
+        return QueryResult.model_validate(cached)
+
+    async def cache_raw_sql_result(
+        self,
+        sql: str,
+        result: QueryResult,
+        params: dict[str, Any] | None = None,
+        ttl: int | None = None,
+    ) -> float:
+        """Cache a raw-SQL query result.
+
+        Table-based invalidation is not tracked here — raw SQL can reference
+        arbitrary tables, and consistent extraction is out of scope; invalidation
+        relies on TTL only.
+        """
+        key = self.make_raw_sql_key(sql, params)
+        effective_ttl = ttl if ttl is not None else self._config.query_ttl
+        cached_at = time.time()
+
+        result_json = result.model_dump_json()
+        if len(result_json) > self._config.max_result_size:
+            return cached_at
+
+        await self._backend.set(key, result.model_dump(), effective_ttl)
+        await self._backend.set(
+            f"meta:{key}", {"cached_at": cached_at, "ttl": effective_ttl}, effective_ttl
+        )
+        return cached_at
+
     async def get_cache_metadata(self, query: QueryDefinition) -> dict[str, float | int] | None:
         """Get cache metadata for a query.
 

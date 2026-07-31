@@ -953,6 +953,7 @@ class PrismiqEngine:
         sql: str,
         params: dict[str, Any] | None = None,
         schema_name: str | None = None,
+        use_cache: bool = True,
     ) -> QueryResult:
         """Execute a raw SQL query.
 
@@ -964,6 +965,9 @@ class PrismiqEngine:
             params: Optional named parameters for the query.
             schema_name: PostgreSQL schema for table validation. If None, uses the
                 engine's default schema. Used for multi-tenant schema isolation.
+            use_cache: Whether to serve from cached results if available. When
+                False, always executes fresh but still refreshes the cache
+                with the new result (parity with execute_query).
 
         Returns:
             QueryResult with columns, rows, and execution metadata.
@@ -993,10 +997,47 @@ class PrismiqEngine:
         else:
             executor = self._executor
 
+        # Schema-scoped raw-SQL cache. Reuse the default query_cache when the
+        # effective schema matches the engine's, else spin up a schema-scoped
+        # QueryCache — mirrors execute_query's pattern.
+        query_cache = self._query_cache
+        if self._cache and effective_schema != self._schema_name:
+            config_kwargs: dict[str, int] = {}
+            if self._query_cache_ttl is not None:
+                config_kwargs["query_ttl"] = self._query_cache_ttl
+                config_kwargs["default_ttl"] = self._query_cache_ttl
+            cache_config = CacheConfig(**config_kwargs) if config_kwargs else None
+            query_cache = QueryCache(
+                self._cache,
+                config=cache_config,
+                schema_name=effective_schema,
+            )
+
+        if use_cache and query_cache:
+            cached = await query_cache.get_raw_sql_result(sql, params)
+            if cached:
+                if self._enable_metrics:
+                    record_cache_hit(True)
+                return cached
+            if self._enable_metrics:
+                record_cache_hit(False)
+
         start = time.perf_counter()
 
         try:
             result = await executor.execute_raw_sql(sql, params)
+
+            # Refresh cache on every successful execution — parity with
+            # execute_query: bypass_cache=True still updates with fresh data.
+            if query_cache:
+                try:
+                    await query_cache.cache_raw_sql_result(sql, result, params)
+                except Exception as cache_err:
+                    _logger.warning(
+                        "Failed to cache raw-SQL result: %s (%s)",
+                        cache_err,
+                        type(cache_err).__name__,
+                    )
 
             # Record metrics
             if self._enable_metrics:
