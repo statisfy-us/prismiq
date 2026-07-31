@@ -166,6 +166,10 @@ class ExecuteSQLRequest(BaseModel):
     filter_values: list[FilterValue] | None = None
     """Runtime values for the dashboard filters."""
 
+    bypass_cache: bool = False
+    """If True, skip cache lookup and execute fresh (cache is still refreshed
+    with the new result). Mirrors ``QueryExecuteRequest.bypass_cache``."""
+
 
 class SQLValidationResponse(BaseModel):
     """Response model for SQL validation endpoint."""
@@ -960,6 +964,7 @@ def create_router(
                 sql=sql,
                 params=params,
                 schema_name=schema_name,
+                use_cache=not request.bypass_cache,
             )
         except SQLValidationError as e:
             detail = e.message
