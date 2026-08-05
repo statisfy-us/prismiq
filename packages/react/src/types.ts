@@ -641,6 +641,8 @@ export interface ExecuteSQLRequest {
   dashboard_filters?: SQLDashboardFilter[];
   /** Runtime values for the dashboard filters. */
   filter_values?: SQLFilterValue[];
+  /** If true, skip cache lookup and re-execute against the DB (cache is still refreshed with the new result). */
+  bypass_cache?: boolean;
 }
 
 /** Dashboard filter definition for SQL filter injection. */
