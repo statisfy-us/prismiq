@@ -425,13 +425,15 @@ export class PrismiqClient {
    * @param params - Optional named parameters for the query.
    * @param dashboardFilters - Optional dashboard filters to inject into the SQL.
    * @param filterValues - Runtime values for the dashboard filters.
+   * @param bypassCache - If true, skip cache lookup and re-execute against the DB (cache is still refreshed with the new result). Mirrors executeQuery.
    * @returns The query result with all rows.
    */
   async executeSQL(
     sql: string,
     params?: Record<string, unknown>,
     dashboardFilters?: SQLDashboardFilter[],
-    filterValues?: SQLFilterValue[]
+    filterValues?: SQLFilterValue[],
+    bypassCache: boolean = false
   ): Promise<QueryResult> {
     const body: ExecuteSQLRequest = { sql };
     if (params) {
@@ -442,6 +444,9 @@ export class PrismiqClient {
     }
     if (filterValues && filterValues.length > 0) {
       body.filter_values = filterValues;
+    }
+    if (bypassCache) {
+      body.bypass_cache = true;
     }
     return this.request<QueryResult>('/query/execute-sql', {
       method: 'POST',

@@ -249,7 +249,8 @@ export function DashboardProvider({
             widget.config.raw_sql!,
             undefined,
             sqlFilters,
-            sqlFilterValues
+            sqlFilterValues,
+            bypassCache
           );
         } else {
           // Apply dashboard filters to widget query
