@@ -221,13 +221,21 @@ class SchemaIntrospector:
         return relationships
 
     async def _get_table_names(self) -> list[str]:
-        """Get list of table names in the schema."""
+        """Get list of table names in the schema.
+
+        Includes ordinary tables, views, and materialized views. `information_schema.tables`
+        omits materialized views, so we UNION `pg_matviews` to cover both.
+        """
         async with self._pool.acquire() as conn:
             query = """
                 SELECT table_name
                 FROM information_schema.tables
                 WHERE table_schema = $1
                     AND table_type IN ('BASE TABLE', 'VIEW')
+                UNION
+                SELECT matviewname AS table_name
+                FROM pg_matviews
+                WHERE schemaname = $1
                 ORDER BY table_name
             """
             rows: list[Record] = await conn.fetch(query, self._schema_name)
@@ -265,17 +273,38 @@ class SchemaIntrospector:
         )
 
     async def _get_columns(self, table_name: str) -> list[ColumnSchema]:
-        """Get column information for a table."""
+        """Get column information for a table (including materialized views).
+
+        `information_schema.columns` omits columns for materialized views, so
+        we UNION with a pg_catalog query to cover ordinary tables/views and MVs.
+        """
         async with self._pool.acquire() as conn:
             query = """
                 SELECT
                     column_name,
                     data_type,
                     is_nullable,
-                    column_default
+                    column_default,
+                    ordinal_position
                 FROM information_schema.columns
                 WHERE table_schema = $1
                     AND table_name = $2
+                UNION ALL
+                SELECT
+                    a.attname AS column_name,
+                    format_type(a.atttypid, a.atttypmod) AS data_type,
+                    CASE WHEN a.attnotnull THEN 'NO' ELSE 'YES' END AS is_nullable,
+                    pg_get_expr(d.adbin, d.adrelid) AS column_default,
+                    a.attnum AS ordinal_position
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid = c.relnamespace
+                JOIN pg_attribute a ON a.attrelid = c.oid
+                LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
+                WHERE n.nspname = $1
+                    AND c.relname = $2
+                    AND c.relkind = 'm'
+                    AND a.attnum > 0
+                    AND NOT a.attisdropped
                 ORDER BY ordinal_position
             """
             rows: list[Record] = await conn.fetch(query, self._schema_name, table_name)
@@ -321,7 +350,7 @@ class SchemaIntrospector:
                 JOIN pg_namespace n ON n.oid = c.relnamespace
                 WHERE n.nspname = $1
                     AND c.relname = $2
-                    AND c.relkind = 'r'
+                    AND c.relkind IN ('r', 'm')
             """
             row = await conn.fetchrow(query, self._schema_name, table_name)
 
