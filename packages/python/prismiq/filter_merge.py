@@ -44,6 +44,7 @@ def merge_filters(
     dashboard_filters: list[DashboardFilter],
     filter_values: list[FilterValue],
     schema: DatabaseSchema,
+    fiscal_year_start_month: int = 1,
 ) -> QueryDefinition:
     """Merge dashboard filter values into a widget query.
 
@@ -83,11 +84,17 @@ def merge_filters(
                 filter_value = FilterValue(
                     filter_id=dash_filter.id, value=dash_filter.default_value
                 )
+            elif dash_filter.type == DashboardFilterType.DATE_RANGE and dash_filter.date_preset:
+                # Date filters fall back to their preset default; the
+                # value=None sentinel makes resolve_date_filter use it.
+                filter_value = FilterValue(filter_id=dash_filter.id, value=None)
             else:
                 continue
 
         # Convert to query filter(s)
-        query_filters = filter_to_query_filters(dash_filter, filter_value, query, schema)
+        query_filters = filter_to_query_filters(
+            dash_filter, filter_value, query, schema, fiscal_year_start_month=fiscal_year_start_month
+        )
         new_filters.extend(query_filters)
 
     if not new_filters:
@@ -166,6 +173,7 @@ def filter_to_query_filters(
     value: FilterValue,
     query: QueryDefinition,
     schema: DatabaseSchema,
+    fiscal_year_start_month: int = 1,
 ) -> list[FilterDefinition]:
     """Convert a dashboard filter to query filter(s).
 
@@ -185,14 +193,19 @@ def filter_to_query_filters(
     if table_id is None:
         return []
 
-    # Handle empty or null values
-    if value.value is None:
+    # Handle empty or null values. Date filters may carry value=None with a
+    # date_preset default — resolve_date_filter falls back to the preset.
+    is_date_preset_fallback = (
+        dashboard_filter.type == DashboardFilterType.DATE_RANGE
+        and dashboard_filter.date_preset is not None
+    )
+    if value.value is None and not is_date_preset_fallback:
         return []
 
     filters: list[FilterDefinition] = []
 
     if dashboard_filter.type == DashboardFilterType.DATE_RANGE:
-        date_range = resolve_date_filter(dashboard_filter, value)
+        date_range = resolve_date_filter(dashboard_filter, value, fiscal_year_start_month=fiscal_year_start_month)
         if date_range:
             start_date, end_date = date_range
             filters.append(
@@ -300,6 +313,7 @@ def get_applicable_filters(
 def resolve_date_filter(
     filter_def: DashboardFilter,
     value: FilterValue,
+    fiscal_year_start_month: int = 1,
 ) -> tuple[date, date] | None:
     """Resolve a date range filter value to concrete dates.
 
@@ -308,6 +322,8 @@ def resolve_date_filter(
     Args:
         filter_def: The dashboard filter definition.
         value: The runtime filter value.
+        fiscal_year_start_month: Month (1-12) the fiscal year starts on;
+            quarter/year presets resolve against this fiscal calendar.
 
     Returns:
         Tuple of (start_date, end_date), or None if cannot be resolved.
@@ -319,14 +335,14 @@ def resolve_date_filter(
         if filter_def.date_preset:
             preset = _str_to_date_preset(filter_def.date_preset)
             if preset:
-                return resolve_date_preset(preset)
+                return resolve_date_preset(preset, fiscal_year_start_month=fiscal_year_start_month)
         return None
 
     # Handle string preset values
     if isinstance(filter_value, str):
         preset = _str_to_date_preset(filter_value)
         if preset:
-            return resolve_date_preset(preset)
+            return resolve_date_preset(preset, fiscal_year_start_month=fiscal_year_start_month)
         return None
 
     # Handle dict with explicit start/end
@@ -335,7 +351,7 @@ def resolve_date_filter(
         if "preset" in filter_value:
             preset = _str_to_date_preset(filter_value["preset"])
             if preset:
-                return resolve_date_preset(preset)
+                return resolve_date_preset(preset, fiscal_year_start_month=fiscal_year_start_month)
             return None
 
         # Check for explicit start/end dates

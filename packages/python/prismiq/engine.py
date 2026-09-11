@@ -112,6 +112,7 @@ class PrismiqEngine:
         skip_table_creation: bool = False,
         database_url_write: str | None = None,
         llm_config: LLMConfig | None = None,
+        fiscal_year_start_month: int = 1,
     ) -> None:
         """Initialize the Prismiq engine.
 
@@ -134,6 +135,9 @@ class PrismiqEngine:
             llm_config: Optional LLM configuration for the chat agent.
                 If provided and enabled, the engine will create an LLM provider for
                 natural language query assistance.
+            fiscal_year_start_month: Month (1-12) the fiscal year starts on.
+                Dashboard date presets (this_quarter, this_year, ...) resolve
+                against this fiscal calendar. Default 1 = calendar periods.
         """
         self._database_url = database_url
         self._database_url_write = database_url_write
@@ -147,6 +151,7 @@ class PrismiqEngine:
         self._persist_dashboards = persist_dashboards
         self._skip_table_creation = skip_table_creation
         self._llm_config = llm_config
+        self.fiscal_year_start_month = fiscal_year_start_month
 
         # Schema config manager
         self._schema_config_manager = SchemaConfigManager(schema_config)

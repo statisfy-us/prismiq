@@ -117,32 +117,32 @@ class TestResolveDatePreset:
         assert end == date(2024, 2, 29)
 
     def test_this_quarter_q1(self) -> None:
-        """THIS_QUARTER in Q1 starts from Jan 1."""
+        """THIS_QUARTER in Q1 spans the full calendar quarter."""
         ref = date(2024, 2, 15)
         start, end = resolve_date_preset(DatePreset.THIS_QUARTER, ref)
         assert start == date(2024, 1, 1)
-        assert end == ref
+        assert end == date(2024, 3, 31)
 
     def test_this_quarter_q2(self) -> None:
-        """THIS_QUARTER in Q2 starts from Apr 1."""
+        """THIS_QUARTER in Q2 spans the full calendar quarter."""
         ref = date(2024, 5, 15)
         start, end = resolve_date_preset(DatePreset.THIS_QUARTER, ref)
         assert start == date(2024, 4, 1)
-        assert end == ref
+        assert end == date(2024, 6, 30)
 
     def test_this_quarter_q3(self) -> None:
-        """THIS_QUARTER in Q3 starts from Jul 1."""
+        """THIS_QUARTER in Q3 spans the full calendar quarter."""
         ref = date(2024, 8, 15)
         start, end = resolve_date_preset(DatePreset.THIS_QUARTER, ref)
         assert start == date(2024, 7, 1)
-        assert end == ref
+        assert end == date(2024, 9, 30)
 
     def test_this_quarter_q4(self) -> None:
-        """THIS_QUARTER in Q4 starts from Oct 1."""
+        """THIS_QUARTER in Q4 spans the full calendar quarter."""
         ref = date(2024, 11, 15)
         start, end = resolve_date_preset(DatePreset.THIS_QUARTER, ref)
         assert start == date(2024, 10, 1)
-        assert end == ref
+        assert end == date(2024, 12, 31)
 
     def test_last_quarter_from_q2(self) -> None:
         """LAST_QUARTER in Q2 returns complete Q1."""
@@ -173,11 +173,11 @@ class TestResolveDatePreset:
         assert end == date(2024, 9, 30)
 
     def test_this_year(self) -> None:
-        """THIS_YEAR starts from Jan 1 of current year."""
+        """THIS_YEAR spans the full calendar year."""
         ref = date(2024, 6, 15)
         start, end = resolve_date_preset(DatePreset.THIS_YEAR, ref)
         assert start == date(2024, 1, 1)
-        assert end == ref
+        assert end == date(2024, 12, 31)
 
     def test_last_year(self) -> None:
         """LAST_YEAR returns complete previous year."""
@@ -383,3 +383,44 @@ class TestGetDateRangeSql:
             _sql, params = get_date_range_sql(preset, "test_col")
             for param in params:
                 assert isinstance(param, date)
+
+
+class TestFiscalDatePresets:
+    """Quarter/year presets against a non-January fiscal year start."""
+
+    def test_this_quarter_fiscal_feb(self) -> None:
+        # FY starts Feb: quarters are Feb-Apr, May-Jul, Aug-Oct, Nov-Jan.
+        start, end = resolve_date_preset(
+            DatePreset.THIS_QUARTER, date(2026, 9, 11), fiscal_year_start_month=2
+        )
+        assert (start, end) == (date(2026, 8, 1), date(2026, 10, 31))
+
+    def test_this_quarter_fiscal_feb_wraps_year(self) -> None:
+        start, end = resolve_date_preset(
+            DatePreset.THIS_QUARTER, date(2026, 1, 15), fiscal_year_start_month=2
+        )
+        assert (start, end) == (date(2025, 11, 1), date(2026, 1, 31))
+
+    def test_last_quarter_fiscal_feb(self) -> None:
+        start, end = resolve_date_preset(
+            DatePreset.LAST_QUARTER, date(2026, 9, 11), fiscal_year_start_month=2
+        )
+        assert (start, end) == (date(2026, 5, 1), date(2026, 7, 31))
+
+    def test_this_year_fiscal_feb(self) -> None:
+        start, end = resolve_date_preset(
+            DatePreset.THIS_YEAR, date(2026, 9, 11), fiscal_year_start_month=2
+        )
+        assert (start, end) == (date(2026, 2, 1), date(2027, 1, 31))
+
+    def test_last_year_fiscal_feb(self) -> None:
+        start, end = resolve_date_preset(
+            DatePreset.LAST_YEAR, date(2026, 9, 11), fiscal_year_start_month=2
+        )
+        assert (start, end) == (date(2025, 2, 1), date(2026, 1, 31))
+
+    def test_invalid_fiscal_month_falls_back_to_calendar(self) -> None:
+        start, end = resolve_date_preset(
+            DatePreset.THIS_QUARTER, date(2026, 9, 11), fiscal_year_start_month=0
+        )
+        assert (start, end) == (date(2026, 7, 1), date(2026, 9, 30))
