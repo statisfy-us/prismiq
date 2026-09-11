@@ -18,7 +18,7 @@ import sqlglot.errors
 from sqlglot import exp
 
 from prismiq.dashboards import DashboardFilter, DashboardFilterType
-from prismiq.filter_merge import FilterValue
+from prismiq.filter_merge import FilterValue, resolve_date_filter
 
 _logger = logging.getLogger(__name__)
 
@@ -52,6 +52,7 @@ def inject_dashboard_filters(
     filter_values: list[FilterValue],
     known_tables: frozenset[str] | None = None,
     param_offset: int = 0,
+    fiscal_year_start_month: int = 1,
 ) -> tuple[str, list[Any]]:
     """Inject dashboard filter conditions into a raw SQL query.
 
@@ -70,13 +71,16 @@ def inject_dashboard_filters(
         param_offset: Starting index for ``$N`` parameter placeholders.
             Use this when the query already has user-supplied params so
             that injected params don't collide.
+        fiscal_year_start_month: Month (1-12) the fiscal year starts on;
+            date presets for quarter/year resolve against this fiscal
+            calendar.
 
     Returns:
         Tuple of ``(modified_sql, param_values)`` where *param_values*
         is a list of values corresponding to the injected ``$N``
         placeholders.
     """
-    if not dashboard_filters or not filter_values:
+    if not dashboard_filters:
         return sql, []
 
     # Build a lookup from filter_id → value
@@ -107,7 +111,22 @@ def inject_dashboard_filters(
 
     for dash_filter in dashboard_filters:
         value = value_map.get(dash_filter.id)
-        if value is None or value == "" or value == []:
+
+        if dash_filter.type == DashboardFilterType.DATE_RANGE:
+            # Date filters resolve presets ("this_quarter", {"preset": ...})
+            # and fall back to the filter's date_preset default when no value
+            # was provided — mirroring the query-builder path. An explicit
+            # cleared value ({"start": "", "end": ""}) resolves to None and
+            # skips the filter.
+            date_range = resolve_date_filter(
+                dash_filter,
+                FilterValue(filter_id=dash_filter.id, value=value),
+                fiscal_year_start_month=fiscal_year_start_month,
+            )
+            if date_range is None:
+                continue
+            value = {"start": date_range[0].isoformat(), "end": date_range[1].isoformat()}
+        elif value is None or value == "" or value == []:
             continue
 
         qualifier: str | None = None

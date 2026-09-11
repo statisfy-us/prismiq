@@ -60,6 +60,19 @@ export function useDashboardFilters(): UseDashboardFiltersResult {
     return dashboard?.filters || [];
   }, [dashboard]);
 
+  // Default value for a filter: explicit default_value, else a date filter's
+  // preset (resolved server-side against the tenant's fiscal calendar).
+  const defaultFor = useCallback((filter: DashboardFilter | undefined): unknown => {
+    if (!filter) return undefined;
+    if (filter.default_value !== undefined && filter.default_value !== null) {
+      return filter.default_value;
+    }
+    if (filter.type === 'date_range' && filter.date_preset) {
+      return { preset: filter.date_preset };
+    }
+    return filter.default_value;
+  }, []);
+
   // Get the current value for a filter
   const getValue = useCallback(
     (filterId: string): unknown => {
@@ -70,27 +83,27 @@ export function useDashboardFilters(): UseDashboardFiltersResult {
 
       // Return default value if no current value
       const filter = filters.find((f) => f.id === filterId);
-      return filter?.default_value;
+      return defaultFor(filter);
     },
-    [filterValues, filters]
+    [filterValues, filters, defaultFor]
   );
 
   // Reset all filters to their defaults
   const resetAll = useCallback(() => {
     for (const filter of filters) {
-      setFilterValue(filter.id, filter.default_value);
+      setFilterValue(filter.id, defaultFor(filter));
     }
-  }, [filters, setFilterValue]);
+  }, [filters, setFilterValue, defaultFor]);
 
   // Reset a single filter to its default
   const resetFilter = useCallback(
     (filterId: string) => {
       const filter = filters.find((f) => f.id === filterId);
       if (filter) {
-        setFilterValue(filterId, filter.default_value);
+        setFilterValue(filterId, defaultFor(filter));
       }
     },
-    [filters, setFilterValue]
+    [filters, setFilterValue, defaultFor]
   );
 
   return useMemo(

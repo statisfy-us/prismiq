@@ -275,9 +275,11 @@ export interface FilterValue {
  */
 export interface DateRangeValue {
   /** Start date (ISO string). */
-  start: string;
+  start?: string;
   /** End date (ISO string). */
-  end: string;
+  end?: string;
+  /** Relative preset (e.g. "this_quarter") resolved server-side against the tenant's fiscal calendar. */
+  preset?: string;
 }
 
 /**
