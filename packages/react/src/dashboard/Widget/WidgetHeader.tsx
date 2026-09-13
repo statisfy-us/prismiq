@@ -37,7 +37,14 @@ export function WidgetHeader({
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+  };
+
+  const titleBlockStyle: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
     flex: 1,
+    minWidth: 0,
   };
 
   const actionsStyle: React.CSSProperties = {
@@ -68,6 +75,8 @@ export function WidgetHeader({
     fontSize: theme.fontSizes.xs,
     color: theme.colors.textMuted,
     whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   };
 
   const handleRefresh = () => {
@@ -78,16 +87,18 @@ export function WidgetHeader({
 
   return (
     <div style={headerStyle} className="prismiq-widget-header">
-      <h3 style={titleStyle}>{title}</h3>
+      <div style={titleBlockStyle}>
+        <h3 style={titleStyle} title={title}>{title}</h3>
 
-      <div style={actionsStyle}>
-        {/* Last refreshed timestamp */}
+        {/* Last refreshed timestamp as subtext */}
         {lastRefreshed !== undefined && (
           <span style={timestampStyle} title={`Last refreshed: ${new Date(lastRefreshed * 1000).toLocaleString()}`}>
             {formatRelativeTime(lastRefreshed)}
           </span>
         )}
+      </div>
 
+      <div style={actionsStyle}>
         {/* Refresh button */}
         {onRefresh && (
           <button
