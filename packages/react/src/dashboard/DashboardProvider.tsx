@@ -115,7 +115,7 @@ export function DashboardProvider({
   lazyLoading = DEFAULT_LAZY_LOADING,
   children,
 }: DashboardProviderProps): JSX.Element {
-  const { client } = useAnalytics();
+  const { client, fiscalYearStartMonth } = useAnalytics();
   const crossFilterContext = useCrossFilterOptional();
 
   // Lazy loading config with defaults
@@ -268,7 +268,8 @@ export function DashboardProvider({
           let query = applyFiltersToQuery(
             widget.query!,
             currentDashboard,
-            currentFilters
+            currentFilters,
+            fiscalYearStartMonth
           );
 
           // Apply cross-filters from other widgets
@@ -308,7 +309,7 @@ export function DashboardProvider({
         }
       }
     },
-    [client]
+    [client, fiscalYearStartMonth]
   );
 
   /**

@@ -7,11 +7,13 @@
 
 import type { Dashboard, FilterValue } from './types';
 import type { FilterDefinition, QueryDefinition } from '../types';
+import { resolveDatePreset } from './datePresets';
 
 export function applyFiltersToQuery(
   query: QueryDefinition,
   dashboard: Dashboard,
-  filterValues: FilterValue[]
+  filterValues: FilterValue[],
+  fiscalYearStartMonth = 1
 ): QueryDefinition {
   // Map filter values by filter ID
   const valueMap = new Map(
@@ -41,13 +43,25 @@ export function applyFiltersToQuery(
     // Convert filter value to FilterDefinition based on filter type
     switch (filter.type) {
       case 'date_range': {
-        const dateValue = value as { start: string; end: string } | string;
-        if (typeof dateValue === 'object' && dateValue.start && dateValue.end) {
+        const dateValue = value as
+          | { start?: string; end?: string; preset?: string }
+          | string;
+        // A bare preset string, or { preset } from a filter's date_preset
+        // default, resolves against the tenant's fiscal calendar.
+        const range =
+          typeof dateValue === 'string'
+            ? resolveDatePreset(dateValue, fiscalYearStartMonth)
+            : dateValue.preset && !dateValue.start && !dateValue.end
+              ? resolveDatePreset(dateValue.preset, fiscalYearStartMonth)
+              : dateValue.start && dateValue.end
+                ? { start: dateValue.start, end: dateValue.end }
+                : null;
+        if (range) {
           additionalFilters.push({
             table_id: tableId,
             column: filter.field,
             operator: 'between',
-            value: [dateValue.start, dateValue.end],
+            value: [range.start, range.end],
           });
         }
         break;
