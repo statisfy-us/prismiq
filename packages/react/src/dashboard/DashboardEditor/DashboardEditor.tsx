@@ -94,7 +94,7 @@ export function DashboardEditor({
   className = '',
 }: DashboardEditorProps): JSX.Element {
   const { theme } = useTheme();
-  const { client } = useAnalytics();
+  const { client, fiscalYearStartMonth } = useAnalytics();
   const { schema } = useSchema();
 
   // Dashboard state
@@ -190,7 +190,12 @@ export function DashboardEditor({
               result = await currentClient.executeSQL(widget.config.raw_sql!);
             } else {
               // Apply dashboard filters to the widget query
-              const query = applyFiltersToQuery(widget.query!, currentDashboard, currentFilterValues);
+              const query = applyFiltersToQuery(
+                widget.query!,
+                currentDashboard,
+                currentFilterValues,
+                fiscalYearStartMonth
+              );
               result = await currentClient.executeQuery(query);
             }
             setWidgetResults((prev) => ({ ...prev, [widget.id]: result }));
@@ -207,7 +212,7 @@ export function DashboardEditor({
         })
       );
     }
-  }, [batchSize]);
+  }, [batchSize, fiscalYearStartMonth]);
 
   // Compute default filter values from dashboard filter definitions
   const getDefaultFilterValues = useCallback((data: Dashboard): FilterValue[] => {
@@ -322,7 +327,7 @@ export function DashboardEditor({
           result = await client.executeSQL(widget!.config.raw_sql!);
         } else {
           // Apply dashboard filters to the widget query
-          const query = applyFiltersToQuery(widget!.query!, dashboard, filterValues);
+          const query = applyFiltersToQuery(widget!.query!, dashboard, filterValues, fiscalYearStartMonth);
           // Pass bypassCache=true to force fresh data on manual refresh
           result = await client.executeQuery(query, true);
         }
@@ -347,7 +352,7 @@ export function DashboardEditor({
         });
       }
     },
-    [dashboard, filterValues, client]
+    [dashboard, filterValues, client, fiscalYearStartMonth]
   );
 
   // Add new widget - opens the full-page editor
