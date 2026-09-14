@@ -1168,7 +1168,7 @@ wheels = [
 
 [[package]]
 name = "prismiq"
-version = "0.2.13"
+version = "0.2.14"
 source = { editable = "packages/python" }
 dependencies = [
     { name = "asyncpg" },

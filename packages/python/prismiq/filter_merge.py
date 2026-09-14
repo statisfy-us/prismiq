@@ -93,7 +93,11 @@ def merge_filters(
 
         # Convert to query filter(s)
         query_filters = filter_to_query_filters(
-            dash_filter, filter_value, query, schema, fiscal_year_start_month=fiscal_year_start_month
+            dash_filter,
+            filter_value,
+            query,
+            schema,
+            fiscal_year_start_month=fiscal_year_start_month,
         )
         new_filters.extend(query_filters)
 
@@ -205,7 +209,9 @@ def filter_to_query_filters(
     filters: list[FilterDefinition] = []
 
     if dashboard_filter.type == DashboardFilterType.DATE_RANGE:
-        date_range = resolve_date_filter(dashboard_filter, value, fiscal_year_start_month=fiscal_year_start_month)
+        date_range = resolve_date_filter(
+            dashboard_filter, value, fiscal_year_start_month=fiscal_year_start_month
+        )
         if date_range:
             start_date, end_date = date_range
             filters.append(
