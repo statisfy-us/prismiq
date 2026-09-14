@@ -929,15 +929,17 @@ def create_router(
             sql = request.sql
             params = request.params
 
-            # Inject dashboard filters into the SQL if provided
-            if request.dashboard_filters and request.filter_values:
+            # Inject dashboard filters into the SQL if provided. filter_values
+            # may be empty — date filters still apply their date_preset default.
+            if request.dashboard_filters:
                 # Count existing user params so injected $N don't collide
                 param_offset = len(params) if params else 0
                 modified_sql, filter_params = inject_dashboard_filters(
                     sql,
                     request.dashboard_filters,
-                    request.filter_values,
+                    request.filter_values or [],
                     param_offset=param_offset,
+                    fiscal_year_start_month=engine.fiscal_year_start_month,
                 )
                 if filter_params:
                     sql = modified_sql

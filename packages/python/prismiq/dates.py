@@ -29,12 +29,19 @@ class DatePreset(str, Enum):
     ALL_TIME = "all_time"
 
 
-def resolve_date_preset(preset: DatePreset, reference: date | None = None) -> tuple[date, date]:
+def resolve_date_preset(
+    preset: DatePreset,
+    reference: date | None = None,
+    fiscal_year_start_month: int = 1,
+) -> tuple[date, date]:
     """Convert a date preset to a concrete (start_date, end_date) tuple.
 
     Args:
         preset: The relative date preset to resolve.
         reference: Reference date for calculations. Defaults to today.
+        fiscal_year_start_month: Month (1-12) when the fiscal year starts.
+            Quarter and year presets resolve against the fiscal calendar;
+            with the default of 1 they behave as calendar quarters/years.
 
     Returns:
         Tuple of (start_date, end_date) representing the date range.
@@ -44,6 +51,7 @@ def resolve_date_preset(preset: DatePreset, reference: date | None = None) -> tu
         (date(2024, 1, 9), date(2024, 1, 15))
     """
     ref = reference or date.today()
+    fy_start = fiscal_year_start_month if 1 <= fiscal_year_start_month <= 12 else 1
 
     if preset == DatePreset.TODAY:
         return ref, ref
@@ -86,38 +94,22 @@ def resolve_date_preset(preset: DatePreset, reference: date | None = None) -> tu
         return last_month_start, last_month_end
 
     if preset == DatePreset.THIS_QUARTER:
-        quarter = (ref.month - 1) // 3
-        start_month = quarter * 3 + 1
-        start = ref.replace(month=start_month, day=1)
-        return start, ref
+        start = _fiscal_quarter_start(ref, fy_start)
+        return start, _quarter_end(start)
 
     if preset == DatePreset.LAST_QUARTER:
-        # Find start of current quarter
-        current_quarter = (ref.month - 1) // 3
-        current_quarter_start_month = current_quarter * 3 + 1
-
-        # Go to previous quarter
-        if current_quarter == 0:
-            # Q1 -> Q4 of previous year
-            last_quarter_start = ref.replace(year=ref.year - 1, month=10, day=1)
-            last_quarter_end = ref.replace(year=ref.year - 1, month=12, day=31)
-        else:
-            last_quarter_start_month = current_quarter_start_month - 3
-            last_quarter_end_month = current_quarter_start_month - 1
-            last_quarter_start = ref.replace(month=last_quarter_start_month, day=1)
-            last_day = calendar.monthrange(ref.year, last_quarter_end_month)[1]
-            last_quarter_end = ref.replace(month=last_quarter_end_month, day=last_day)
-
-        return last_quarter_start, last_quarter_end
+        this_q_start = _fiscal_quarter_start(ref, fy_start)
+        last_q_start = date_add(this_q_start, months=-3)
+        return last_q_start, _quarter_end(last_q_start)
 
     if preset == DatePreset.THIS_YEAR:
-        start = ref.replace(month=1, day=1)
-        return start, ref
+        start = _fiscal_year_start(ref, fy_start)
+        return start, date_add(start, years=1, days=-1)
 
     if preset == DatePreset.LAST_YEAR:
-        start = ref.replace(year=ref.year - 1, month=1, day=1)
-        end = ref.replace(year=ref.year - 1, month=12, day=31)
-        return start, end
+        this_fy_start = _fiscal_year_start(ref, fy_start)
+        start = date_add(this_fy_start, years=-1)
+        return start, this_fy_start - timedelta(days=1)
 
     if preset == DatePreset.ALL_TIME:
         # Use a very early date as start
@@ -125,6 +117,24 @@ def resolve_date_preset(preset: DatePreset, reference: date | None = None) -> tu
 
     # Default fallback (should not reach here)
     return ref, ref
+
+
+def _fiscal_year_start(ref: date, fy_start_month: int) -> date:
+    """First day of the fiscal year containing *ref*."""
+    year = ref.year if ref.month >= fy_start_month else ref.year - 1
+    return date(year, fy_start_month, 1)
+
+
+def _fiscal_quarter_start(ref: date, fy_start_month: int) -> date:
+    """First day of the fiscal quarter containing *ref*."""
+    months_into_fy = (ref.month - fy_start_month) % 12
+    quarter_index = months_into_fy // 3
+    return date_add(_fiscal_year_start(ref, fy_start_month), months=quarter_index * 3)
+
+
+def _quarter_end(quarter_start: date) -> date:
+    """Last day of the quarter beginning at *quarter_start*."""
+    return date_add(quarter_start, months=3, days=-1)
 
 
 def date_trunc(unit: str, dt: datetime) -> datetime:

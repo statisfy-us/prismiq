@@ -167,11 +167,22 @@ export function DashboardProvider({
     setDashboard(data);
     // Initialize filter values with defaults
     const defaults: FilterValue[] = data.filters
-      .filter((f) => f.default_value !== undefined)
+      .filter((f) => f.default_value !== undefined && f.default_value !== null)
       .map((f) => ({
         filter_id: f.id,
         value: f.default_value,
       }));
+    // Date filters with a preset default start as { preset } — the backend
+    // resolves the preset to concrete dates (fiscal-calendar aware).
+    for (const f of data.filters) {
+      if (
+        f.type === 'date_range' &&
+        f.date_preset &&
+        (f.default_value === undefined || f.default_value === null)
+      ) {
+        defaults.push({ filter_id: f.id, value: { preset: f.date_preset } });
+      }
+    }
     setFilterValues(defaults);
 
     // When lazy loading is DISABLED: Initialize all widgets with loading state
