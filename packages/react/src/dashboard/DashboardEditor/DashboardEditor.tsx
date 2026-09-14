@@ -212,7 +212,7 @@ export function DashboardEditor({
         })
       );
     }
-  }, [batchSize]);
+  }, [batchSize, fiscalYearStartMonth]);
 
   // Compute default filter values from dashboard filter definitions
   const getDefaultFilterValues = useCallback((data: Dashboard): FilterValue[] => {
@@ -352,7 +352,7 @@ export function DashboardEditor({
         });
       }
     },
-    [dashboard, filterValues, client]
+    [dashboard, filterValues, client, fiscalYearStartMonth]
   );
 
   // Add new widget - opens the full-page editor

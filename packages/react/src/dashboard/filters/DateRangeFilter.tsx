@@ -25,10 +25,14 @@ export function DateRangeFilter({
   const { theme } = useTheme();
   const { fiscalYearStartMonth } = useAnalytics();
 
-  // Parse value
-  const dateValue: DateRangeValue = typeof value === 'object' && value
-    ? value
-    : { start: '', end: '' };
+  // Parse value. A bare preset string ("this_quarter") is equivalent to
+  // { preset } — both must render the dates the preset resolves to.
+  const dateValue: DateRangeValue =
+    typeof value === 'string' && value
+      ? { preset: value }
+      : typeof value === 'object' && value
+        ? value
+        : { start: '', end: '' };
 
   const activePreset =
     dateValue.preset && !dateValue.start && !dateValue.end ? dateValue.preset : null;
